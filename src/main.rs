@@ -16,6 +16,26 @@ pub mod ast {
         fn location(&self) -> &Location;
     }
 
+    #[derive(Debug)]
+    pub enum DefinitionKind {
+        Constructor,
+        Inductive,
+        Binding,
+    }
+
+    /// A definition. It has a text, and a location.
+    #[derive(Debug)]
+    pub struct Definition {
+        pub text: String,
+        pub location: Location,
+    }
+
+    impl Element for Definition {
+        fn location(&self) -> &Location {
+            &self.location
+        }
+    }
+
     /// A constructor for an inductive type. It has a name and a type.
     ///
     /// ## Examples
@@ -27,7 +47,7 @@ pub mod ast {
     /// Are constructors for the inductive type `nat`.
     #[derive(Debug)]
     pub struct Constructor {
-        pub name: Variable,
+        pub name: Definition,
         pub type_rep: Term,
         pub location: Location,
     }
@@ -80,7 +100,7 @@ pub mod ast {
     #[derive(Debug)]
     pub struct Inductive {
         pub doc_strings: Vec<DocString>,
-        pub name: Variable,
+        pub name: Definition,
         pub parameters: Vec<Variable>,
         pub constructors: Vec<Constructor>,
         pub location: Location,
@@ -112,7 +132,7 @@ pub mod ast {
     #[derive(Debug)]
     pub struct Binding {
         pub doc_strings: Vec<DocString>,
-        pub name: Variable,
+        pub name: Definition,
         pub value: Vec<Term>,
         pub location: Location,
     }
@@ -123,24 +143,37 @@ pub mod ast {
         }
     }
 
-    /// Represents a command downgrade from statement, just like @eval and @type.
     #[derive(Debug)]
-    pub enum CommandKind {
-        Eval,
-        Type,
+    pub struct Identifier {
+        pub text: String,
+        pub location: Location,
+    }
+
+    impl Element for Identifier {
+        fn location(&self) -> &Location {
+            &self.location
+        }
     }
 
     /// Represents a command downgrade from statement, just like @eval and @type.
-    /// 
+    #[derive(Debug)]
+    pub enum CommandKind {
+        Eval(Term),
+        Type(Term),
+        Import(Identifier),
+        Elim(Vec<Definition>),
+    }
+
+    /// Represents a command downgrade from statement, just like @eval and @type.
+    ///
     /// ## Examples
-    /// 
+    ///
     /// ```haskell
     /// @eval 10
     /// ```
     #[derive(Debug)]
     pub struct Downgrade {
         pub kind: CommandKind,
-        pub value: Term,
         pub location: Location,
     }
 
@@ -200,6 +233,51 @@ pub mod ast {
     }
 
     impl Element for Int {
+        fn location(&self) -> &Location {
+            &self.location
+        }
+    }
+
+    /// A pattern. It has a definition, a list of arguments, and a location.
+    ///
+    /// It's a simple pattern for eliminator.
+    #[derive(Debug)]
+    pub struct Pattern {
+        pub definition: Definition,
+        pub arguments: Vec<Identifier>,
+        pub location: Location,
+    }
+
+    impl Element for Pattern {
+        fn location(&self) -> &Location {
+            &self.location
+        }
+    }
+
+    /// A case for eliminator.
+    #[derive(Debug)]
+    pub struct Case {
+        pub patterns: Vec<Pattern>,
+        pub value: Box<Term>,
+        pub location: Location,
+    }
+
+    impl Element for Case {
+        fn location(&self) -> &Location {
+            &self.location
+        }
+    }
+
+    /// An eliminator. It has a list of patterns, and a location.
+    ///
+    /// It's a simple eliminator for inductive types.
+    #[derive(Debug)]
+    pub struct Elim {
+        pub patterns: Vec<Pattern>,
+        pub location: Location,
+    }
+
+    impl Element for Elim {
         fn location(&self) -> &Location {
             &self.location
         }
@@ -316,6 +394,7 @@ pub mod ast {
     pub enum Term {
         Universe(Universe),
         Int(Int),
+        Elim(Elim),
         Fun(Fun),
         Variable(Variable),
         Apply(Apply),
@@ -327,6 +406,7 @@ pub mod ast {
             match self {
                 Term::Universe(universe) => universe.location(),
                 Term::Int(int) => int.location(),
+                Term::Elim(elim) => elim.location(),
                 Term::Fun(fun) => fun.location(),
                 Term::Variable(variable) => variable.location(),
                 Term::Apply(apply) => apply.location(),
