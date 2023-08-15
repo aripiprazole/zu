@@ -117,7 +117,7 @@ pub mod ast {
     /// It's an wrapper for different types of declarations.
     pub trait Declaration: Element {
         /// The documentation of the declaration.
-        fn doc_strings(&self) -> &Vec<String>;
+        fn doc_strings(&self) -> &[DocString];
     }
 
     /// An inductive type. It has a name, a list of parameters, and a list of
@@ -150,6 +150,12 @@ pub mod ast {
         }
     }
 
+    impl Declaration for Inductive {
+        fn doc_strings(&self) -> &[DocString] {
+            &self.doc_strings
+        }
+    }
+
     /// Defines a binding. It has a name, a list of doc strings, and a value.
     ///
     /// ## Examples
@@ -178,6 +184,12 @@ pub mod ast {
     impl Element for Binding {
         fn location(&self) -> &Location {
             &self.location
+        }
+    }
+
+    impl Declaration for Binding {
+        fn doc_strings(&self) -> &[DocString] {
+            &self.doc_strings
         }
     }
 
