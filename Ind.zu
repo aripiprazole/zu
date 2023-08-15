@@ -5,9 +5,9 @@ module example.
 -- | Defines an natural inductive type, which can be either `Zero`,
 -- or it's successor `Succ`, which takes the previous and returns the
 -- next natural number.
-nat = \inductive
-| Zero : nat
-| Succ : nat -> nat.
+\inductive nat
+  Zero : nat,
+  Succ : nat -> nat.
 
 -- | Defines a simple sum aritimetic function which sums with church
 -- encoding.
