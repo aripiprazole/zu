@@ -487,7 +487,7 @@ pub mod ast {
     ///
     /// ## Examples
     ///
-    /// For example, the pi type `%x : A -> B`, where `x` is the name, `A` is the
+    /// For example, the pi type `\pi (x : A) -> B`, where `x` is the name, `A` is the
     /// domain, and `B` is the codomain.
     ///
     /// The pi type can be an arrow type too, like `A -> B`
@@ -596,6 +596,90 @@ pub mod failure {
         ($($x:expr),+ $(,)?) => {
             $crate::failure::DiagId(vec![$($x.to_string()),+])
         };
+    }
+}
+
+/// The tokenization part of the language.
+pub mod lexer {
+    use logos::Logos;
+
+    /// The base structure of the lexer.
+    #[derive(Logos, Debug, PartialEq, Eq)]
+    #[logos(skip r"[ \t\n\f]+")]
+    pub enum Token {
+        // SECTION: Commands
+        #[token("@import")]
+        CmdImport,
+
+        #[token("@eval")]
+        CmdEval,
+
+        #[token("@type")]
+        CmdType,
+
+        #[token("@elim")]
+        CmdElim,
+
+        // SECTION: Keywords
+        #[token("\\module")]
+        KwModule,
+
+        #[token("\\inductive")]
+        KwInductive,
+
+        #[token("\\type")]
+        KwType,
+
+        #[token("\\elim")]
+        KwElim,
+
+        #[token("\\of")]
+        KwOf,
+
+        #[token("\\fun")]
+        KwFun,
+
+        // SECTION: Control
+        #[token("(")]
+        LParen,
+
+        #[token(")")]
+        RParen,
+
+        #[token("{")]
+        LBrace,
+
+        #[token("}")]
+        RBrace,
+
+        // SECTION: Symbols
+        #[token(".")]
+        SmDot,
+
+        #[token(",")]
+        SmComma,
+
+        #[token(":")]
+        SmColon,
+
+        #[token("=")]
+        SmEq,
+
+        #[token("->")]
+        SmArr,
+
+        #[token("=>")]
+        SmDoubleArr,
+
+        // SECTION: Values
+        #[regex("[a-zA-Z*/+-_^&$@!][a-zA-Z0-9_*/+-^&$@!]*")]
+        Constructor,
+
+        #[regex("\"\\.*\"")]
+        String,
+
+        #[regex("\\d", priority = 2)]
+        Int,
     }
 }
 
