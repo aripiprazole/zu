@@ -4,6 +4,25 @@
 pub mod ast {
     use std::fmt::Debug;
 
+    /// The ast GAT state.
+    pub mod state {
+        /// Represents the syntax state, if it's resolved, or just parsed, it's useful for not
+        /// having to redeclare the same types.
+        pub trait State {}
+
+        /// Represents the parsed state, it's the state of the syntax tree when it's just parsed.
+        #[derive(Debug)]
+        pub struct Quoted;
+
+        impl State for Quoted {}
+
+        /// Represents the resolved state, it's the state of the syntax tree when it's resolved.
+        #[derive(Debug)]
+        pub struct Resolved;
+
+        impl State for Resolved {}
+    }
+
     #[derive(Debug)]
     pub struct Location {
         pub from: usize,
