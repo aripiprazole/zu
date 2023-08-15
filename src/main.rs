@@ -131,9 +131,9 @@ pub mod ast {
     /// For example, the inductive type `nat`:
     ///
     /// ```haskell
-    /// nat = \inductive
-    /// | Zero : nat
-    /// | Succ : nat -> nat.
+    /// \inductive nat  
+    ///   Zero : nat,
+    ///   Succ : nat -> nat.
     /// ```
     #[derive(Debug)]
     pub struct Inductive {
