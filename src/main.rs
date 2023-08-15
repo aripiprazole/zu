@@ -16,6 +16,25 @@ pub mod ast {
         fn location(&self) -> &Location;
     }
 
+    /// Error node, it does contains an error.
+    #[derive(Debug)]
+    pub struct Error {
+        /// The error message.
+        pub message: String,
+
+        /// The original text that originated the error.
+        pub full_text: String,
+
+        /// The location of the error.
+        pub location: Location,
+    }
+
+    impl Element for Error {
+        fn location(&self) -> &Location {
+            &self.location
+        }
+    }
+
     #[derive(Debug)]
     pub enum DefinitionKind {
         Constructor,
@@ -186,6 +205,8 @@ pub mod ast {
     /// A statement. It can be an inductive type, or a downgrade.
     #[derive(Debug)]
     pub enum Stmt {
+        Error(Error),
+
         /// An inductive type is a statement that introduces a new inductive
         /// type.
         Inductive(Inductive),
@@ -202,6 +223,7 @@ pub mod ast {
     impl Element for Stmt {
         fn location(&self) -> &Location {
             match self {
+                Stmt::Error(error) => &error.location,
                 Stmt::Inductive(inductive) => &inductive.location,
                 Stmt::Binding(binding) => &binding.location,
                 Stmt::Downgrade(downgrade) => downgrade.location(),
@@ -420,6 +442,7 @@ pub mod ast {
     /// It's the base of the abstract syntax tree.
     #[derive(Debug)]
     pub enum Term {
+        Error(Error),
         Universe(Universe),
         Int(Int),
         Elim(Elim),
@@ -434,6 +457,7 @@ pub mod ast {
     impl Element for Term {
         fn location(&self) -> &Location {
             match self {
+                Term::Error(error) => error.location(),
                 Term::Universe(universe) => universe.location(),
                 Term::Int(int) => int.location(),
                 Term::Elim(elim) => elim.location(),
