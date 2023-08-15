@@ -994,6 +994,16 @@ pub mod grammar {
         todo!()
     }
 
+    /// Usually finishes a statement with a `.`.
+    pub fn dot(p: &mut Parser) {
+        expect!(p, Token::SmDot, "expected `.` ending of statement");
+    }
+
+    /// Parses a statement. It has the following grammar:
+    /// 
+    /// ```txt
+    /// stmt =
+    /// | <definition> : <expr> = <expr> . # Stmt::Binding
     pub fn stmt(p: &mut Parser) -> ast::Stmt<state::Quoted> {
         let m = p.open();
 
@@ -1007,7 +1017,7 @@ pub mod grammar {
                 let type_repr = expr(p);
                 expect!(p, Token::SmEq, "expected the value of signature");
                 let value = expr(p);
-                expect!(p, Token::SmDot, "expected `.` ending of statement");
+                dot(p);
 
                 // Constructs the binding signature.
                 ast::Stmt::Binding(ast::Binding {
@@ -1035,6 +1045,16 @@ pub mod grammar {
         }
     }
 
+    /// Parses a primary expression. It has the following grammar:
+    ///
+    /// ```txt
+    /// Primary =
+    /// | <reference>                           # Term::Reference
+    /// | <integer>                             # Term::Int
+    /// | \type                                 # Term::Universe
+    /// | \elim <expr> \of (<case> ,*)          # Term::Elim
+    /// | \fun (<definition> ,*) -> <expr>      # Term::Fun
+    /// | \pi (<definition> : <expr>) -> <expr> # Term::Pi
     pub fn primary(p: &mut Parser) -> ast::Term<state::Quoted> {
         let m = p.open();
 
@@ -1054,6 +1074,13 @@ pub mod grammar {
         }
     }
 
+    /// Parses an expression. It has the following grammar:
+    ///
+    /// ```txt
+    /// expr =
+    /// | <primary> (<primary> *) # Term::Apply
+    /// | <expr> ((-> <expr>) *)  # Term::Pi
+    /// ```
     pub fn expr(p: &mut Parser) -> ast::Term<state::Quoted> {
         let m = p.open();
         let callee = primary(p);
