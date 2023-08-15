@@ -1,0 +1,14 @@
+-- | Defines natural numbers without induction feature, it's
+-- like functions in dependent langauges.
+nat = %n: type -> (n -> n) -> n -> n.
+
+-- | Defines a dependent eliminator for `Zero`, `Succ` in nat
+@elim nat of Zero, Succ
+
+-- | Defines the zero constructor
+Zero = \fun _, _, zero
+  zero.
+
+-- | Defines the succ constructor
+Succ = \fun n, N, succ, _
+  (n N succ zero).

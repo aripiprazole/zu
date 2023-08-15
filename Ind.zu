@@ -11,8 +11,8 @@ nat = \inductive
 -- encoding.
 + : nat -> nat -> nat = \fun a, b
   \elim a
-    | Zero   => Zero
-    | Succ n => Succ (+ n b).
+    Zero   => Zero,
+    Succ n => Succ (+ n b).
 
 @eval + (Succ Zero) Zero.
 

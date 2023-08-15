@@ -39,7 +39,7 @@ pub mod ast {
     }
 
     /// A documentation string. It has a list of strings.
-    /// 
+    ///
     /// It's used to document declarations.
     #[derive(Debug)]
     pub struct DocString {
@@ -92,6 +92,64 @@ pub mod ast {
         }
     }
 
+    /// Defines a binding. It has a name, a list of doc strings, and a value.
+    ///
+    /// ## Examples
+    /// ```haskell
+    ///
+    /// -- | Defines natural numbers without induction feature, it's
+    /// -- like functions in dependent langauges.
+    /// nat = %n: type -> (n -> n) -> n -> n.
+    ///
+    /// -- | Defines the zero constructor
+    /// Zero = \fun _, _, zero
+    ///   zero.
+    ///
+    /// -- | Defines the succ constructor
+    /// Succ = \fun n, N, succ, _
+    ///   (n N succ zero).
+    /// ```
+    #[derive(Debug)]
+    pub struct Binding {
+        pub doc_strings: Vec<DocString>,
+        pub name: Variable,
+        pub value: Vec<Term>,
+        pub location: Location,
+    }
+
+    impl Element for Binding {
+        fn location(&self) -> &Location {
+            &self.location
+        }
+    }
+
+    /// Represents a command downgrade from statement, just like @eval and @type.
+    #[derive(Debug)]
+    pub enum CommandKind {
+        Eval,
+        Type,
+    }
+
+    /// Represents a command downgrade from statement, just like @eval and @type.
+    /// 
+    /// ## Examples
+    /// 
+    /// ```haskell
+    /// @eval 10
+    /// ```
+    #[derive(Debug)]
+    pub struct Downgrade {
+        pub kind: CommandKind,
+        pub value: Term,
+        pub location: Location,
+    }
+
+    impl Element for Downgrade {
+        fn location(&self) -> &Location {
+            &self.location
+        }
+    }
+
     /// A statement. It can be an inductive type, or a downgrade.
     #[derive(Debug)]
     pub enum Stmt {
@@ -99,18 +157,35 @@ pub mod ast {
         /// type.
         Inductive(Inductive),
 
+        /// A binding is a statement that introduces a new binding.
+        Binding(Binding),
+
         /// A downgrade is a statement that downgrades a type to a term.
         ///
         /// For example, `nat` is a type, but `nat` is also a term.
-        Downgrade(Term),
+        Downgrade(Downgrade),
     }
 
     impl Element for Stmt {
         fn location(&self) -> &Location {
             match self {
                 Stmt::Inductive(inductive) => &inductive.location,
+                Stmt::Binding(binding) => &binding.location,
                 Stmt::Downgrade(downgrade) => downgrade.location(),
             }
+        }
+    }
+
+    /// Type of a type. It has a location.
+    #[derive(Debug)]
+    pub struct Universe {
+        /// The location of the integer in the source code.
+        pub location: Location,
+    }
+
+    impl Element for Universe {
+        fn location(&self) -> &Location {
+            &self.location
         }
     }
 
@@ -138,6 +213,10 @@ pub mod ast {
         /// which we don't care about the name.
         pub text: Option<String>,
 
+        /// The type of the variable. If it's in an implicit argument position,
+        /// it will fallback to the type `type`.
+        pub type_repr: Option<Box<Term>>,
+
         /// If the variable binds something implicitly or explicitly.
         pub icit: Icit,
 
@@ -158,6 +237,48 @@ pub mod ast {
 
         /// Implicit binder `%x : A`.
         Impl,
+    }
+
+    /// An application term. It has a list of arguments, and a function.
+    ///
+    /// ## Examples
+    ///
+    /// ```haskell
+    /// (a b c)
+    /// ```
+    #[derive(Debug)]
+    pub struct Apply {
+        pub callee: Box<Term>,
+        pub arguments: Vec<Variable>,
+        pub location: Location,
+    }
+
+    impl Element for Apply {
+        fn location(&self) -> &Location {
+            &self.location
+        }
+    }
+
+    /// A function term. It has a list of arguments, and a value.
+    ///
+    /// ## Examples
+    ///
+    /// ```haskell
+    /// -- | Defines the succ constructor
+    /// Succ = \fun n, N, succ, _
+    ///   (n N succ zero).
+    /// ```
+    #[derive(Debug)]
+    pub struct Fun {
+        pub arguments: Vec<Variable>,
+        pub value: Box<Term>,
+        pub location: Location,
+    }
+
+    impl Element for Fun {
+        fn location(&self) -> &Location {
+            &self.location
+        }
     }
 
     /// A pi type. It has a name, a domain, and a codomain.
@@ -193,18 +314,22 @@ pub mod ast {
     /// It's the base of the abstract syntax tree.
     #[derive(Debug)]
     pub enum Term {
+        Universe(Universe),
         Int(Int),
+        Fun(Fun),
         Variable(Variable),
-        Apply(Box<Term>, Vec<Term>),
+        Apply(Apply),
         Pi(Pi),
     }
 
     impl Element for Term {
         fn location(&self) -> &Location {
             match self {
+                Term::Universe(universe) => universe.location(),
                 Term::Int(int) => int.location(),
+                Term::Fun(fun) => fun.location(),
                 Term::Variable(variable) => variable.location(),
-                Term::Apply(apply, _) => apply.location(),
+                Term::Apply(apply) => apply.location(),
                 Term::Pi(pi) => pi.location(),
             }
         }
