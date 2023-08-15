@@ -153,8 +153,8 @@ pub mod ast {
     /// Defines a binding. It has a name, a list of doc strings, and a value.
     ///
     /// ## Examples
+    /// 
     /// ```haskell
-    ///
     /// -- | Defines natural numbers without induction feature, it's
     /// -- like functions in dependent langauges.
     /// nat = %n: type -> (n -> n) -> n -> n.
@@ -199,7 +199,7 @@ pub mod ast {
         Eval(Term),
         Type(Term),
         Import(Identifier),
-        Elim(Vec<Definition>),
+        Elim(Definition, Vec<Definition>),
     }
 
     /// Represents a command downgrade from statement, just like @eval and @type.
