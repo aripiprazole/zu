@@ -601,12 +601,31 @@ pub mod failure {
 
 /// The tokenization part of the language.
 pub mod lexer {
+    use std::num::ParseIntError;
+
     use logos::Logos;
+
+    #[derive(Default, Debug, PartialEq, Eq, Clone, Copy)]
+    pub enum LexerError {
+        IntegerParseError,
+
+        #[default]
+        Unknown
+    }
+
+    impl From<ParseIntError> for LexerError {
+        fn from(_: ParseIntError) -> Self {
+            LexerError::IntegerParseError
+        }
+    }
 
     /// The base structure of the lexer.
     #[derive(Logos, Debug, PartialEq, Eq)]
-    #[logos(skip r"[ \t\n\f]+")]
+    #[logos(error = LexerError)]
     pub enum Token {
+        #[regex("[ \\t\\n\\f]+", logos::skip)]
+        Ws,
+
         // SECTION: Commands
         #[token("@import")]
         CmdImport,
@@ -672,14 +691,26 @@ pub mod lexer {
         SmDoubleArr,
 
         // SECTION: Values
-        #[regex("[a-zA-Z*/+-_^&$@!][a-zA-Z0-9_*/+-^&$@!]*")]
-        Constructor,
+        #[regex("[a-zA-Z*/+-_^&$@!][a-zA-Z0-9_*/+-^&$@!]*", |tok| tok.slice().to_string())]
+        Constructor(String),
 
-        #[regex("\"\\.*\"")]
-        String,
+        #[regex("\"\\.*\"", |tok| tok.slice().to_string())]
+        String(String),
 
-        #[regex("\\d", priority = 2)]
-        Int,
+        #[regex("\\d", |tok| tok.slice().parse(), priority = 2)]
+        Int(isize),
+    }
+}
+
+/// The parsing part of the language.
+pub mod parser {
+    use logos::Lexer;
+
+    use crate::lexer::Token;
+
+    pub struct Parser<'src> {
+        pub lexer: Lexer<'src, Token>,
+        pub src: &'src str,
     }
 }
 
