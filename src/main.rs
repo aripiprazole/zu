@@ -448,10 +448,10 @@ pub mod ast {
 
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
     pub enum Icit {
-        /// Explicit binder `{%x : A}`.
+        /// Explicit binder `(x : A)`.
         Expl,
 
-        /// Implicit binder `%x : A`.
+        /// Implicit binder `{x : A}`.
         Impl,
     }
 
@@ -465,7 +465,7 @@ pub mod ast {
     #[derive(Debug)]
     pub struct Apply<S: state::State> {
         pub callee: Box<Term<S>>,
-        pub arguments: Vec<Variable<S>>,
+        pub arguments: Vec<Term<S>>,
         pub location: Location,
     }
 
@@ -714,14 +714,14 @@ pub mod lexer {
         SmDoubleArr,
 
         // SECTION: Values
-        #[regex("[a-zA-Z*/+-_^&$@!][a-zA-Z0-9_*/+-^&$@!]*", |tok| tok.slice().to_string())]
-        Constructor(String),
+        #[regex("[a-zA-Z*/+-_^&$@!][a-zA-Z0-9_*/+-^&$@!]*")]
+        Constructor,
 
-        #[regex("\"\\.*\"", |tok| tok.slice().to_string())]
-        String(String),
+        #[regex("\"\\.*\"")]
+        String,
 
-        #[regex("\\d", |tok| tok.slice().parse(), priority = 2)]
-        Int(isize),
+        #[regex("\\d", priority = 2)]
+        Int,
     }
 }
 
@@ -729,7 +729,10 @@ pub mod lexer {
 pub mod parser {
     use std::{cell::Cell, fmt::Display};
 
-    use crate::lexer::{LexerError, Token};
+    use crate::{
+        failure::DiagId,
+        lexer::{LexerError, Token},
+    };
 
     use super::*;
     use logos::{Logos, Span};
@@ -747,6 +750,7 @@ pub mod parser {
         index: usize,
 
         /// The fuel, to avoiding infinite loops.
+        #[cfg(debug_assertions)]
         fuel: Cell<usize>,
     }
 
@@ -763,8 +767,9 @@ pub mod parser {
             Self {
                 lexer: lexer::Token::lexer(src).spanned().collect(),
                 failures: Vec::new(),
-                index: 0,
+                #[cfg(debug_assertions)]
                 fuel: Cell::new(256),
+                index: 0,
                 src,
             }
         }
@@ -796,7 +801,7 @@ pub mod parser {
         #[must_use]
         pub fn close(&mut self, Marker(latest): Marker) -> ast::Location {
             if self.is_eof() {
-                return Default::default();
+                return latest; // Return latest location before EOF
             }
 
             let span = self.lexer[self.index].1.clone();
@@ -809,8 +814,15 @@ pub mod parser {
         }
 
         /// Lookup the current token.
-        pub fn lookup(&mut self) -> Option<lexer::Token> {
-            match self.lexer.get(self.index)? {
+        pub fn lookahead(&mut self, n: usize) -> Option<lexer::Token> {
+            #[cfg(debug_assertions)]
+            if self.fuel.get() == 0 {
+                panic!("infinite loop detected");
+            } else {
+                self.fuel.set(self.fuel.take() - 1);
+            }
+
+            match self.lexer.get(self.index + n)? {
                 (Ok(token), _) => Some(token.clone()),
                 (Err(_), span) => {
                     self.failures.push(failure::Failure {
@@ -828,18 +840,10 @@ pub mod parser {
 
         /// Expects a token, if it's not the current token, it will report an error.
         pub fn expect(&mut self, message: &str, kind: Token) {
-            if self.lookup() == Some(kind) {
+            if self.lookahead(0) == Some(kind) {
                 self.advance();
             } else if !self.is_eof() {
-                // Don't report an error if it's the end of the file.
-                self.failures.push(failure::Failure {
-                    kind: failure::DiagKind::Parser,
-                    level: failure::DiagLevel::Error,
-                    id: diag_id!("expected-token"),
-                    message: message.to_string(),
-                    location: self.create_location(self.lexer[self.index].1.clone()),
-                });
-
+                self.fail(message, diag_id!["unexpected-token"]);
                 self.advance(); // Advance anyways.
             }
         }
@@ -853,13 +857,27 @@ pub mod parser {
         /// Advances the parser.
         #[inline(always)]
         pub fn advance(&mut self) {
+            #[cfg(debug_assertions)]
+            self.fuel.set(self.fuel.take() + 1);
+
             self.index += 1;
+        }
+
+        /// Proceeds the parser with true to make easier pattern matching
+        #[inline(always)]
+        pub fn skips(&mut self) -> bool {
+            if self.is_eof() {
+                return false;
+            }
+
+            self.advance();
+            true
         }
 
         /// Expects a token, if it's not the current token, it will return false.
         #[inline(always)]
         pub fn is(&mut self, kind: Token) -> bool {
-            self.lookup() == Some(kind)
+            self.lookahead(0) == Some(kind)
         }
 
         /// Creates a new high-level location from logos' lexer span.
@@ -873,6 +891,30 @@ pub mod parser {
                 file: self.src.to_string(),
             }
         }
+
+        /// Expects a token in the parser, if it's not the current token, it will report an error.
+        #[inline(always)]
+        pub fn is_in(&mut self, tokens: &[Token]) -> bool {
+            tokens.contains(&self.lookahead(0).unwrap_or(Token::SmDot))
+        }
+
+        #[inline(always)]
+        pub fn fail(&mut self, message: &str, id: DiagId) {
+            // Don't report an error if it's the end of the file.
+            self.failures.push(failure::Failure {
+                kind: failure::DiagKind::Parser,
+                level: failure::DiagLevel::Error,
+                id,
+                message: message.to_string(),
+                location: self.create_location(self.lexer[self.index].1.clone()),
+            });
+        }
+
+        /// Reads a location to a string buffer
+        #[inline(always)]
+        pub fn slice(&mut self, location: &ast::Location) -> String {
+            self.src[location.from..location.to].to_string()
+        }
     }
 
     /// Expects a token in the parser, if it's not the current token, it will report an error.
@@ -883,22 +925,36 @@ pub mod parser {
         };
     }
 
+    /// Expects a token in the parser, if it's not the current token, it will return false.
+    #[macro_export]
+    macro_rules! delimited {
+        ($p:expr, $s:expr, $e:expr, $f:expr, $($arg:tt)*) => {{
+            expect!($p, $s, $($arg)*);
+            let f = $f($p);
+            expect!($p, $e, $($arg)*);
+            f
+        }};
+    }
+
     /// Recovers from an error, it will report an error, and return a recovery value.
     #[macro_export]
     macro_rules! recover {
         ($p:expr, $m:expr, $($arg:tt)*) => {
             if $p.is_eof() {
+                let l = $p.close($m);
                 $crate::ast::Recovery::recover_from_error($crate::ast::Error {
                     message: "unexpected end of file".into(),
-                    full_text: "".into(),
-                    location: $p.close($m),
+                    full_text: $p.slice(&l),
+                    location: l,
                 })
             } else {
-                // TODO: report error
+                let l = $p.close($m);
+                let m = format!($($arg)*);
+                $p.fail(&m, diag_id!["cant-parse"]);
                 $crate::ast::Recovery::recover_from_error($crate::ast::Error {
-                    message: format!($($arg)*),
-                    full_text:  "".into(),
-                    location: $p.close($m),
+                    message: m,
+                    full_text: $p.slice(&l),
+                    location: l,
                 })
             }
         };
@@ -914,6 +970,22 @@ pub mod grammar {
         parser::Parser,
     };
 
+    /// The first character that can be parsed as a an expression.
+    ///
+    /// It's useful to recover from errors.
+    const EXPR_FIRST: &[Token] = &[
+        Token::LParen,
+        Token::KwElim,
+        Token::KwFun,
+        Token::KwPi,
+        Token::KwType,
+        Token::Constructor,
+        Token::Int,
+    ];
+
+    /// The last character that can be parsed as a an expression.
+    const EXPR_RECOVERY: &[Token] = &[Token::RParen, Token::SmComma, Token::SmDot];
+
     pub fn definition(p: &mut Parser) -> parsed::Definition {
         todo!()
     }
@@ -925,10 +997,11 @@ pub mod grammar {
     pub fn stmt(p: &mut Parser) -> ast::Stmt<state::Quoted> {
         let m = p.open();
 
-        match p.lookup() {
-            // SECTION: Singature
+        match p.lookahead(0) {
+            // SECTION: Signature
+            //   Parses a signature, it's a type or a value definition.
             //   Grammar: ?doc_strings <constructor> : <expr> = <expr>.
-            Some(Token::Constructor(_)) => {
+            Some(Token::Constructor) => {
                 let definition = definition(p);
                 expect!(p, Token::SmColon, "expected the type of signature");
                 let type_repr = expr(p);
@@ -936,6 +1009,7 @@ pub mod grammar {
                 let value = expr(p);
                 expect!(p, Token::SmDot, "expected `.` ending of statement");
 
+                // Constructs the binding signature.
                 ast::Stmt::Binding(ast::Binding {
                     doc_strings: vec![],
                     location: p.close(m),
@@ -955,6 +1029,7 @@ pub mod grammar {
             Some(Token::CmdImport) => recover!(p, m, "`@import` commands aren't supported yet"),
 
             // SECTION: Errors
+            // Send a diagnostic to parser, and recover the tree.
             None => recover!(p, m, "eof can't be parsed into statement"),
             _ => recover!(p, m, "unknown statement token"),
         }
@@ -963,11 +1038,17 @@ pub mod grammar {
     pub fn primary(p: &mut Parser) -> ast::Term<state::Quoted> {
         let m = p.open();
 
-        match p.lookup() {
-            Some(Token::KwPi) => todo!(),
-            Some(Token::KwFun) => todo!(),
-            Some(Token::KwType) => todo!(),
-            Some(Token::KwElim) => todo!(),
+        match p.lookahead(0) {
+            Some(Token::KwPi) if p.skips() => todo!(),
+            Some(Token::KwFun) if p.skips() => todo!(),
+            Some(Token::KwType) if p.skips() => todo!(),
+            Some(Token::KwElim) if p.skips() => todo!(),
+            Some(Token::LParen) => {
+                delimited!(p, Token::LParen, Token::RParen, expr, "expected `)`")
+            }
+
+            // SECTION: Errors
+            // Send a diagnostic to parser, and recover the tree.
             None => recover!(p, m, "eof can't be parsed into expression"),
             _ => recover!(p, m, "unknown expression token"),
         }
@@ -976,9 +1057,16 @@ pub mod grammar {
     pub fn expr(p: &mut Parser) -> ast::Term<state::Quoted> {
         let m = p.open();
         let callee = primary(p);
-        let arguments = Vec::new();
+        let mut arguments = vec![];
 
-        // TODO: parse call arguments
+        // Parses a new argument whenever it's possible to detect a
+        // new expression.
+        while p.is_in(EXPR_FIRST) {
+            arguments.push(primary(p));
+        }
+
+        // If there's no argument, return directly the callee to avoid
+        // redundancy.
         if arguments.is_empty() {
             callee
         } else {
