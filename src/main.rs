@@ -101,7 +101,7 @@ pub mod ast {
         }
     }
 
-    #[derive(Debug, Hash, PartialEq, Eq, Clone)]
+    #[derive(Default, Debug, Hash, PartialEq, Eq, Clone)]
     pub struct Location {
         pub from: usize,
         pub to: usize,
@@ -124,6 +124,13 @@ pub mod ast {
 
         /// The location of the error.
         pub location: Location,
+    }
+
+    /// Represents a recovery from an error.
+    pub trait Recovery {
+        /// Creates a new instance of [`Self`] when it's an error, it's
+        /// useful for enums
+        fn recover_from_error(error: Error) -> Self;
     }
 
     impl Element for Error {
@@ -224,18 +231,19 @@ pub mod ast {
     /// nat = %n: type -> (n -> n) -> n -> n.
     ///
     /// -- | Defines the zero constructor
-    /// Zero = \fun _, _, zero
+    /// Zero : _ = \fun _, _, zero
     ///   zero.
     ///
     /// -- | Defines the succ constructor
-    /// Succ = \fun n, N, succ, _
+    /// Succ : _ = \fun n, N, succ, _
     ///   (n N succ zero).
     /// ```
     #[derive(Debug)]
     pub struct Binding<S: state::State> {
         pub doc_strings: Vec<DocString>,
         pub name: S::Definition,
-        pub value: Vec<Term<S>>,
+        pub type_repr: Term<S>,
+        pub value: Term<S>,
         pub location: Location,
     }
 
@@ -307,6 +315,12 @@ pub mod ast {
         ///
         /// For example, `nat` is a type, but `nat` is also a term.
         Downgrade(Downgrade<S>),
+    }
+
+    impl<S: state::State> Recovery for Stmt<S> {
+        fn recover_from_error(error: Error) -> Self {
+            Stmt::Error(error)
+        }
     }
 
     impl<S: state::State> Element for Stmt<S> {
@@ -528,6 +542,12 @@ pub mod ast {
         Hole(Hole),
     }
 
+    impl<S: state::State> Recovery for Term<S> {
+        fn recover_from_error(error: Error) -> Self {
+            Term::Error(error)
+        }
+    }
+
     impl<S: state::State> Element for Term<S> {
         fn location(&self) -> &Location {
             match self {
@@ -610,7 +630,7 @@ pub mod lexer {
         IntegerParseError,
 
         #[default]
-        Unknown
+        Unknown,
     }
 
     impl From<ParseIntError> for LexerError {
@@ -620,7 +640,7 @@ pub mod lexer {
     }
 
     /// The base structure of the lexer.
-    #[derive(Logos, Debug, PartialEq, Eq)]
+    #[derive(Logos, Debug, PartialEq, Eq, Clone)]
     #[logos(error = LexerError)]
     pub enum Token {
         #[regex("[ \\t\\n\\f]+", logos::skip)]
@@ -648,6 +668,9 @@ pub mod lexer {
 
         #[token("\\type")]
         KwType,
+
+        #[token("\\pi")]
+        KwPi,
 
         #[token("\\elim")]
         KwElim,
@@ -704,13 +727,267 @@ pub mod lexer {
 
 /// The parsing part of the language.
 pub mod parser {
-    use logos::Lexer;
+    use std::{cell::Cell, fmt::Display};
 
-    use crate::lexer::Token;
+    use crate::lexer::{LexerError, Token};
 
+    use super::*;
+    use logos::{Logos, Span};
+
+    /// The parser implementation, which turns tokens into the abstract syntax tree,
+    /// it's the main part of the compiler.
     pub struct Parser<'src> {
-        pub lexer: Lexer<'src, Token>,
-        pub src: &'src str,
+        pub lexer: Vec<(Result<lexer::Token, LexerError>, Span)>,
+        pub failures: Vec<failure::Failure>,
+
+        /// The source code.
+        src: &'src str,
+
+        /// The current index of the parser.
+        index: usize,
+
+        /// The fuel, to avoiding infinite loops.
+        fuel: Cell<usize>,
+    }
+
+    /// Defines a marker for the parser. It's useful to create locations and closing it
+    pub struct Marker(ast::Location);
+
+    impl<'src> Parser<'src> {
+        /// Creates a new parser instance instantiating the lexer with the source code.
+        ///
+        /// ## Parameters
+        ///
+        /// - `src`: The source code to parse.
+        pub fn new(src: &'src str) -> Self {
+            Self {
+                lexer: lexer::Token::lexer(src).spanned().collect(),
+                failures: Vec::new(),
+                index: 0,
+                fuel: Cell::new(256),
+                src,
+            }
+        }
+
+        /// Creates a location for the latest span ever found in the parser,
+        /// it's useful to reporting locations in the tree.
+        pub fn location(&mut self) -> ast::Location {
+            if self.is_eof() {
+                return Default::default();
+            }
+
+            let span = self.lexer[self.index].1.clone();
+
+            ast::Location {
+                from: span.start,
+                to: span.end,
+                file: self.src.to_string(),
+            }
+        }
+
+        /// Opens and closes a marker, it's useful to create locations.
+        #[must_use]
+        #[inline(always)]
+        pub fn open(&mut self) -> Marker {
+            Marker(self.location())
+        }
+
+        /// Close a marker and get a location from it
+        #[must_use]
+        pub fn close(&mut self, Marker(latest): Marker) -> ast::Location {
+            if self.is_eof() {
+                return Default::default();
+            }
+
+            let span = self.lexer[self.index].1.clone();
+
+            ast::Location {
+                from: latest.from,
+                to: span.end,
+                file: self.src.to_string(),
+            }
+        }
+
+        /// Lookup the current token.
+        pub fn lookup(&mut self) -> Option<lexer::Token> {
+            match self.lexer.get(self.index)? {
+                (Ok(token), _) => Some(token.clone()),
+                (Err(_), span) => {
+                    self.failures.push(failure::Failure {
+                        kind: failure::DiagKind::Parser,
+                        level: failure::DiagLevel::Error,
+                        id: diag_id!("unknown-token"),
+                        message: "unknown token".to_string(),
+                        location: self.create_location(span.clone()),
+                    });
+
+                    None
+                }
+            }
+        }
+
+        /// Expects a token, if it's not the current token, it will report an error.
+        pub fn expect(&mut self, message: &str, kind: Token) {
+            if self.lookup() == Some(kind) {
+                self.advance();
+            } else if !self.is_eof() {
+                // Don't report an error if it's the end of the file.
+                self.failures.push(failure::Failure {
+                    kind: failure::DiagKind::Parser,
+                    level: failure::DiagLevel::Error,
+                    id: diag_id!("expected-token"),
+                    message: message.to_string(),
+                    location: self.create_location(self.lexer[self.index].1.clone()),
+                });
+
+                self.advance(); // Advance anyways.
+            }
+        }
+
+        /// Check if the parser has reached the end of the file.
+        #[inline(always)]
+        pub fn is_eof(&self) -> bool {
+            self.index >= self.lexer.len()
+        }
+
+        /// Advances the parser.
+        #[inline(always)]
+        pub fn advance(&mut self) {
+            self.index += 1;
+        }
+
+        /// Expects a token, if it's not the current token, it will return false.
+        #[inline(always)]
+        pub fn is(&mut self, kind: Token) -> bool {
+            self.lookup() == Some(kind)
+        }
+
+        /// Creates a new high-level location from logos' lexer span.
+        ///
+        /// It's useful for creating locations for diagnostics.
+        #[inline(always)]
+        pub fn create_location(&self, span: Span) -> ast::Location {
+            ast::Location {
+                from: span.start,
+                to: span.end,
+                file: self.src.to_string(),
+            }
+        }
+    }
+
+    /// Expects a token in the parser, if it's not the current token, it will report an error.
+    #[macro_export]
+    macro_rules! expect {
+        ($p:expr, $t:expr, $($arg:tt)*) => {
+            $p.expect(&format!($($arg)*), $t)
+        };
+    }
+
+    /// Recovers from an error, it will report an error, and return a recovery value.
+    #[macro_export]
+    macro_rules! recover {
+        ($p:expr, $m:expr, $($arg:tt)*) => {
+            if $p.is_eof() {
+                $crate::ast::Recovery::recover_from_error($crate::ast::Error {
+                    message: "unexpected end of file".into(),
+                    full_text: "".into(),
+                    location: $p.close($m),
+                })
+            } else {
+                // TODO: report error
+                $crate::ast::Recovery::recover_from_error($crate::ast::Error {
+                    message: format!($($arg)*),
+                    full_text:  "".into(),
+                    location: $p.close($m),
+                })
+            }
+        };
+    }
+}
+
+/// The grammar implementation of the language.
+pub mod grammar {
+    use super::*;
+    use crate::{
+        ast::{parsed, state},
+        lexer::Token,
+        parser::Parser,
+    };
+
+    pub fn definition(p: &mut Parser) -> parsed::Definition {
+        todo!()
+    }
+
+    pub fn reference(p: &mut Parser) -> parsed::Reference {
+        todo!()
+    }
+
+    pub fn stmt(p: &mut Parser) -> ast::Stmt<state::Quoted> {
+        let m = p.open();
+
+        match p.lookup() {
+            // SECTION: Singature
+            //   Grammar: ?doc_strings <constructor> : <expr> = <expr>.
+            Some(Token::Constructor(_)) => {
+                let definition = definition(p);
+                expect!(p, Token::SmColon, "expected the type of signature");
+                let type_repr = expr(p);
+                expect!(p, Token::SmEq, "expected the value of signature");
+                let value = expr(p);
+                expect!(p, Token::SmDot, "expected `.` ending of statement");
+
+                ast::Stmt::Binding(ast::Binding {
+                    doc_strings: vec![],
+                    location: p.close(m),
+                    name: definition,
+                    type_repr,
+                    value,
+                })
+            }
+
+            // SECTION: Induction
+            Some(Token::KwInductive) => recover!(p, m, r"`\inductive` types aren't supported yet"),
+
+            // SECTION: Commands
+            Some(Token::CmdElim) => recover!(p, m, "`@elim` commands aren't supported yet"),
+            Some(Token::CmdEval) => recover!(p, m, "`@eval` commands aren't supported yet"),
+            Some(Token::CmdType) => recover!(p, m, "`@type` commands aren't supported yet"),
+            Some(Token::CmdImport) => recover!(p, m, "`@import` commands aren't supported yet"),
+
+            // SECTION: Errors
+            None => recover!(p, m, "eof can't be parsed into statement"),
+            _ => recover!(p, m, "unknown statement token"),
+        }
+    }
+
+    pub fn primary(p: &mut Parser) -> ast::Term<state::Quoted> {
+        let m = p.open();
+
+        match p.lookup() {
+            Some(Token::KwPi) => todo!(),
+            Some(Token::KwFun) => todo!(),
+            Some(Token::KwType) => todo!(),
+            Some(Token::KwElim) => todo!(),
+            None => recover!(p, m, "eof can't be parsed into expression"),
+            _ => recover!(p, m, "unknown expression token"),
+        }
+    }
+
+    pub fn expr(p: &mut Parser) -> ast::Term<state::Quoted> {
+        let m = p.open();
+        let callee = primary(p);
+        let arguments = Vec::new();
+
+        // TODO: parse call arguments
+        if arguments.is_empty() {
+            callee
+        } else {
+            ast::Term::Apply(ast::Apply {
+                callee: callee.into(),
+                arguments,
+                location: p.close(m),
+            })
+        }
     }
 }
 
