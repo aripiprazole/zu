@@ -101,7 +101,7 @@ pub mod ast {
         }
     }
 
-    #[derive(Debug)]
+    #[derive(Debug, Hash, PartialEq, Eq, Clone)]
     pub struct Location {
         pub from: usize,
         pub to: usize,
@@ -543,6 +543,59 @@ pub mod ast {
                 Term::Reference(atom) => atom.location(),
             }
         }
+    }
+}
+
+/// Error reporting module to the language.
+pub mod failure {
+    use super::*;
+
+    pub const UNRESOLVED_REFERENCE: &str = "unresolved-reference";
+    pub const DUPLICATED_DEFINITION: &str = "duplicated-definition";
+
+    /// The identification of the diagnostic, it's a list of strings.
+    ///
+    /// ## Examples
+    ///
+    /// For example, if we have, "unresolved-variable", "name-of-var", it will group all the
+    /// errors with the same diagnostic id.
+    #[derive(Debug, Hash, PartialEq, Eq, Clone)]
+    pub struct DiagId(pub Vec<String>);
+
+    /// The diagnostic level, it's the severity of the diagnostic.
+    #[derive(Debug, Hash, PartialEq, Eq, Clone, Copy)]
+    pub enum DiagLevel {
+        /// The diagnostic is a warning.
+        Warning,
+
+        /// The diagnostic is an error.
+        Error,
+    }
+
+    /// The diagnostic kind, it's the severity of the diagnostic.
+    #[derive(Debug, Hash, PartialEq, Eq, Clone, Copy)]
+    pub enum DiagKind {
+        Parser,
+        Resolver,
+        Typer,
+    }
+
+    /// The diagnostic message to be presented to the user.
+    #[derive(Debug, Hash, PartialEq, Eq, Clone)]
+    pub struct Failure {
+        pub kind: DiagKind,
+        pub level: DiagLevel,
+        pub id: DiagId,
+        pub message: String,
+        pub location: ast::Location,
+    }
+
+    /// Creates a new diagnostic id for types with `Display`.
+    #[macro_export]
+    macro_rules! diag_id {
+        ($($x:expr),+ $(,)?) => {
+            $crate::failure::DiagId(vec![$($x.to_string()),+])
+        };
     }
 }
 
