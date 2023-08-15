@@ -6,21 +6,99 @@ pub mod ast {
 
     /// The ast GAT state.
     pub mod state {
+        use super::*;
+
         /// Represents the syntax state, if it's resolved, or just parsed, it's useful for not
         /// having to redeclare the same types.
-        pub trait State {}
+        pub trait State: Debug {
+            type Reference: Element;
+            type Definition: Debug;
+        }
 
         /// Represents the parsed state, it's the state of the syntax tree when it's just parsed.
         #[derive(Debug)]
         pub struct Quoted;
 
-        impl State for Quoted {}
+        impl State for Quoted {
+            type Definition = parsed::Definition;
+            type Reference = parsed::Reference;
+        }
 
         /// Represents the resolved state, it's the state of the syntax tree when it's resolved.
         #[derive(Debug)]
         pub struct Resolved;
 
-        impl State for Resolved {}
+        impl State for Resolved {
+            type Definition = resolved::Definition;
+            type Reference = resolved::Reference;
+        }
+    }
+
+    #[derive(Debug)]
+    pub enum DefinitionKind {
+        Constructor,
+        Inductive,
+        Binding,
+    }
+
+    pub mod parsed {
+        use super::*;
+
+        /// A definition. It has a text, and a location.
+        #[derive(Debug)]
+        pub struct Definition {
+            pub text: String,
+            pub location: Location,
+        }
+
+        impl Element for Definition {
+            fn location(&self) -> &Location {
+                &self.location
+            }
+        }
+
+        /// A name access.
+        #[derive(Debug)]
+        pub struct Reference {
+            pub text: String,
+            pub location: Location,
+        }
+
+        impl Element for Reference {
+            fn location(&self) -> &Location {
+                &self.location
+            }
+        }
+    }
+
+    pub mod resolved {
+        use super::*;
+
+        /// A definition. It has a text, and a location.
+        #[derive(Debug)]
+        pub struct Definition {
+            pub text: String,
+            pub location: Location,
+        }
+
+        impl Element for Definition {
+            fn location(&self) -> &Location {
+                &self.location
+            }
+        }
+
+        /// A name access.
+        #[derive(Debug)]
+        pub struct Reference {
+            pub text: String,
+            pub location: Location,
+        }
+
+        impl Element for Reference {
+            fn location(&self) -> &Location {
+                &self.location
+            }
+        }
     }
 
     #[derive(Debug)]
@@ -54,26 +132,6 @@ pub mod ast {
         }
     }
 
-    #[derive(Debug)]
-    pub enum DefinitionKind {
-        Constructor,
-        Inductive,
-        Binding,
-    }
-
-    /// A definition. It has a text, and a location.
-    #[derive(Debug)]
-    pub struct Definition {
-        pub text: String,
-        pub location: Location,
-    }
-
-    impl Element for Definition {
-        fn location(&self) -> &Location {
-            &self.location
-        }
-    }
-
     /// A constructor for an inductive type. It has a name and a type.
     ///
     /// ## Examples
@@ -84,13 +142,13 @@ pub mod ast {
     ///
     /// Are constructors for the inductive type `nat`.
     #[derive(Debug)]
-    pub struct Constructor {
-        pub name: Definition,
-        pub type_rep: Term,
+    pub struct Constructor<S: state::State> {
+        pub name: S::Definition,
+        pub type_rep: Term<S>,
         pub location: Location,
     }
 
-    impl Element for Constructor {
+    impl<S: state::State> Element for Constructor<S> {
         fn location(&self) -> &Location {
             &self.location
         }
@@ -136,21 +194,21 @@ pub mod ast {
     ///   Succ : nat -> nat.
     /// ```
     #[derive(Debug)]
-    pub struct Inductive {
+    pub struct Inductive<S: state::State> {
         pub doc_strings: Vec<DocString>,
-        pub name: Definition,
-        pub parameters: Vec<Variable>,
-        pub constructors: Vec<Constructor>,
+        pub name: S::Definition,
+        pub parameters: Vec<Variable<S>>,
+        pub constructors: Vec<Constructor<S>>,
         pub location: Location,
     }
 
-    impl Element for Inductive {
+    impl<S: state::State> Element for Inductive<S> {
         fn location(&self) -> &Location {
             &self.location
         }
     }
 
-    impl Declaration for Inductive {
+    impl<S: state::State> Declaration for Inductive<S> {
         fn doc_strings(&self) -> &[DocString] {
             &self.doc_strings
         }
@@ -159,7 +217,7 @@ pub mod ast {
     /// Defines a binding. It has a name, a list of doc strings, and a value.
     ///
     /// ## Examples
-    /// 
+    ///
     /// ```haskell
     /// -- | Defines natural numbers without induction feature, it's
     /// -- like functions in dependent langauges.
@@ -174,20 +232,20 @@ pub mod ast {
     ///   (n N succ zero).
     /// ```
     #[derive(Debug)]
-    pub struct Binding {
+    pub struct Binding<S: state::State> {
         pub doc_strings: Vec<DocString>,
-        pub name: Definition,
-        pub value: Vec<Term>,
+        pub name: S::Definition,
+        pub value: Vec<Term<S>>,
         pub location: Location,
     }
 
-    impl Element for Binding {
+    impl<S: state::State> Element for Binding<S> {
         fn location(&self) -> &Location {
             &self.location
         }
     }
 
-    impl Declaration for Binding {
+    impl<S: state::State> Declaration for Binding<S> {
         fn doc_strings(&self) -> &[DocString] {
             &self.doc_strings
         }
@@ -207,11 +265,11 @@ pub mod ast {
 
     /// Represents a command downgrade from statement, just like @eval and @type.
     #[derive(Debug)]
-    pub enum CommandKind {
-        Eval(Term),
-        Type(Term),
+    pub enum CommandKind<S: state::State> {
+        Eval(Term<S>),
+        Type(Term<S>),
         Import(Identifier),
-        Elim(Definition, Vec<Definition>),
+        Elim(S::Definition, Vec<S::Definition>),
     }
 
     /// Represents a command downgrade from statement, just like @eval and @type.
@@ -222,12 +280,12 @@ pub mod ast {
     /// @eval 10
     /// ```
     #[derive(Debug)]
-    pub struct Downgrade {
-        pub kind: CommandKind,
+    pub struct Downgrade<S: state::State> {
+        pub kind: CommandKind<S>,
         pub location: Location,
     }
 
-    impl Element for Downgrade {
+    impl<S: state::State> Element for Downgrade<S> {
         fn location(&self) -> &Location {
             &self.location
         }
@@ -235,23 +293,23 @@ pub mod ast {
 
     /// A statement. It can be an inductive type, or a downgrade.
     #[derive(Debug)]
-    pub enum Stmt {
+    pub enum Stmt<S: state::State> {
         Error(Error),
 
         /// An inductive type is a statement that introduces a new inductive
         /// type.
-        Inductive(Inductive),
+        Inductive(Inductive<S>),
 
         /// A binding is a statement that introduces a new binding.
-        Binding(Binding),
+        Binding(Binding<S>),
 
         /// A downgrade is a statement that downgrades a type to a term.
         ///
         /// For example, `nat` is a type, but `nat` is also a term.
-        Downgrade(Downgrade),
+        Downgrade(Downgrade<S>),
     }
 
-    impl Element for Stmt {
+    impl<S: state::State> Element for Stmt<S> {
         fn location(&self) -> &Location {
             match self {
                 Stmt::Error(error) => &error.location,
@@ -270,21 +328,6 @@ pub mod ast {
     }
 
     impl Element for Universe {
-        fn location(&self) -> &Location {
-            &self.location
-        }
-    }
-
-    /// A name access.
-    #[derive(Debug)]
-    pub struct Atom {
-        pub text: String,
-
-        /// The location of the integer in the source code.
-        pub location: Location,
-    }
-
-    impl Element for Atom {
         fn location(&self) -> &Location {
             &self.location
         }
@@ -323,13 +366,13 @@ pub mod ast {
     ///
     /// It's a simple pattern for eliminator.
     #[derive(Debug)]
-    pub struct Pattern {
-        pub definition: Definition,
-        pub arguments: Vec<Identifier>,
+    pub struct Pattern<S: state::State> {
+        pub definition: S::Reference,
+        pub arguments: Vec<S::Definition>,
         pub location: Location,
     }
 
-    impl Element for Pattern {
+    impl<S: state::State> Element for Pattern<S> {
         fn location(&self) -> &Location {
             &self.location
         }
@@ -337,13 +380,13 @@ pub mod ast {
 
     /// A case for eliminator.
     #[derive(Debug)]
-    pub struct Case {
-        pub patterns: Vec<Pattern>,
-        pub value: Box<Term>,
+    pub struct Case<S: state::State> {
+        pub patterns: Vec<Pattern<S>>,
+        pub value: Box<Term<S>>,
         pub location: Location,
     }
 
-    impl Element for Case {
+    impl<S: state::State> Element for Case<S> {
         fn location(&self) -> &Location {
             &self.location
         }
@@ -353,12 +396,12 @@ pub mod ast {
     ///
     /// It's a simple eliminator for inductive types.
     #[derive(Debug)]
-    pub struct Elim {
-        pub patterns: Vec<Pattern>,
+    pub struct Elim<S: state::State> {
+        pub patterns: Vec<Pattern<S>>,
         pub location: Location,
     }
 
-    impl Element for Elim {
+    impl<S: state::State> Element for Elim<S> {
         fn location(&self) -> &Location {
             &self.location
         }
@@ -366,15 +409,15 @@ pub mod ast {
 
     /// A variable. It has a name and a location.
     #[derive(Debug)]
-    pub struct Variable {
+    pub struct Variable<S: state::State> {
         /// The name of the variable. The idea of the [`Option`] type, is when
         /// we have a binder like `_`, which is a placeholder for a variable for
         /// which we don't care about the name.
-        pub text: Option<String>,
+        pub text: Option<S::Definition>,
 
         /// The type of the variable. If it's in an implicit argument position,
         /// it will fallback to the type `type`.
-        pub type_repr: Option<Box<Term>>,
+        pub type_repr: Option<Box<Term<S>>>,
 
         /// If the variable binds something implicitly or explicitly.
         pub icit: Icit,
@@ -383,7 +426,7 @@ pub mod ast {
         pub location: Location,
     }
 
-    impl Element for Variable {
+    impl<S: state::State> Element for Variable<S> {
         fn location(&self) -> &Location {
             &self.location
         }
@@ -406,13 +449,13 @@ pub mod ast {
     /// (a b c)
     /// ```
     #[derive(Debug)]
-    pub struct Apply {
-        pub callee: Box<Term>,
-        pub arguments: Vec<Variable>,
+    pub struct Apply<S: state::State> {
+        pub callee: Box<Term<S>>,
+        pub arguments: Vec<Variable<S>>,
         pub location: Location,
     }
 
-    impl Element for Apply {
+    impl<S: state::State> Element for Apply<S> {
         fn location(&self) -> &Location {
             &self.location
         }
@@ -428,13 +471,13 @@ pub mod ast {
     ///   (n N succ zero).
     /// ```
     #[derive(Debug)]
-    pub struct Fun {
-        pub arguments: Vec<Variable>,
-        pub value: Box<Term>,
+    pub struct Fun<S: state::State> {
+        pub arguments: Vec<Variable<S>>,
+        pub value: Box<Term<S>>,
         pub location: Location,
     }
 
-    impl Element for Fun {
+    impl<S: state::State> Element for Fun<S> {
         fn location(&self) -> &Location {
             &self.location
         }
@@ -454,15 +497,15 @@ pub mod ast {
     /// Pi types can be implicit too, like `{%x : A} -> B`, where `x` is the name,
     /// `A` is the domain, and `B` is the codomain.
     #[derive(Debug)]
-    pub struct Pi {
+    pub struct Pi<S: state::State> {
         pub icit: Icit,
-        pub name: Variable,
-        pub domain: Box<Term>,
-        pub codomain: Box<Term>,
+        pub name: Variable<S>,
+        pub domain: Box<Term<S>>,
+        pub codomain: Box<Term<S>>,
         pub location: Location,
     }
 
-    impl Element for Pi {
+    impl<S: state::State> Element for Pi<S> {
         fn location(&self) -> &Location {
             &self.location
         }
@@ -472,20 +515,20 @@ pub mod ast {
     ///
     /// It's the base of the abstract syntax tree.
     #[derive(Debug)]
-    pub enum Term {
+    pub enum Term<S: state::State> {
         Error(Error),
         Universe(Universe),
         Int(Int),
-        Elim(Elim),
-        Fun(Fun),
-        Variable(Variable),
-        Apply(Apply),
-        Pi(Pi),
-        Atom(Atom),
+        Elim(Elim<S>),
+        Fun(Fun<S>),
+        Variable(Variable<S>),
+        Apply(Apply<S>),
+        Pi(Pi<S>),
+        Reference(S::Reference),
         Hole(Hole),
     }
 
-    impl Element for Term {
+    impl<S: state::State> Element for Term<S> {
         fn location(&self) -> &Location {
             match self {
                 Term::Error(error) => error.location(),
@@ -497,7 +540,7 @@ pub mod ast {
                 Term::Apply(apply) => apply.location(),
                 Term::Pi(pi) => pi.location(),
                 Term::Hole(hole) => hole.location(),
-                Term::Atom(atom) => atom.location(),
+                Term::Reference(atom) => atom.location(),
             }
         }
     }
