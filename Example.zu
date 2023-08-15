@@ -3,7 +3,7 @@
 nat = %n: type -> (n -> n) -> n -> n.
 
 -- | Defines a dependent eliminator for `Zero`, `Succ` in nat
-@elim nat of Zero, Succ
+@elim nat of Zero, Succ.
 
 -- | Defines the zero constructor
 Zero = \fun _, _, zero

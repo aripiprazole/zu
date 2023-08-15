@@ -222,6 +222,34 @@ pub mod ast {
         }
     }
 
+    /// A name access.
+    #[derive(Debug)]
+    pub struct Atom {
+        pub text: String,
+
+        /// The location of the integer in the source code.
+        pub location: Location,
+    }
+
+    impl Element for Atom {
+        fn location(&self) -> &Location {
+            &self.location
+        }
+    }
+
+    /// A hole. It has a location.
+    #[derive(Debug)]
+    pub struct Hole {
+        /// The location of the integer in the source code.
+        pub location: Location,
+    }
+
+    impl Element for Hole {
+        fn location(&self) -> &Location {
+            &self.location
+        }
+    }
+
     /// Int is a integer value like `0`, `1`, `2`, etc.
     #[derive(Debug)]
     pub struct Int {
@@ -399,6 +427,8 @@ pub mod ast {
         Variable(Variable),
         Apply(Apply),
         Pi(Pi),
+        Atom(Atom),
+        Hole(Hole),
     }
 
     impl Element for Term {
@@ -411,6 +441,8 @@ pub mod ast {
                 Term::Variable(variable) => variable.location(),
                 Term::Apply(apply) => apply.location(),
                 Term::Pi(pi) => pi.location(),
+                Term::Hole(hole) => hole.location(),
+                Term::Atom(atom) => atom.location(),
             }
         }
     }
