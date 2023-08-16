@@ -101,11 +101,17 @@ pub mod ast {
         }
     }
 
-    #[derive(Default, Debug, Hash, PartialEq, Eq, Clone)]
+    #[derive(Default, Hash, PartialEq, Eq, Clone)]
     pub struct Location {
         pub from: usize,
         pub to: usize,
         pub file: String,
+    }
+
+    impl Debug for Location {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "Location")
+        }
     }
 
     /// An element. It can be a declaration, or a term.
@@ -362,6 +368,21 @@ pub mod ast {
 
     /// Int is a integer value like `0`, `1`, `2`, etc.
     #[derive(Debug)]
+    pub struct Str {
+        pub value: String,
+
+        /// The location of the source in the source code.
+        pub location: Location,
+    }
+
+    impl Element for Str {
+        fn location(&self) -> &Location {
+            &self.location
+        }
+    }
+
+    /// Int is a integer value like `0`, `1`, `2`, etc.
+    #[derive(Debug)]
     pub struct Int {
         /// The value of the integer.
         pub value: isize,
@@ -528,11 +549,11 @@ pub mod ast {
     /// A term. It can be an integer, a variable, an application, or a pi type.
     ///
     /// It's the base of the abstract syntax tree.
-    #[derive(Debug)]
     pub enum Term<S: state::State> {
         Error(Error),
         Universe(Universe),
         Int(Int),
+        Str(Str),
         Elim(Elim<S>),
         Fun(Fun<S>),
         Variable(Variable<S>),
@@ -540,6 +561,24 @@ pub mod ast {
         Pi(Pi<S>),
         Reference(S::Reference),
         Hole(Hole),
+    }
+
+    impl<S: state::State> Debug for Term<S> {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Error(arg0) => arg0.fmt(f),
+            Self::Universe(arg0) => arg0.fmt(f),
+            Self::Int(arg0) => arg0.fmt(f),
+            Self::Str(arg0) => arg0.fmt(f),
+            Self::Elim(arg0) => arg0.fmt(f),
+            Self::Fun(arg0) => arg0.fmt(f),
+            Self::Variable(arg0) => arg0.fmt(f),
+            Self::Apply(arg0) => arg0.fmt(f),
+            Self::Pi(arg0) => arg0.fmt(f),
+            Self::Reference(arg0) => arg0.fmt(f),
+            Self::Hole(arg0) => arg0.fmt(f),
+        }
+    }
     }
 
     impl<S: state::State> Recovery for Term<S> {
@@ -554,6 +593,7 @@ pub mod ast {
                 Term::Error(error) => error.location(),
                 Term::Universe(universe) => universe.location(),
                 Term::Int(int) => int.location(),
+                Term::Str(str) => str.location(),
                 Term::Elim(elim) => elim.location(),
                 Term::Fun(fun) => fun.location(),
                 Term::Variable(variable) => variable.location(),
@@ -714,20 +754,20 @@ pub mod lexer {
         SmDoubleArr,
 
         // SECTION: Values
-        #[regex("[a-zA-Z*/+-_^&$@!][a-zA-Z0-9_*/+-^&$@!]*")]
+        #[regex("[a-zA-Z*/+-][a-zA-Z0-9_*/+-^$@!]*")]
         Constructor,
 
         #[regex("\"\\.*\"")]
         String,
 
-        #[regex("\\d", priority = 2)]
+        #[regex("\\d")]
         Int,
     }
 }
 
 /// The parsing part of the language.
 pub mod parser {
-    use std::{cell::Cell, fmt::Display};
+    use std::cell::Cell;
 
     use crate::{
         failure::DiagId,
@@ -795,6 +835,15 @@ pub mod parser {
         #[inline(always)]
         pub fn open(&mut self) -> Marker {
             Marker(self.location())
+        }
+
+        /// Opens and closes a marker, it's useful to create locations.
+        #[must_use]
+        #[inline(always)]
+        pub fn next_and_close(&mut self, m: Marker) -> ast::Location {
+            let location = self.close(m);
+            self.advance();
+            location
         }
 
         /// Close a marker and get a location from it
@@ -990,8 +1039,14 @@ pub mod grammar {
         todo!()
     }
 
-    pub fn reference(p: &mut Parser) -> parsed::Reference {
-        todo!()
+    /// Parses a simple reference to a definition.
+    pub fn reference(p: &mut Parser, m: parser::Marker) -> parsed::Reference {
+        let location = p.next_and_close(m);
+
+        parsed::Reference {
+            text: p.slice(&location),
+            location,
+        }
     }
 
     /// Usually finishes a statement with a `.`.
@@ -1000,7 +1055,7 @@ pub mod grammar {
     }
 
     /// Parses a statement. It has the following grammar:
-    /// 
+    ///
     /// ```txt
     /// stmt =
     /// | <definition> : <expr> = <expr> . # Stmt::Binding
@@ -1056,20 +1111,53 @@ pub mod grammar {
     /// | \fun (<definition> ,*) -> <expr>      # Term::Fun
     /// | \pi (<definition> : <expr>) -> <expr> # Term::Pi
     pub fn primary(p: &mut Parser) -> ast::Term<state::Quoted> {
+        /// Consumes a token and returns the string of the content.
+        ///
+        /// It's useful when parsing literals.
+        fn next(p: &mut Parser) -> String {
+            let location = p.location();
+            let string = p.slice(&location);
+            p.advance();
+            string
+        }
+
         let m = p.open();
 
         match p.lookahead(0) {
+            // SECTION: Primaries
             Some(Token::KwPi) if p.skips() => todo!(),
             Some(Token::KwFun) if p.skips() => todo!(),
-            Some(Token::KwType) if p.skips() => todo!(),
             Some(Token::KwElim) if p.skips() => todo!(),
             Some(Token::LParen) => {
                 delimited!(p, Token::LParen, Token::RParen, expr, "expected `)`")
             }
 
+            // SECTION: Literals
+            // Parses a constructor
+            Some(Token::Constructor) => ast::Term::Reference(reference(p, m)),
+            // Parses a type universe
+            Some(Token::KwType) => ast::Term::Universe(ast::Universe {
+                location: p.next_and_close(m),
+            }),
+            // Parses the integer.
+            Some(Token::Int) => ast::Term::Int(ast::Int {
+                value: next(p).parse::<isize>().unwrap(),
+                location: p.next_and_close(m),
+            }),
+            // Parses the string.
+            Some(Token::String) => {
+                let str = next(p);
+
+                ast::Term::Str(ast::Str {
+                    value: (&str[1..str.len() - 1]).into(),
+                    location: p.next_and_close(m),
+                })
+            }
+
             // SECTION: Errors
             // Send a diagnostic to parser, and recover the tree.
             None => recover!(p, m, "eof can't be parsed into expression"),
+            _ if p.skips() => recover!(p, m, "unknown expression token"),
             _ => recover!(p, m, "unknown expression token"),
         }
     }
@@ -1083,6 +1171,7 @@ pub mod grammar {
     /// ```
     pub fn expr(p: &mut Parser) -> ast::Term<state::Quoted> {
         let m = p.open();
+        println!("lookahead: {:?}", p.lookahead(0));
         let callee = primary(p);
         let mut arguments = vec![];
 
@@ -1107,5 +1196,7 @@ pub mod grammar {
 }
 
 fn main() {
-    println!("Hello, world!");
+    let mut p = parser::Parser::new("println 10");
+
+    println!("ast -> {:#?}", grammar::expr(&mut p));
 }
