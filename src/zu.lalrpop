@@ -1,0 +1,127 @@
+use crate::ast::state;
+use crate::ast::Element;
+use std::str::FromStr;
+
+grammar(filename: &str);
+
+/// Separated by commas, this is used for function arguments.
+#[inline]
+Sep<U, T>: Vec<T> = {
+  <mut v:(<T> U)*> <e:T?> => match e {
+    Some(e) => {
+        v.push(e);
+        v
+    }
+    None => v
+  }
+}
+
+/// Primary expressions, that aren't necessary expressions but can be used as
+/// the base of an expression.
+pub Primary: crate::ast::Term<state::Quoted> = {
+  "(" <Term> ")" => crate::ast::Term::Group(<>.into()),
+  <Reference> => crate::ast::Term::Reference(<>),
+  <s: @L> "_" <e: @R> => crate::ast::Term::Hole(crate::ast::Hole { location: crate::ast::Location::new(s, e, filename) }),
+  <s: @L> <value:String> <e: @R> => crate::ast::Term::Str(crate::ast::Str {
+    value,
+    location: crate::ast::Location::new(s, e, filename),
+  }),
+  <s: @L> <value:Int> <e: @R> => crate::ast::Term::Int(crate::ast::Int {
+    value,
+    location: crate::ast::Location::new(s, e, filename),
+  }),
+}
+
+/// Parses a call with a single argument, this is a primary term followed by a
+/// single argument.
+pub Apply: crate::ast::Term<state::Quoted> = {
+  <s: @L> <callee:Call> <argument:Primary> <e: @R> => match callee.clone().unwrap() {
+    crate::ast::Term::Apply(mut apply) => {
+      apply.arguments.push(argument);
+      crate::ast::Term::Apply(apply)
+    }
+    _ => crate::ast::Term::Apply(crate::ast::Apply {
+      callee: Box::new(callee),
+      arguments: vec![argument],
+      location: crate::ast::Location::new(s, e, filename),
+    }),
+  },
+}
+
+/// Parses a pi expression, this is a list of arguments followed by an arrow
+/// and a value.
+pub Pi: crate::ast::Pi<state::Quoted> = {
+  <s: @L> <domain:Domain> "->" <value:Arrow> <e: @R> => crate::ast::Pi {
+    location: crate::ast::Location::new(s, e, filename),
+    icit: crate::ast::Icit::Expl,
+    codomain: value.into(),
+    domain,
+  },
+}
+
+/// Arrow type signature, this is a domain followed by an arrow and a value.
+pub Arrow: crate::ast::Term<state::Quoted> = {
+  Call,
+  <Pi> => crate::ast::Term::Pi(<>),
+}
+
+/// Parses a lambda function, this is a list of arguments followed by an arrow
+/// and a value.
+pub Fun: crate::ast::Term<state::Quoted> = {
+  <s: @L> "\\fun" <arguments:Sep<",", Reference>> "->" <value:Term> <e: @R> => crate::ast::Term::Fun(crate::ast::Fun {
+    arguments,
+    value: value.into(),
+    location: crate::ast::Location::new(s, e, filename),
+  })
+}
+
+/// Represents a domain for pi expressions, this is a variable with a type.
+pub Domain: crate::ast::Variable<state::Quoted> = {
+  /// Parses unnamed explicit arguments, which you don't need to specify
+  /// the type and neither the name.
+  <term:Call> => crate::ast::Variable {
+    text: vec![None],
+    location: term.location().clone(),
+    type_repr: term.into(),
+    icit: crate::ast::Icit::Expl,
+  },
+
+  // Parses explicit arguments, which you need to specify
+  // the type.
+  <s: @L> <names:Sep<",", Reference>> ":" <value:Call> <e: @R> => crate::ast::Variable {
+    text: names.into_iter().map(Some).collect(),
+    type_repr: value.into(),
+    icit: crate::ast::Icit::Expl,
+    location: crate::ast::Location::new(s, e, filename),
+  },
+  
+  // Parses explicit arguments, which you don't need to specify
+  // the type.
+  <s: @L> "{" <names:Sep<",", Reference>> ":" <value:Term> "}" <e: @R> => crate::ast::Variable {
+    text: names.into_iter().map(Some).collect(),
+    type_repr: value.into(),
+    icit: crate::ast::Icit::Impl,
+    location: crate::ast::Location::new(s, e, filename),
+  },
+}
+
+/// Parses a call, this is a primary term followed by a list of arguments. It can 
+/// parse either a call or a call with a single argument.
+pub Call: crate::ast::Term<state::Quoted> = {
+  Primary,
+  Apply,
+}
+
+/// Parser for expressions in the language, these are the terms but it doesn't
+/// parses as primary.
+pub Term: crate::ast::Term<state::Quoted> = {
+  Fun,
+  Arrow,
+}
+
+Int: isize = <s:r"[0-9]+"> => isize::from_str(s).unwrap();
+String: std::string::String = <text:r"'[^']*'"> => (&text[1..text.len() - 1]).to_string();
+Reference: crate::ast::parsed::Reference = <s: @L> <text:r"[a-zA-Z*/+-][a-zA-Z0-9_*/+-]*"> <e: @R> => crate::ast::parsed::Reference {
+  text: text.to_string(),
+  location: crate::ast::Location::new(s, e, filename),
+};

@@ -8,3 +8,8 @@ edition = "2021"
 [dependencies]
 ariadne = "0.3.0"
 logos = "0.13.0"
+lalrpop-util = {version = "0.20.0", default-features = false, features = ["lexer", "unicode"]}
+
+# Add a build-time dependency on the lalrpop library:
+[build-dependencies]
+lalrpop = "0.20.0"

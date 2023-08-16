@@ -10,25 +10,28 @@ pub mod ast {
 
         /// Represents the syntax state, if it's resolved, or just parsed, it's useful for not
         /// having to redeclare the same types.
-        pub trait State: Debug {
+        pub trait State: Debug + Clone {
+            type NameSet: Debug + Clone;
             type Reference: Element;
-            type Definition: Debug;
+            type Definition: Element;
         }
 
         /// Represents the parsed state, it's the state of the syntax tree when it's just parsed.
-        #[derive(Debug)]
+        #[derive(Debug, Clone)]
         pub struct Quoted;
 
         impl State for Quoted {
-            type Definition = parsed::Definition;
+            type NameSet = Vec<Option<Self::Definition>>;
+            type Definition = parsed::Reference;
             type Reference = parsed::Reference;
         }
 
         /// Represents the resolved state, it's the state of the syntax tree when it's resolved.
-        #[derive(Debug)]
+        #[derive(Debug, Clone)]
         pub struct Resolved;
 
         impl State for Resolved {
+            type NameSet = Option<Self::Definition>;
             type Definition = resolved::Definition;
             type Reference = resolved::Reference;
         }
@@ -44,21 +47,8 @@ pub mod ast {
     pub mod parsed {
         use super::*;
 
-        /// A definition. It has a text, and a location.
-        #[derive(Debug)]
-        pub struct Definition {
-            pub text: String,
-            pub location: Location,
-        }
-
-        impl Element for Definition {
-            fn location(&self) -> &Location {
-                &self.location
-            }
-        }
-
         /// A name access.
-        #[derive(Debug)]
+        #[derive(Debug, Clone)]
         pub struct Reference {
             pub text: String,
             pub location: Location,
@@ -75,7 +65,7 @@ pub mod ast {
         use super::*;
 
         /// A definition. It has a text, and a location.
-        #[derive(Debug)]
+        #[derive(Debug, Clone)]
         pub struct Definition {
             pub text: String,
             pub location: Location,
@@ -88,7 +78,7 @@ pub mod ast {
         }
 
         /// A name access.
-        #[derive(Debug)]
+        #[derive(Debug, Clone)]
         pub struct Reference {
             pub text: String,
             pub location: Location,
@@ -103,9 +93,20 @@ pub mod ast {
 
     #[derive(Default, Hash, PartialEq, Eq, Clone)]
     pub struct Location {
-        pub from: usize,
-        pub to: usize,
-        pub file: String,
+        pub start: usize,
+        pub end: usize,
+        pub filename: String,
+    }
+
+    impl Location {
+        /// Creates a new instance of [`Location`].
+        pub fn new(start: usize, end: usize, filename: &str) -> Self {
+            Self {
+                start,
+                end,
+                filename: filename.into(),
+            }
+        }
     }
 
     impl Debug for Location {
@@ -115,12 +116,12 @@ pub mod ast {
     }
 
     /// An element. It can be a declaration, or a term.
-    pub trait Element: Debug {
+    pub trait Element: Debug + Clone {
         fn location(&self) -> &Location;
     }
 
     /// Error node, it does contains an error.
-    #[derive(Debug)]
+    #[derive(Debug, Clone)]
     pub struct Error {
         /// The error message.
         pub message: String,
@@ -154,7 +155,7 @@ pub mod ast {
     /// - `Succ : nat -> nat`
     ///
     /// Are constructors for the inductive type `nat`.
-    #[derive(Debug)]
+    #[derive(Debug, Clone)]
     pub struct Constructor<S: state::State> {
         pub name: S::Definition,
         pub type_rep: Term<S>,
@@ -170,7 +171,7 @@ pub mod ast {
     /// A documentation string. It has a list of strings.
     ///
     /// It's used to document declarations.
-    #[derive(Debug)]
+    #[derive(Debug, Clone)]
     pub struct DocString {
         pub full_text: String,
         pub text: String,
@@ -206,7 +207,7 @@ pub mod ast {
     ///   Zero : nat,
     ///   Succ : nat -> nat.
     /// ```
-    #[derive(Debug)]
+    #[derive(Debug, Clone)]
     pub struct Inductive<S: state::State> {
         pub doc_strings: Vec<DocString>,
         pub name: S::Definition,
@@ -244,7 +245,7 @@ pub mod ast {
     /// Succ : _ = \fun n, N, succ, _
     ///   (n N succ zero).
     /// ```
-    #[derive(Debug)]
+    #[derive(Debug, Clone)]
     pub struct Binding<S: state::State> {
         pub doc_strings: Vec<DocString>,
         pub name: S::Definition,
@@ -265,7 +266,7 @@ pub mod ast {
         }
     }
 
-    #[derive(Debug)]
+    #[derive(Debug, Clone)]
     pub struct Identifier {
         pub text: String,
         pub location: Location,
@@ -278,7 +279,7 @@ pub mod ast {
     }
 
     /// Represents a command downgrade from statement, just like @eval and @type.
-    #[derive(Debug)]
+    #[derive(Debug, Clone)]
     pub enum CommandKind<S: state::State> {
         Eval(Term<S>),
         Type(Term<S>),
@@ -293,7 +294,7 @@ pub mod ast {
     /// ```haskell
     /// @eval 10
     /// ```
-    #[derive(Debug)]
+    #[derive(Debug, Clone)]
     pub struct Downgrade<S: state::State> {
         pub kind: CommandKind<S>,
         pub location: Location,
@@ -306,7 +307,7 @@ pub mod ast {
     }
 
     /// A statement. It can be an inductive type, or a downgrade.
-    #[derive(Debug)]
+    #[derive(Debug, Clone)]
     pub enum Stmt<S: state::State> {
         Error(Error),
 
@@ -341,7 +342,7 @@ pub mod ast {
     }
 
     /// Type of a type. It has a location.
-    #[derive(Debug)]
+    #[derive(Debug, Clone)]
     pub struct Universe {
         /// The location of the integer in the source code.
         pub location: Location,
@@ -354,7 +355,7 @@ pub mod ast {
     }
 
     /// A hole. It has a location.
-    #[derive(Debug)]
+    #[derive(Debug, Clone)]
     pub struct Hole {
         /// The location of the integer in the source code.
         pub location: Location,
@@ -367,7 +368,7 @@ pub mod ast {
     }
 
     /// Int is a integer value like `0`, `1`, `2`, etc.
-    #[derive(Debug)]
+    #[derive(Debug, Clone)]
     pub struct Str {
         pub value: String,
 
@@ -382,7 +383,7 @@ pub mod ast {
     }
 
     /// Int is a integer value like `0`, `1`, `2`, etc.
-    #[derive(Debug)]
+    #[derive(Debug, Clone)]
     pub struct Int {
         /// The value of the integer.
         pub value: isize,
@@ -400,7 +401,7 @@ pub mod ast {
     /// A pattern. It has a definition, a list of arguments, and a location.
     ///
     /// It's a simple pattern for eliminator.
-    #[derive(Debug)]
+    #[derive(Debug, Clone)]
     pub struct Pattern<S: state::State> {
         pub definition: S::Reference,
         pub arguments: Vec<S::Definition>,
@@ -414,7 +415,7 @@ pub mod ast {
     }
 
     /// A case for eliminator.
-    #[derive(Debug)]
+    #[derive(Debug, Clone)]
     pub struct Case<S: state::State> {
         pub patterns: Vec<Pattern<S>>,
         pub value: Box<Term<S>>,
@@ -430,7 +431,7 @@ pub mod ast {
     /// An eliminator. It has a list of patterns, and a location.
     ///
     /// It's a simple eliminator for inductive types.
-    #[derive(Debug)]
+    #[derive(Debug, Clone)]
     pub struct Elim<S: state::State> {
         pub patterns: Vec<Pattern<S>>,
         pub location: Location,
@@ -443,16 +444,16 @@ pub mod ast {
     }
 
     /// A variable. It has a name and a location.
-    #[derive(Debug)]
+    #[derive(Debug, Clone)]
     pub struct Variable<S: state::State> {
         /// The name of the variable. The idea of the [`Option`] type, is when
         /// we have a binder like `_`, which is a placeholder for a variable for
         /// which we don't care about the name.
-        pub text: Option<S::Definition>,
+        pub text: S::NameSet,
 
         /// The type of the variable. If it's in an implicit argument position,
         /// it will fallback to the type `type`.
-        pub type_repr: Option<Box<Term<S>>>,
+        pub type_repr: Box<Term<S>>,
 
         /// If the variable binds something implicitly or explicitly.
         pub icit: Icit,
@@ -483,7 +484,7 @@ pub mod ast {
     /// ```haskell
     /// (a b c)
     /// ```
-    #[derive(Debug)]
+    #[derive(Debug, Clone)]
     pub struct Apply<S: state::State> {
         pub callee: Box<Term<S>>,
         pub arguments: Vec<Term<S>>,
@@ -505,7 +506,7 @@ pub mod ast {
     /// Succ = \fun n, N, succ, _
     ///   (n N succ zero).
     /// ```
-    #[derive(Debug)]
+    #[derive(Debug, Clone)]
     pub struct Fun<S: state::State> {
         pub arguments: Vec<S::Definition>,
         pub value: Box<Term<S>>,
@@ -531,7 +532,7 @@ pub mod ast {
     ///
     /// Pi types can be implicit too, like `{%x : A} -> B`, where `x` is the name,
     /// `A` is the domain, and `B` is the codomain.
-    #[derive(Debug)]
+    #[derive(Debug, Clone)]
     pub struct Pi<S: state::State> {
         pub icit: Icit,
         pub domain: Variable<S>,
@@ -548,18 +549,30 @@ pub mod ast {
     /// A term. It can be an integer, a variable, an application, or a pi type.
     ///
     /// It's the base of the abstract syntax tree.
+    #[derive(Clone)]
     pub enum Term<S: state::State> {
         Error(Error),
         Universe(Universe),
         Int(Int),
         Str(Str),
+        Group(Box<Term<S>>),
         Elim(Elim<S>),
         Fun(Fun<S>),
-        Variable(Variable<S>),
         Apply(Apply<S>),
         Pi(Pi<S>),
         Reference(S::Reference),
         Hole(Hole),
+    }
+
+    impl<S: state::State> Term<S> {
+        /// Removes the group from the term. It's useful to pattern
+        /// match agains't group.
+        pub fn unwrap(self) -> Self {
+            match self {
+                Self::Group(arg0) => *arg0.clone(),
+                _ => self,
+            }
+        }
     }
 
     impl<S: state::State> Debug for Term<S> {
@@ -569,9 +582,9 @@ pub mod ast {
                 Self::Universe(arg0) => arg0.fmt(f),
                 Self::Int(arg0) => arg0.fmt(f),
                 Self::Str(arg0) => arg0.fmt(f),
+                Self::Group(arg0) => arg0.fmt(f),
                 Self::Elim(arg0) => arg0.fmt(f),
                 Self::Fun(arg0) => arg0.fmt(f),
-                Self::Variable(arg0) => arg0.fmt(f),
                 Self::Apply(arg0) => arg0.fmt(f),
                 Self::Pi(arg0) => arg0.fmt(f),
                 Self::Reference(arg0) => arg0.fmt(f),
@@ -594,8 +607,8 @@ pub mod ast {
                 Term::Int(int) => int.location(),
                 Term::Str(str) => str.location(),
                 Term::Elim(elim) => elim.location(),
+                Term::Group(group) => group.location(),
                 Term::Fun(fun) => fun.location(),
-                Term::Variable(variable) => variable.location(),
                 Term::Apply(apply) => apply.location(),
                 Term::Pi(pi) => pi.location(),
                 Term::Hole(hole) => hole.location(),
@@ -660,793 +673,24 @@ pub mod failure {
     }
 }
 
-/// The tokenization part of the language.
-pub mod lexer {
-    use std::num::ParseIntError;
-
-    use logos::Logos;
-
-    #[derive(Default, Debug, PartialEq, Eq, Clone, Copy)]
-    pub enum LexerError {
-        IntegerParseError,
-
-        #[default]
-        Unknown,
-    }
-
-    impl From<ParseIntError> for LexerError {
-        fn from(_: ParseIntError) -> Self {
-            LexerError::IntegerParseError
-        }
-    }
-
-    /// The base structure of the lexer.
-    #[derive(Logos, Debug, PartialEq, Eq, Clone)]
-    #[logos(error = LexerError)]
-    pub enum Token {
-        #[regex("[ \\t\\n\\f]+", logos::skip)]
-        Ws,
-
-        // SECTION: Commands
-        #[token("@import")]
-        CmdImport,
-
-        #[token("@eval")]
-        CmdEval,
-
-        #[token("@type")]
-        CmdType,
-
-        #[token("@elim")]
-        CmdElim,
-
-        // SECTION: Keywords
-        #[token("\\module")]
-        ModuleKw,
-
-        #[token("\\inductive")]
-        InductiveKw,
-
-        #[token("\\type")]
-        TypeKw,
-
-        #[token("\\pi")]
-        PiKw,
-
-        #[token("\\elim")]
-        ElimKw,
-
-        #[token("\\of")]
-        OfKw,
-
-        #[token("\\fun")]
-        FunKw,
-
-        // SECTION: Control
-        #[token("(")]
-        LParen,
-
-        #[token(")")]
-        RParen,
-
-        #[token("{")]
-        LBrace,
-
-        #[token("}")]
-        RBrace,
-
-        // SECTION: Symbols
-        #[token(".")]
-        Dot,
-
-        #[token(",")]
-        Comma,
-
-        #[token(":")]
-        Colon,
-
-        #[token("=")]
-        Eq,
-
-        #[token("->")]
-        Arrow,
-
-        #[token("=>")]
-        DoubleArrow,
-
-        #[token("_")]
-        Hole,
-
-        // SECTION: Values
-        #[regex("--.*\n")]
-        Comment,
-
-        #[regex("[a-zA-Z*/+-][a-zA-Z0-9_*/+-]*")]
-        Constructor,
-
-        #[regex("\"\\.*\"")]
-        String,
-
-        #[regex("[0-9]+")]
-        Int,
-    }
-}
-
-/// The parsing part of the language.
+/// Parser LALRPOP mod.
 pub mod parser {
-    use logos::{Logos, Span};
-    use std::cell::Cell;
+    use lalrpop_util::lalrpop_mod;
 
-    use crate::{
-        failure::DiagId,
-        lexer::{LexerError, Token},
-    };
+    pub use zu::*;
 
-    use super::*;
-
-    #[derive(Clone)]
-    pub struct Context {
-        pub message: String,
-        pub location: ast::Location,
-        pub old: Option<Box<Context>>,
-    }
-
-    /// The parser implementation, which turns tokens into the abstract syntax tree,
-    /// it's the main part of the compiler.
-    pub struct Parser<'src> {
-        pub lexer: Vec<(Result<lexer::Token, LexerError>, Span)>,
-        pub failures: Vec<failure::Failure>,
-
-        /// The current index of the parser.
-        pub index: usize,
-
-        pub context: Option<Context>,
-
-        /// The source code file name.
-        filename: String,
-
-        /// The source code.
-        src: &'src str,
-
-        /// The fuel, to avoiding infinite loops.
-        #[cfg(debug_assertions)]
-        fuel: Cell<usize>,
-    }
-
-    /// Defines a marker for the parser. It's useful to create locations and closing it
-    #[derive(Clone)]
-    pub struct Marker(ast::Location);
-
-    impl<'src> Parser<'src> {
-        /// Creates a new parser instance instantiating the lexer with the source code.
-        ///
-        /// ## Parameters
-        ///
-        /// - `src`: The source code to parse.
-        pub fn new(filename: &str, src: &'src str) -> Self {
-            Self {
-                filename: filename.to_string(),
-                lexer: lexer::Token::lexer(src).spanned().collect(),
-                failures: Vec::new(),
-                context: None,
-                #[cfg(debug_assertions)]
-                fuel: Cell::new(256),
-                index: 0,
-                src,
-            }
-        }
-
-        /// Setups the current context with the current location
-        /// and a message.
-        pub fn begin(&mut self, message: &str) -> parser::Marker {
-            let m = self.open();
-            let old_context = std::mem::take(&mut self.context);
-            self.context = Some(Context {
-                message: message.to_string(),
-                location: self.location(),
-                old: old_context.map(Box::new),
-            });
-            m
-        }
-
-        /// Run the parser and report with ariadne.
-        pub fn parse_and_report<F, U>(&mut self, f: F) -> U
-        where
-            F: FnOnce(&mut Self) -> U,
-        {
-            use ariadne::*;
-            type AriadneSpan = (String, std::ops::Range<usize>);
-
-            let value = f(self);
-            let source = Source::from(self.src.to_string());
-
-            for error in self.failures.iter() {
-                let range = error.location.from..error.location.to;
-                Report::<AriadneSpan>::build(ReportKind::Error, self.filename.to_string(), 0)
-                    .with_code(1)
-                    .with_message(error.message.to_string())
-                    .with_label(
-                        Label::new((self.filename.clone(), range))
-                            .with_message(error.message.to_string())
-                            .with_color(Color::Red),
-                    )
-                    .with_labels(error.context.clone().map(|context| {
-                        let range = context.from..context.to;
-                        let reason = &error.reason;
-
-                        Label::new((self.filename.clone(), range))
-                            .with_message(format!("while trying to parse: {reason}"))
-                            .with_color(Color::Yellow)
-                    }))
-                    .finish()
-                    .eprint((self.filename.to_string(), source.clone()))
-                    .unwrap();
-            }
-
-            value
-        }
-
-        /// Creates a location for the latest span ever found in the parser,
-        /// it's useful to reporting locations in the tree.
-        pub fn location(&mut self) -> ast::Location {
-            if self.is_eof() {
-                return Default::default();
-            }
-
-            let span = self.lexer[self.index].1.clone();
-
-            ast::Location {
-                from: span.start,
-                to: span.end,
-                file: self.src.to_string(),
-            }
-        }
-
-        /// Opens and closes a marker, it's useful to create locations.
-        #[must_use]
-        #[inline(always)]
-        pub fn open(&mut self) -> Marker {
-            Marker(self.location())
-        }
-
-        /// Opens and closes a marker, it's useful to create locations.
-        #[must_use]
-        #[inline(always)]
-        pub fn next_and_close(&mut self, m: Marker) -> ast::Location {
-            let location = self.close(m);
-            self.advance();
-            location
-        }
-
-        /// Close a marker and get a location from it
-        #[must_use]
-        pub fn close(&mut self, Marker(latest): Marker) -> ast::Location {
-            // Try to unwrap the context to the latest location
-            // ever find, it's useful for error handling.
-            match self.context {
-                Some(ref context) if context.location == latest => {
-                    if let Some(box ref context) = context.old {
-                        self.context = Some(context.clone());
-                    }
-                }
-                _ => {}
-            }
-
-            if self.is_eof() && self.lexer.last().is_some() {
-                // Return latest location before EOF
-                return self.create_location(self.lexer.last().unwrap().1.clone());
-            } else if self.is_eof() {
-                return latest; // Return latest location before EOF
-            }
-
-            let span = self.lexer[self.index].1.clone();
-
-            ast::Location {
-                from: latest.from,
-                to: span.end,
-                file: self.src.to_string(),
-            }
-        }
-
-        /// Lookup the current token.
-        pub fn lookahead(&mut self, n: usize) -> Option<lexer::Token> {
-            #[cfg(debug_assertions)]
-            if self.fuel.get() == 0 {
-                panic!("infinite loop detected");
-            } else {
-                self.fuel.set(self.fuel.take() - 1);
-            }
-
-            match self.lexer.get(self.index + n)? {
-                (Ok(token), _) => Some(token.clone()),
-                (Err(_), span) => {
-                    self.failures.push(failure::Failure {
-                        kind: failure::DiagKind::Parser,
-                        level: failure::DiagLevel::Error,
-                        id: diag_id!("unknown-token"),
-                        message: "unknown token".to_string(),
-                        reason: "unknown token".to_string(),
-                        location: self.create_location(span.clone()),
-                        context: None,
-                    });
-
-                    None
-                }
-            }
-        }
-
-        /// Expects a token, if it's not the current token, it will report an error.
-        pub fn expect(&mut self, advance: bool, message: &str, kind: Token) {
-            if self.lookahead(0) != Some(kind) {
-                self.fail(message, diag_id!["unexpected-token"]);
-
-                // Don't advance if it's not the expected token.
-                if !advance {
-                    return;
-                }
-            }
-            self.advance(); // Advance anyways.
-        }
-
-        /// Check if the parser has reached the end of the file.
-        #[inline(always)]
-        pub fn is_eof(&self) -> bool {
-            self.index >= self.lexer.len()
-        }
-
-        /// Advances the parser.
-        #[inline(always)]
-        pub fn advance(&mut self) {
-            #[cfg(debug_assertions)]
-            self.fuel.set(self.fuel.take() + 1);
-
-            self.index += 1;
-        }
-
-        /// Proceeds the parser with true to make easier pattern matching
-        #[inline(always)]
-        pub fn skips(&mut self) -> bool {
-            if self.is_eof() {
-                return false;
-            }
-
-            self.advance();
-            true
-        }
-
-        /// Expects a token, if it's not the current token, it will return false.
-        #[inline(always)]
-        pub fn is(&mut self, kind: Token) -> bool {
-            self.lookahead(0) == Some(kind)
-        }
-
-        /// Creates a new high-level location from logos' lexer span.
-        ///
-        /// It's useful for creating locations for diagnostics.
-        #[inline(always)]
-        pub fn create_location(&self, span: Span) -> ast::Location {
-            ast::Location {
-                from: span.start,
-                to: span.end,
-                file: self.src.to_string(),
-            }
-        }
-
-        /// Expects a token in the parser, if it's not the current token, it will report an error.
-        #[inline(always)]
-        pub fn is_in(&mut self, tokens: &[Token]) -> bool {
-            tokens.contains(&self.lookahead(0).unwrap_or(Token::Dot))
-        }
-
-        #[inline(always)]
-        pub fn fail(&mut self, message: &str, id: DiagId) {
-            let (token, span) = self
-                .lexer
-                .get(self.index)
-                .cloned()
-                .or_else(|| self.lexer.last().cloned())
-                .expect("expected a token");
-
-            // Don't report an error if it's the end of the file.
-            self.failures.push(failure::Failure {
-                kind: failure::DiagKind::Parser,
-                level: failure::DiagLevel::Error,
-                id,
-                message: message.to_string(),
-                reason: match self.context {
-                    Some(ref context) => context.message.clone(),
-                    _ if self.is_eof() => "but found eof".into(),
-                    _ => match token {
-                        Ok(token) => format!("but found `{token:?}`"),
-                        _ => message.to_string(),
-                    },
-                },
-                context: self.context.clone().map(|c| c.location),
-                location: self.create_location(span.clone()),
-            });
-        }
-
-        /// Reads a location to a string buffer
-        #[inline(always)]
-        pub fn slice(&mut self, location: &ast::Location) -> String {
-            self.src[location.from..location.to].to_string()
-        }
-    }
-
-    /// Expects a token in the parser, if it's not the current token, it will report an error.
-    #[macro_export]
-    macro_rules! expect {
-        ($p:expr, $t:expr, $($arg:tt)*) => {
-            $p.expect(true, &format!($($arg)*), $t)
-        };
-        (@no-advance $p:expr, $t:expr, $($arg:tt)*) => {
-            $p.expect(false, &format!($($arg)*), $t)
-        };
-    }
-
-    /// Expects a token in the parser, if it's not the current token, it will return false.
-    #[macro_export]
-    macro_rules! delimited {
-        ($p:expr, $s:expr, $e:expr, $f:expr, $($arg:tt)*) => {{
-            expect!($p, $s, $($arg)*);
-            let f = $f($p);
-            expect!($p, $e, $($arg)*);
-            f
-        }};
-    }
-
-    /// Recovers from an error, it will report an error, and return a recovery value.
-    #[macro_export]
-    macro_rules! recover {
-        ($p:expr, $m:expr, $($arg:tt)*) => {
-            if $p.is_eof() {
-                let l = $p.close($m);
-                $crate::ast::Recovery::recover_from_error($crate::ast::Error {
-                    message: "unexpected end of file".into(),
-                    full_text: $p.slice(&l),
-                    location: l,
-                })
-            } else {
-                let l = $p.close($m);
-                let m = format!($($arg)*);
-                $p.fail(&m, diag_id!["cant-parse"]);
-                $crate::ast::Recovery::recover_from_error($crate::ast::Error {
-                    message: m,
-                    full_text: $p.slice(&l),
-                    location: l,
-                })
-            }
-        };
-    }
-}
-
-/// The grammar implementation of the language.
-pub mod grammar {
-    use super::*;
-    use crate::{
-        ast::{parsed, state},
-        lexer::Token,
-        parser::Parser,
-    };
-
-    /// The first character that can be parsed as a an expression.
-    ///
-    /// It's useful to recover from errors.
-    const EXPR_FIRST: &[Token] = &[
-        Token::LParen,
-        Token::ElimKw,
-        Token::FunKw,
-        Token::PiKw,
-        Token::TypeKw,
-        Token::Constructor,
-        Token::Int,
-        Token::Hole,
-    ];
-
-    pub fn definition(p: &mut Parser) -> parsed::Definition {
-        let m = p.open();
-        let location = p.close(m);
-        expect!(p, Token::Constructor, "expected a definition");
-
-        parsed::Definition {
-            text: p.slice(&location),
-            location,
-        }
-    }
-
-    /// Parses a simple reference to a definition.
-    pub fn reference(p: &mut Parser) -> parsed::Reference {
-        let m = p.open();
-        let location = p.close(m);
-        expect!(p, Token::Constructor, "expected a definition");
-
-        parsed::Reference {
-            text: p.slice(&location),
-            location,
-        }
-    }
-
-    /// Usually finishes a statement with a `.`.
-    pub fn dot(p: &mut Parser) {
-        expect!(p, Token::Dot, "expected `.` ending of statement");
-    }
-
-    /// Check if it's a comment, and if it is, then parse it.
-    pub fn doc_string(p: &mut Parser) -> Option<ast::DocString> {
-        if !p.is(Token::Comment) {
-            return None;
-        }
-
-        let m = p.open();
-        let location = p.next_and_close(m);
-        let text = p.slice(&location);
-
-        Some(ast::DocString {
-            full_text: (&text[2..]).into(),
-            location,
-            text,
-        })
-    }
-
-    /// Parses a statement. It has the following grammar:
-    ///
-    /// ```txt
-    /// stmt =
-    /// | <definition> : <expr> = <expr> . # Stmt::Binding
-    pub fn stmt(p: &mut Parser) -> ast::Stmt<state::Quoted> {
-        // Parses a signature definition.
-        fn signature_stmt(p: &mut Parser, docs: Vec<ast::DocString>) -> ast::Stmt<state::Quoted> {
-            let m = p.begin("signature");
-
-            let definition = definition(p);
-            // Parses a type representation. It can be a
-            // hole, or a type.
-            let type_repr = match p.lookahead(0) {
-                // Parses type repr as a type, normally.
-                Some(Token::Colon) if p.skips() => expr(p),
-
-                // As the next value is an `=`, so we can set the type
-                // as a hole, with the location set to the definition's
-                // location.
-                Some(Token::Eq) => ast::Term::Hole(ast::Hole {
-                    location: definition.location.clone(),
-                }),
-
-                // Return error and recover with hole default value for
-                // type repr.
-                _ => {
-                    // Return hole as default type. for the signature.
-                    ast::Term::Hole(ast::Hole {
-                        location: definition.location.clone(),
-                    })
-                }
-            };
-            expect!(p, Token::Eq, "expected the value of signature");
-            let value = expr(p);
-            dot(p);
-
-            // Constructs the binding signature.
-            ast::Stmt::Binding(ast::Binding {
-                location: p.close(m),
-                name: definition,
-                doc_strings: docs,
-                type_repr,
-                value,
-            })
-        }
-
-        let m = p.open();
-        let mut doc_strings = vec![];
-
-        // Parse doc string whenever it's possible to add into the
-        // documentation string list.
-        while let Some(doc_string) = doc_string(p) {
-            doc_strings.push(doc_string);
-        }
-
-        match p.lookahead(0) {
-            // SECTION: Signature
-            //   Parses a signature, it's a type or a value definition.
-            //   Grammar: ?doc_strings <constructor> (: <expr>)? = <expr>.
-            Some(Token::Constructor) => signature_stmt(p, doc_strings),
-
-            // SECTION: Induction
-            Some(Token::InductiveKw) => recover!(p, m, r"`\inductive` types aren't supported yet"),
-
-            // SECTION: Commands
-            Some(Token::CmdElim) => recover!(p, m, "`@elim` commands aren't supported yet"),
-            Some(Token::CmdEval) => recover!(p, m, "`@eval` commands aren't supported yet"),
-            Some(Token::CmdType) => recover!(p, m, "`@type` commands aren't supported yet"),
-            Some(Token::CmdImport) => recover!(p, m, "`@import` commands aren't supported yet"),
-
-            // SECTION: Errors
-            // Send a diagnostic to parser, and recover the tree.
-            None => recover!(p, m, "eof can't be parsed into statement"),
-            _ => recover!(p, m, "unknown statement token"),
-        }
-    }
-
-    /// Parses a variable parameter. It has the following grammar:
-    pub fn variable(p: &mut Parser, icit: ast::Icit) -> ast::Variable<state::Quoted> {
-        let m = p.begin("variable");
-        let name = definition(p);
-        expect!(p, Token::Colon, "expected `:` for the pi type");
-        let domain = expr(p);
-
-        ast::Variable {
-            icit,
-            text: Some(name),
-            location: p.close(m),
-            type_repr: Some(domain.into()),
-        }
-    }
-
-    /// Parses a primary expression. It has the following grammar:
-    ///
-    /// ```txt
-    /// Primary =
-    /// | <reference>                           # Term::Reference
-    /// | <integer>                             # Term::Int
-    /// | \type                                 # Term::Universe
-    /// | \elim <expr> \of (<case> ,*)          # Term::Elim
-    /// | \fun (<definition> ,*) -> <expr>      # Term::Fun
-    /// | \pi (<definition> : <expr>) -> <expr> # Term::Pi
-    pub fn primary(p: &mut Parser) -> ast::Term<state::Quoted> {
-        /// Consumes a token and returns the string of the content.
-        ///
-        /// It's useful when parsing literals.
-        fn next(p: &mut Parser) -> String {
-            let location = p.location();
-            let string = p.slice(&location);
-            p.advance();
-            string
-        }
-
-        /// Pi expression
-        fn pi_expr(p: &mut Parser, m: parser::Marker) -> ast::Term<state::Quoted> {
-            let domain = match p.lookahead(0) {
-                // Pareses explicit bindings for Pi types.
-                Some(Token::LParen) if p.skips() => {
-                    let variable = variable(p, ast::Icit::Expl);
-                    expect!(@no-advance p, Token::RParen, "expected `)` finish for the pi type");
-                    variable
-                }
-
-                // Parses implicit bindings for Pi types.
-                Some(Token::LBrace) if p.skips() => {
-                    let variable = variable(p, ast::Icit::Impl);
-                    expect!(@no-advance p, Token::RBrace, "expected `}}` finish for the pi type");
-                    variable
-                }
-
-                // Returns an error and recover the default value for the
-                // parameter
-                _ => {
-                    expect!(@no-advance p, Token::LParen, "expected `(` for the pi type");
-
-                    ast::Variable {
-                        icit: ast::Icit::Expl,
-                        text: None,
-                        location: p.location(),
-                        type_repr: None,
-                    }
-                }
-            };
-            expect!(p, Token::Arrow, "expected `->` to the codomain");
-            let codomain = expr(p);
-
-            ast::Term::Pi(ast::Pi {
-                icit: ast::Icit::Expl,
-                domain,
-                codomain: codomain.into(),
-                location: p.close(m),
-            })
-        }
-
-        /// Fun expression parser
-        fn fun_expr(p: &mut Parser, m: parser::Marker) -> ast::Term<state::Quoted> {
-            // Parses a new argument whenever it's possible to detect a
-            // new definition.
-            let mut arguments = vec![definition(p)];
-            while p.is(Token::Comma) {
-                p.advance();
-
-                arguments.push(definition(p));
-            }
-
-            ast::Term::Fun(ast::Fun {
-                arguments,
-                value: expr(p).into(), // Parses the codomain of the function.
-                location: p.close(m),
-            })
-        }
-
-        /// Group expression parser
-        fn group_expr(p: &mut Parser) -> ast::Term<state::Quoted> {
-            delimited!(p, Token::LParen, Token::RParen, expr, "expected `)`")
-        }
-
-        let m = p.open();
-
-        match p.lookahead(0) {
-            // SECTION: Primaries
-            Some(Token::PiKw) if p.skips() => pi_expr(p, m),
-            Some(Token::FunKw) if p.skips() => fun_expr(p, m),
-            Some(Token::ElimKw) if p.skips() => todo!(),
-            Some(Token::LParen) => group_expr(p),
-
-            // SECTION: Literals
-            // Parses a hole
-            Some(Token::Hole) if p.skips() => ast::Term::Hole(ast::Hole {
-                location: p.close(m),
-            }),
-            // Parses a constructor
-            Some(Token::Constructor) => ast::Term::Reference(reference(p)),
-            // Parses a type universe
-            Some(Token::TypeKw) => ast::Term::Universe(ast::Universe {
-                location: p.next_and_close(m),
-            }),
-            // Parses the integer.
-            Some(Token::Int) => ast::Term::Int(ast::Int {
-                value: next(p).parse::<isize>().unwrap(),
-                location: p.next_and_close(m),
-            }),
-            // Parses the string.
-            Some(Token::String) => {
-                let str = next(p);
-
-                ast::Term::Str(ast::Str {
-                    value: (&str[1..str.len() - 1]).into(),
-                    location: p.next_and_close(m),
-                })
-            }
-
-            // SECTION: Errors
-            // Send a diagnostic to parser, and recover the tree.
-            None => recover!(p, m, "eof can't be parsed into expression"),
-            Some(t) if p.skips() => recover!(p, m, "unknown expression token {t:?}"),
-            _ => recover!(p, m, "unknown expression token"),
-        }
-    }
-
-    /// Parses an expression. It has the following grammar:
-    ///
-    /// ```txt
-    /// expr =
-    /// | <primary> (<primary> *) # Term::Apply
-    /// | <expr> ((-> <expr>) *)  # Term::Pi
-    /// ```
-    pub fn expr(p: &mut Parser) -> ast::Term<state::Quoted> {
-        let m = p.begin("expression");
-        let callee = primary(p);
-        let mut arguments = vec![];
-
-        // Parses a new argument whenever it's possible to detect a
-        // new expression.
-        while p.is_in(EXPR_FIRST) {
-            arguments.push(primary(p));
-        }
-
-        // If there's no argument, return directly the callee to avoid
-        // redundancy.
-        if arguments.is_empty() {
-            callee
-        } else {
-            ast::Term::Apply(ast::Apply {
-                callee: callee.into(),
-                arguments,
-                location: p.close(m),
-            })
-        }
+    lalrpop_mod! {
+        #[allow(warnings)]
+        /// The parsing module
+        pub zu
     }
 }
 
 fn main() {
-    let mut p = parser::Parser::new(
-        "Example.zu",
-        "-- | Defines the succ constructor\n
-         A : \\pi {a : b} -> c = \\fun a, b (a _).",
-    );
+    let filename = "Example.zu".to_string();
+    let ast = parser::TermParser::new()
+        .parse(&filename, "(A -> x, y: B -> x)")
+        .unwrap();
 
-    println!("AST: {:#?}", p.parse_and_report(grammar::stmt));
+    println!("{:#?}", ast);
 }
