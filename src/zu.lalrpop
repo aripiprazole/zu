@@ -4,16 +4,27 @@ use std::str::FromStr;
 
 grammar(filename: &str);
 
-/// Separated by commas, this is used for function arguments.
-#[inline]
-Sep<U, T>: Vec<T> = {
-  <mut v:(<T> U)*> <e:T?> => match e {
-    Some(e) => {
-        v.push(e);
-        v
-    }
-    None => v
-  }
+/// Parses a top-level statement, this is a statement that can be used
+/// outside of a block.
+pub Stmt: crate::ast::Stmt<state::Quoted> = {
+  <s: @L> <doc_strings:DocString*> <name:Reference> <type_repr:TypeRepr?> "=" <value:Term> "." <e: @R> => crate::ast::Stmt::Binding(crate::ast::Binding {
+    doc_strings,
+    type_repr: match type_repr {
+      Some(type_repr) => type_repr.into(),
+      _ => crate::ast::Term::Hole(crate::ast::Hole {
+        location: name.location().clone(),
+      }),
+    },
+    name,
+    value: value.into(),
+    location: crate::ast::Location::new(s, e, filename),
+  }),
+}
+
+/// Parses an optional type representation for a statement, this is a colon
+/// followed by a type representation.
+pub TypeRepr: crate::ast::Term<state::Quoted> = {
+  ":" <value:Term> => value.into(),
 }
 
 /// Primary expressions, that aren't necessary expressions but can be used as
@@ -21,6 +32,7 @@ Sep<U, T>: Vec<T> = {
 pub Primary: crate::ast::Term<state::Quoted> = {
   "(" <Term> ")" => crate::ast::Term::Group(<>.into()),
   <Reference> => crate::ast::Term::Reference(<>),
+  <s: @L> "\\Type" <e: @R> => crate::ast::Term::Universe(crate::ast::Universe { location: crate::ast::Location::new(s, e, filename) }),
   <s: @L> "_" <e: @R> => crate::ast::Term::Hole(crate::ast::Hole { location: crate::ast::Location::new(s, e, filename) }),
   <s: @L> <value:String> <e: @R> => crate::ast::Term::Str(crate::ast::Str {
     value,
@@ -119,9 +131,30 @@ pub Term: crate::ast::Term<state::Quoted> = {
   Arrow,
 }
 
+/// Parses a relevent document string, this is a string that is used to document
+/// the code.
+pub DocString: crate::ast::DocString = <s: @L> <text:r"--.*\n"> <e: @R> => crate::ast::DocString {
+  text: (&text[2..]).to_string(),
+  full_text: text.to_string(),
+  location: crate::ast::Location::new(s, e, filename),
+};
+
 Int: isize = <s:r"[0-9]+"> => isize::from_str(s).unwrap();
 String: std::string::String = <text:r"'[^']*'"> => (&text[1..text.len() - 1]).to_string();
 Reference: crate::ast::parsed::Reference = <s: @L> <text:r"[a-zA-Z*/+-][a-zA-Z0-9_*/+-]*"> <e: @R> => crate::ast::parsed::Reference {
   text: text.to_string(),
   location: crate::ast::Location::new(s, e, filename),
 };
+
+/// Separated by commas, this is used for function arguments. It's useful
+/// to parse vectors, more specifically.
+#[inline]
+Sep<U, T>: Vec<T> = {
+  <mut v:(<T> U)*> <e:T?> => match e {
+    Some(e) => {
+        v.push(e);
+        v
+    }
+    None => v
+  }
+}

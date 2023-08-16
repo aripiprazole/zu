@@ -307,7 +307,7 @@ pub mod ast {
     }
 
     /// A statement. It can be an inductive type, or a downgrade.
-    #[derive(Debug, Clone)]
+    #[derive(Clone)]
     pub enum Stmt<S: state::State> {
         Error(Error),
 
@@ -322,6 +322,16 @@ pub mod ast {
         ///
         /// For example, `nat` is a type, but `nat` is also a term.
         Downgrade(Downgrade<S>),
+    }
+    impl<S: state::State> Debug for Stmt<S> {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            match self {
+                Self::Error(arg0) => arg0.fmt(f),
+                Self::Inductive(arg0) => arg0.fmt(f),
+                Self::Binding(arg0) => arg0.fmt(f),
+                Self::Downgrade(arg0) => arg0.fmt(f),
+            }
+        }
     }
 
     impl<S: state::State> Recovery for Stmt<S> {
@@ -688,8 +698,8 @@ pub mod parser {
 
 fn main() {
     let filename = "Example.zu".to_string();
-    let ast = parser::TermParser::new()
-        .parse(&filename, "(A -> x, y: B -> x)")
+    let ast = parser::StmtParser::new()
+        .parse(&filename, "nat : type = \\Type.")
         .unwrap();
 
     println!("{:#?}", ast);
