@@ -507,7 +507,7 @@ pub mod ast {
     /// ```
     #[derive(Debug)]
     pub struct Fun<S: state::State> {
-        pub arguments: Vec<Variable<S>>,
+        pub arguments: Vec<S::Definition>,
         pub value: Box<Term<S>>,
         pub location: Location,
     }
@@ -1244,7 +1244,22 @@ pub mod grammar {
                     location: p.close(m),
                 })
             }
-            Some(Token::KwFun) if p.skips() => todo!(),
+            Some(Token::KwFun) if p.skips() => {
+                // Parses a new argument whenever it's possible to detect a
+                // new definition.
+                let mut arguments = vec![definition(p)];
+                while p.is(Token::SmComma) {
+                    p.advance();
+
+                    arguments.push(definition(p));
+                }
+
+                ast::Term::Fun(ast::Fun {
+                    arguments,
+                    value: expr(p).into(), // Parses the codomain of the function.
+                    location: p.close(m),
+                })
+            }
             Some(Token::KwElim) if p.skips() => todo!(),
             Some(Token::LParen) => {
                 delimited!(p, Token::LParen, Token::RParen, expr, "expected `)`")
@@ -1313,7 +1328,10 @@ pub mod grammar {
 }
 
 fn main() {
-    let mut p = parser::Parser::new("-- | Defines the succ constructor\nA : \\pi {a : b} -> c = C.");
+    let mut p = parser::Parser::new(
+        "-- | Defines the succ constructor\n
+         A : \\pi {a : b} -> c = \\fun a, b (a b).",
+    );
 
     println!("AST: {:#?}", grammar::stmt(&mut p));
     println!("Failures: {:#?}", p.failures);
