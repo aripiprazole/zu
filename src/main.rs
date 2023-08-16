@@ -7,7 +7,7 @@ pub mod ast {
     /// File definition, it contains all the statements,
     /// the module name, and a base location for it as anchor
     /// for the statements.
-    #[derive(Debug, Clone)]
+    #[derive(Default, Debug, Clone)]
     pub struct File<S: state::State> {
         pub name: String,
         pub stmts: Vec<Stmt<S>>,
@@ -21,7 +21,7 @@ pub mod ast {
 
         /// Represents the syntax state, if it's resolved, or just parsed, it's useful for not
         /// having to redeclare the same types.
-        pub trait State: Debug + Clone {
+        pub trait State: Default + Debug + Clone {
             type NameSet: Debug + Clone;
             type Import: Element;
             type Reference: Element;
@@ -29,7 +29,7 @@ pub mod ast {
         }
 
         /// Represents the parsed state, it's the state of the syntax tree when it's just parsed.
-        #[derive(Debug, Clone)]
+        #[derive(Default, Debug, Clone)]
         pub struct Quoted;
 
         impl State for Quoted {
@@ -40,7 +40,7 @@ pub mod ast {
         }
 
         /// Represents the resolved state, it's the state of the syntax tree when it's resolved.
-        #[derive(Debug, Clone)]
+        #[derive(Default, Debug, Clone)]
         pub struct Resolved;
 
         impl State for Resolved {
@@ -773,6 +773,7 @@ pub mod failure {
 
 /// Parser LALRPOP mod.
 pub mod parser {
+    use ariadne::Fmt;
     use lalrpop_util::{lalrpop_mod, ParseError};
 
     pub use zu::*;
@@ -804,31 +805,36 @@ pub mod parser {
 
     /// Builds an ariadne label from a parse error. It's to construct the report
     /// for the user.
-    fn label(err: ParseError<usize, Token<'_>, &str>) -> (Option<String>, Vec<ariadne::Label>) {
+    fn label(err: ParseError<usize, Token<'_>, &str>) -> (String, Vec<ariadne::Label>) {
         match err {
             ParseError::InvalidToken { location } => {
                 let span = location..location;
                 let message = format!("invalid token at {}", location);
-                let labels = vec![ariadne::Label::new(span).with_message(message.clone())];
-                (Some(message), labels)
+                let labels =
+                    vec![ariadne::Label::new(span)
+                        .with_message(message.clone().fg(ariadne::Color::Red))];
+                (message, labels)
             }
             ParseError::UnrecognizedEof { location, expected } => {
                 let span = location..location;
-                let labels = vec![ariadne::Label::new(span).with_message(fmt_expected(&expected))];
-                (Some("unexpected end of file".into()), labels)
+                let labels = vec![ariadne::Label::new(span)
+                    .with_message(fmt_expected(&expected).fg(ariadne::Color::Red))];
+                ("unexpected end of file".into(), labels)
             }
             ParseError::UnrecognizedToken { token, expected } => {
                 let span = token.0..token.2;
-                let labels = vec![ariadne::Label::new(span).with_message(fmt_expected(&expected))];
-                (Some(format!("unrecognized token {}", token.1)), labels)
+                let labels = vec![ariadne::Label::new(span)
+                    .with_message(fmt_expected(&expected).fg(ariadne::Color::Red))];
+                (format!("unrecognized token {}", token.1), labels)
             }
             ParseError::ExtraToken { ref token } => {
                 let span = token.0..token.2;
                 let message = format!("extra token {}", token.1);
-                let labels = vec![ariadne::Label::new(span).with_message(message)];
-                (Some("extra token detected".into()), labels)
+                let labels =
+                    vec![ariadne::Label::new(span).with_message(message.fg(ariadne::Color::Red))];
+                ("extra token detected".into(), labels)
             }
-            ParseError::User { error } => (Some(error.into()), vec![]),
+            ParseError::User { error } => (error.into(), vec![]),
         }
     }
 
@@ -838,19 +844,45 @@ pub mod parser {
     /// Parses or report the error.
     pub fn parse_or_report(filename: &str, text: &str) -> Result<FileQt, ParserReport> {
         let mut errors = vec![];
-        match FileParser::new().parse(&mut errors, filename, text) {
-            Ok(ast) => Ok(ast),
-            Err(err) => {
-                let kind = ariadne::ReportKind::Custom("parse error", ariadne::Color::Red);
-                let (message, labels) = label(err);
-                let mut report = ariadne::Report::<std::ops::Range<usize>>::build(kind, (), 0);
-                report = report.with_labels(labels);
-                if let Some(message) = message {
-                    report = report.with_message(message);
-                }
-                Err(report.finish().into())
+        let ast = match FileParser::new().parse(&mut errors, filename, text) {
+            Ok(ast) => ast,
+            Err(error) => {
+                // Build up the list with at least one recovery error.
+                errors.push(lalrpop_util::ErrorRecovery {
+                    dropped_tokens: vec![],
+                    error,
+                });
+                Default::default()
             }
+        };
+
+        // If there's no error, so return normally the AST as nothing
+        // had happened.
+        if errors.is_empty() {
+            return Ok(ast);
         }
+
+        // Pop off the first of the errors, so we can get
+        // an error message for the report, and the rest of the
+        // errors.
+        let recovery = errors.remove(0);
+
+        // Otherwise, we have to report the error.
+        let (message, labels) = label(recovery.error);
+
+        // Build the ariadne report.
+        let kind = ariadne::ReportKind::Custom("parse error", ariadne::Color::Red);
+        let report = ariadne::Report::<std::ops::Range<usize>>::build(kind, (), 0)
+            .with_labels(labels)
+            .with_labels(
+                errors
+                    .into_iter()
+                    .flat_map(|recovery| label(recovery.error).1),
+            )
+            .with_message(message)
+            .finish();
+
+        Err(report.into())
     }
 }
 
