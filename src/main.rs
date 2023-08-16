@@ -4,7 +4,18 @@
 pub mod ast {
     use std::fmt::Debug;
 
-    /// The ast GAT state.
+    /// File definition, it contains all the statements,
+    /// the module name, and a base location for it as anchor
+    /// for the statements.
+    #[derive(Debug, Clone)]
+    pub struct File<S: state::State> {
+        pub name: String,
+        pub stmts: Vec<Stmt<S>>,
+        pub location: Location,
+    }
+
+    /// The ast GAT state. It's more likelly a Tree That Grow, with the
+    /// rust features, but that's it.
     pub mod state {
         use super::*;
 
@@ -772,8 +783,8 @@ pub mod parser {
 
 fn main() {
     let filename = "Example.zu".to_string();
-    let ast = parser::StmtParser::new()
-        .parse(&filename, "nat : type = \\Type.")
+    let ast = parser::FileParser::new()
+        .parse(&filename, "\\module 'Nat'. nat : type = \\Type.")
         .unwrap();
 
     println!("{:#?}", ast);

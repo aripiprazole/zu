@@ -4,6 +4,24 @@ use std::str::FromStr;
 
 grammar(filename: &str);
 
+/// Parses an entire file declaration into the abstract syntax tree, so
+/// we can resolve and typecheck it.
+pub File: crate::ast::File<state::Quoted> = {
+  <s: @L> <name:ModuleName?> <stmts:Stmt*> <e: @R> => crate::ast::File {
+    // Remove the .zu extension from filenames, so the modules are more
+    // idiomatic.
+    name: name.unwrap_or_else(|| filename.to_string().replace(".zu", "")),
+    stmts,
+    location: crate::ast::Location::new(s, e, filename),
+  },
+}
+
+/// Parses the header module declaration within the file, this is used to
+/// declare the module name.
+pub ModuleName: String = {
+  "\\module" <name:String> "." => name,
+}
+
 /// Parses a top-level statement, this is a statement that can be used
 /// outside of a block.
 pub Stmt: crate::ast::Stmt<state::Quoted> = {
