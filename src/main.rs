@@ -565,20 +565,20 @@ pub mod ast {
 
     impl<S: state::State> Debug for Term<S> {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Error(arg0) => arg0.fmt(f),
-            Self::Universe(arg0) => arg0.fmt(f),
-            Self::Int(arg0) => arg0.fmt(f),
-            Self::Str(arg0) => arg0.fmt(f),
-            Self::Elim(arg0) => arg0.fmt(f),
-            Self::Fun(arg0) => arg0.fmt(f),
-            Self::Variable(arg0) => arg0.fmt(f),
-            Self::Apply(arg0) => arg0.fmt(f),
-            Self::Pi(arg0) => arg0.fmt(f),
-            Self::Reference(arg0) => arg0.fmt(f),
-            Self::Hole(arg0) => arg0.fmt(f),
+            match self {
+                Self::Error(arg0) => arg0.fmt(f),
+                Self::Universe(arg0) => arg0.fmt(f),
+                Self::Int(arg0) => arg0.fmt(f),
+                Self::Str(arg0) => arg0.fmt(f),
+                Self::Elim(arg0) => arg0.fmt(f),
+                Self::Fun(arg0) => arg0.fmt(f),
+                Self::Variable(arg0) => arg0.fmt(f),
+                Self::Apply(arg0) => arg0.fmt(f),
+                Self::Pi(arg0) => arg0.fmt(f),
+                Self::Reference(arg0) => arg0.fmt(f),
+                Self::Hole(arg0) => arg0.fmt(f),
+            }
         }
-    }
     }
 
     impl<S: state::State> Recovery for Term<S> {
@@ -1063,9 +1063,10 @@ pub mod grammar {
         expect!(p, Token::SmDot, "expected `.` ending of statement");
     }
 
+    /// Check if it's a comment, and if it is, then parse it.
     pub fn doc_string(p: &mut Parser) -> Option<ast::DocString> {
         if !p.is(Token::Comment) {
-            return None
+            return None;
         }
 
         let m = p.open();
@@ -1088,7 +1089,7 @@ pub mod grammar {
         let m = p.open();
         let mut doc_strings = vec![];
 
-        // Parse doc string whenever it's possible to add into the 
+        // Parse doc string whenever it's possible to add into the
         // documentation string list.
         while let Some(doc_string) = doc_string(p) {
             doc_strings.push(doc_string);
@@ -1097,11 +1098,33 @@ pub mod grammar {
         match p.lookahead(0) {
             // SECTION: Signature
             //   Parses a signature, it's a type or a value definition.
-            //   Grammar: ?doc_strings <constructor> : <expr> = <expr>.
+            //   Grammar: ?doc_strings <constructor> (: <expr>)? = <expr>.
             Some(Token::Constructor) => {
                 let definition = definition(p);
-                expect!(p, Token::SmColon, "expected the type of signature");
-                let type_repr = expr(p);
+                // Parses a type representation. It can be a
+                // hole, or a type.
+                let type_repr = match p.lookahead(0) {
+                    // Parses type repr as a type, normally.
+                    Some(Token::SmColon) if p.skips() => expr(p),
+
+                    // As the next value is an `=`, so we can set the type
+                    // as a hole, with the location set to the definition's
+                    // location.
+                    Some(Token::SmEq) => ast::Term::Hole(ast::Hole {
+                        location: definition.location.clone(),
+                    }),
+
+                    // Return error and recover with hole default value for
+                    // type repr.
+                    _ => {
+                        expect!(p, Token::SmEq, "expected the value of signature");
+
+                        // Return hole as default type. for the signature.
+                        ast::Term::Hole(ast::Hole {
+                            location: definition.location.clone(),
+                        })
+                    }
+                };
                 expect!(p, Token::SmEq, "expected the value of signature");
                 let value = expr(p);
                 dot(p);
