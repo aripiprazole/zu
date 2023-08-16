@@ -2,9 +2,6 @@
 -- like functions in dependent langauges.
 nat : _ = \pi (N : \type) -> (N -> N) -> N -> N.
 
--- | Defines a dependent eliminator for `Zero`, `Succ` in nat
-@elim nat \of Zero, Succ.
-
 -- | Defines the zero constructor
 Zero : _ = \fun _, _, zero
   zero.

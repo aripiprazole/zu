@@ -752,6 +752,9 @@ pub mod lexer {
         #[token("=>")]
         DoubleArrow,
 
+        #[token("_")]
+        Hole,
+
         // SECTION: Values
         #[regex("--.*\n")]
         Comment,
@@ -762,7 +765,7 @@ pub mod lexer {
         #[regex("\"\\.*\"")]
         String,
 
-        #[regex("\\d")]
+        #[regex("[0-9]+")]
         Int,
     }
 }
@@ -1042,6 +1045,7 @@ pub mod grammar {
         Token::TypeKw,
         Token::Constructor,
         Token::Int,
+        Token::Hole,
     ];
 
     /// The last character that can be parsed as a an expression.
@@ -1096,6 +1100,51 @@ pub mod grammar {
     /// stmt =
     /// | <definition> : <expr> = <expr> . # Stmt::Binding
     pub fn stmt(p: &mut Parser) -> ast::Stmt<state::Quoted> {
+        // Parses a signature definition.
+        fn signature_stmt(
+            p: &mut Parser,
+            doc_strings: Vec<ast::DocString>,
+            m: parser::Marker,
+        ) -> ast::Stmt<state::Quoted> {
+            let definition = definition(p);
+            // Parses a type representation. It can be a
+            // hole, or a type.
+            let type_repr = match p.lookahead(0) {
+                // Parses type repr as a type, normally.
+                Some(Token::Colon) if p.skips() => expr(p),
+
+                // As the next value is an `=`, so we can set the type
+                // as a hole, with the location set to the definition's
+                // location.
+                Some(Token::Eq) => ast::Term::Hole(ast::Hole {
+                    location: definition.location.clone(),
+                }),
+
+                // Return error and recover with hole default value for
+                // type repr.
+                _ => {
+                    expect!(p, Token::Eq, "expected the value of signature");
+
+                    // Return hole as default type. for the signature.
+                    ast::Term::Hole(ast::Hole {
+                        location: definition.location.clone(),
+                    })
+                }
+            };
+            expect!(p, Token::Eq, "expected the value of signature");
+            let value = expr(p);
+            dot(p);
+
+            // Constructs the binding signature.
+            ast::Stmt::Binding(ast::Binding {
+                location: p.close(m),
+                name: definition,
+                doc_strings,
+                type_repr,
+                value,
+            })
+        }
+
         let m = p.open();
         let mut doc_strings = vec![];
 
@@ -1109,45 +1158,7 @@ pub mod grammar {
             // SECTION: Signature
             //   Parses a signature, it's a type or a value definition.
             //   Grammar: ?doc_strings <constructor> (: <expr>)? = <expr>.
-            Some(Token::Constructor) => {
-                let definition = definition(p);
-                // Parses a type representation. It can be a
-                // hole, or a type.
-                let type_repr = match p.lookahead(0) {
-                    // Parses type repr as a type, normally.
-                    Some(Token::Colon) if p.skips() => expr(p),
-
-                    // As the next value is an `=`, so we can set the type
-                    // as a hole, with the location set to the definition's
-                    // location.
-                    Some(Token::Eq) => ast::Term::Hole(ast::Hole {
-                        location: definition.location.clone(),
-                    }),
-
-                    // Return error and recover with hole default value for
-                    // type repr.
-                    _ => {
-                        expect!(p, Token::Eq, "expected the value of signature");
-
-                        // Return hole as default type. for the signature.
-                        ast::Term::Hole(ast::Hole {
-                            location: definition.location.clone(),
-                        })
-                    }
-                };
-                expect!(p, Token::Eq, "expected the value of signature");
-                let value = expr(p);
-                dot(p);
-
-                // Constructs the binding signature.
-                ast::Stmt::Binding(ast::Binding {
-                    location: p.close(m),
-                    name: definition,
-                    doc_strings,
-                    type_repr,
-                    value,
-                })
-            }
+            Some(Token::Constructor) => signature_stmt(p, doc_strings, m),
 
             // SECTION: Induction
             Some(Token::InductiveKw) => recover!(p, m, r"`\inductive` types aren't supported yet"),
@@ -1275,6 +1286,10 @@ pub mod grammar {
             Some(Token::LParen) => group_expr(p),
 
             // SECTION: Literals
+            // Parses a hole
+            Some(Token::Hole) if p.skips() => ast::Term::Hole(ast::Hole {
+                location: p.close(m),
+            }),
             // Parses a constructor
             Some(Token::Constructor) => ast::Term::Reference(reference(p)),
             // Parses a type universe
@@ -1299,7 +1314,7 @@ pub mod grammar {
             // SECTION: Errors
             // Send a diagnostic to parser, and recover the tree.
             None => recover!(p, m, "eof can't be parsed into expression"),
-            _ if p.skips() => recover!(p, m, "unknown expression token"),
+            Some(t) if p.skips() => recover!(p, m, "unknown expression token {t:?}"),
             _ => recover!(p, m, "unknown expression token"),
         }
     }
@@ -1339,7 +1354,7 @@ pub mod grammar {
 fn main() {
     let mut p = parser::Parser::new(
         "-- | Defines the succ constructor\n
-         A : \\pi {a : b} -> c = \\fun a, b (a b).",
+         A : \\pi {a : b} -> c = \\fun a, b (a _).",
     );
 
     println!("AST: {:#?}", grammar::stmt(&mut p));
