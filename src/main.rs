@@ -700,25 +700,25 @@ pub mod lexer {
 
         // SECTION: Keywords
         #[token("\\module")]
-        KwModule,
+        ModuleKw,
 
         #[token("\\inductive")]
-        KwInductive,
+        InductiveKw,
 
         #[token("\\type")]
-        KwType,
+        TypeKw,
 
         #[token("\\pi")]
-        KwPi,
+        PiKw,
 
         #[token("\\elim")]
-        KwElim,
+        ElimKw,
 
         #[token("\\of")]
-        KwOf,
+        OfKw,
 
         #[token("\\fun")]
-        KwFun,
+        FunKw,
 
         // SECTION: Control
         #[token("(")]
@@ -735,22 +735,22 @@ pub mod lexer {
 
         // SECTION: Symbols
         #[token(".")]
-        SmDot,
+        Dot,
 
         #[token(",")]
-        SmComma,
+        Comma,
 
         #[token(":")]
-        SmColon,
+        Colon,
 
         #[token("=")]
-        SmEq,
+        Eq,
 
         #[token("->")]
-        SmArr,
+        Arrow,
 
         #[token("=>")]
-        SmDoubleArr,
+        DoubleArrow,
 
         // SECTION: Values
         #[regex("--.*\n")]
@@ -949,7 +949,7 @@ pub mod parser {
         /// Expects a token in the parser, if it's not the current token, it will report an error.
         #[inline(always)]
         pub fn is_in(&mut self, tokens: &[Token]) -> bool {
-            tokens.contains(&self.lookahead(0).unwrap_or(Token::SmDot))
+            tokens.contains(&self.lookahead(0).unwrap_or(Token::Dot))
         }
 
         #[inline(always)]
@@ -1036,16 +1036,16 @@ pub mod grammar {
     /// It's useful to recover from errors.
     const EXPR_FIRST: &[Token] = &[
         Token::LParen,
-        Token::KwElim,
-        Token::KwFun,
-        Token::KwPi,
-        Token::KwType,
+        Token::ElimKw,
+        Token::FunKw,
+        Token::PiKw,
+        Token::TypeKw,
         Token::Constructor,
         Token::Int,
     ];
 
     /// The last character that can be parsed as a an expression.
-    const EXPR_RECOVERY: &[Token] = &[Token::RParen, Token::SmComma, Token::SmDot];
+    const EXPR_RECOVERY: &[Token] = &[Token::RParen, Token::Comma, Token::Dot];
 
     pub fn definition(p: &mut Parser) -> parsed::Definition {
         let m = p.open();
@@ -1070,7 +1070,7 @@ pub mod grammar {
 
     /// Usually finishes a statement with a `.`.
     pub fn dot(p: &mut Parser) {
-        expect!(p, Token::SmDot, "expected `.` ending of statement");
+        expect!(p, Token::Dot, "expected `.` ending of statement");
     }
 
     /// Check if it's a comment, and if it is, then parse it.
@@ -1115,19 +1115,19 @@ pub mod grammar {
                 // hole, or a type.
                 let type_repr = match p.lookahead(0) {
                     // Parses type repr as a type, normally.
-                    Some(Token::SmColon) if p.skips() => expr(p),
+                    Some(Token::Colon) if p.skips() => expr(p),
 
                     // As the next value is an `=`, so we can set the type
                     // as a hole, with the location set to the definition's
                     // location.
-                    Some(Token::SmEq) => ast::Term::Hole(ast::Hole {
+                    Some(Token::Eq) => ast::Term::Hole(ast::Hole {
                         location: definition.location.clone(),
                     }),
 
                     // Return error and recover with hole default value for
                     // type repr.
                     _ => {
-                        expect!(p, Token::SmEq, "expected the value of signature");
+                        expect!(p, Token::Eq, "expected the value of signature");
 
                         // Return hole as default type. for the signature.
                         ast::Term::Hole(ast::Hole {
@@ -1135,7 +1135,7 @@ pub mod grammar {
                         })
                     }
                 };
-                expect!(p, Token::SmEq, "expected the value of signature");
+                expect!(p, Token::Eq, "expected the value of signature");
                 let value = expr(p);
                 dot(p);
 
@@ -1150,7 +1150,7 @@ pub mod grammar {
             }
 
             // SECTION: Induction
-            Some(Token::KwInductive) => recover!(p, m, r"`\inductive` types aren't supported yet"),
+            Some(Token::InductiveKw) => recover!(p, m, r"`\inductive` types aren't supported yet"),
 
             // SECTION: Commands
             Some(Token::CmdElim) => recover!(p, m, "`@elim` commands aren't supported yet"),
@@ -1169,7 +1169,7 @@ pub mod grammar {
     pub fn variable(p: &mut Parser, icit: ast::Icit) -> ast::Variable<state::Quoted> {
         let m = p.open();
         let name = definition(p);
-        expect!(p, Token::SmColon, "expected `:` for the pi type");
+        expect!(p, Token::Colon, "expected `:` for the pi type");
         let domain = expr(p);
 
         ast::Variable {
@@ -1205,7 +1205,7 @@ pub mod grammar {
 
         match p.lookahead(0) {
             // SECTION: Primaries
-            Some(Token::KwPi) if p.skips() => {
+            Some(Token::PiKw) if p.skips() => {
                 let domain = match p.lookahead(0) {
                     // Pareses explicit bindings for Pi types.
                     Some(Token::LParen) if p.skips() => {
@@ -1234,7 +1234,7 @@ pub mod grammar {
                         }
                     }
                 };
-                expect!(p, Token::SmArr, "expected `->` to the codomain");
+                expect!(p, Token::Arrow, "expected `->` to the codomain");
                 let codomain = expr(p);
 
                 ast::Term::Pi(ast::Pi {
@@ -1244,11 +1244,11 @@ pub mod grammar {
                     location: p.close(m),
                 })
             }
-            Some(Token::KwFun) if p.skips() => {
+            Some(Token::FunKw) if p.skips() => {
                 // Parses a new argument whenever it's possible to detect a
                 // new definition.
                 let mut arguments = vec![definition(p)];
-                while p.is(Token::SmComma) {
+                while p.is(Token::Comma) {
                     p.advance();
 
                     arguments.push(definition(p));
@@ -1260,7 +1260,7 @@ pub mod grammar {
                     location: p.close(m),
                 })
             }
-            Some(Token::KwElim) if p.skips() => todo!(),
+            Some(Token::ElimKw) if p.skips() => todo!(),
             Some(Token::LParen) => {
                 delimited!(p, Token::LParen, Token::RParen, expr, "expected `)`")
             }
@@ -1269,7 +1269,7 @@ pub mod grammar {
             // Parses a constructor
             Some(Token::Constructor) => ast::Term::Reference(reference(p)),
             // Parses a type universe
-            Some(Token::KwType) => ast::Term::Universe(ast::Universe {
+            Some(Token::TypeKw) => ast::Term::Universe(ast::Universe {
                 location: p.next_and_close(m),
             }),
             // Parses the integer.
