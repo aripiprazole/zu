@@ -759,6 +759,9 @@ pub mod failure {
         pub location: ast::Location,
     }
 
+    /// Type for a lot of diagnostics.
+    pub struct Report(pub Vec<Failure>);
+
     /// Creates a new diagnostic id for types with `Display`.
     #[macro_export]
     macro_rules! diag_id {
@@ -770,7 +773,7 @@ pub mod failure {
 
 /// Parser LALRPOP mod.
 pub mod parser {
-    use lalrpop_util::lalrpop_mod;
+    use lalrpop_util::{lalrpop_mod, ParseError};
 
     pub use zu::*;
 
@@ -779,13 +782,84 @@ pub mod parser {
         /// The parsing module
         pub zu
     }
+
+    /// The parsed file type.
+    type FileQt = crate::ast::File<crate::ast::state::Quoted>;
+
+    fn fmt_expected(expected: &[String]) -> String {
+        let mut f = String::new();
+        if !expected.is_empty() {
+            for (i, e) in expected.iter().enumerate() {
+                let sep = match i {
+                    0 => "Expected one of",
+                    _ if i < expected.len() - 1 => ",",
+                    // Last expected message to be written
+                    _ => " or",
+                };
+                f.push_str(&format!("{sep} {e}"));
+            }
+        }
+        f
+    }
+
+    /// Builds an ariadne label from a parse error. It's to construct the report
+    /// for the user.
+    fn label(err: ParseError<usize, Token<'_>, &str>) -> (Option<String>, Vec<ariadne::Label>) {
+        match err {
+            ParseError::InvalidToken { location } => {
+                let span = location..location;
+                let message = format!("invalid token at {}", location);
+                let labels = vec![ariadne::Label::new(span).with_message(message.clone())];
+                (Some(message), labels)
+            }
+            ParseError::UnrecognizedEof { location, expected } => {
+                let span = location..location;
+                let labels = vec![ariadne::Label::new(span).with_message(fmt_expected(&expected))];
+                (Some("unexpected end of file".into()), labels)
+            }
+            ParseError::UnrecognizedToken { token, expected } => {
+                let span = token.0..token.2;
+                let labels = vec![ariadne::Label::new(span).with_message(fmt_expected(&expected))];
+                (Some(format!("unrecognized token {}", token.1)), labels)
+            }
+            ParseError::ExtraToken { ref token } => {
+                let span = token.0..token.2;
+                let message = format!("extra token {}", token.1);
+                let labels = vec![ariadne::Label::new(span).with_message(message)];
+                (Some("extra token detected".into()), labels)
+            }
+            ParseError::User { error } => (Some(error.into()), vec![]),
+        }
+    }
+
+    /// The boxed type of the parser report.
+    type ParserReport = Box<ariadne::Report<'static>>;
+
+    /// Parses or report the error.
+    pub fn parse_or_report(filename: &str, text: &str) -> Result<FileQt, ParserReport> {
+        let mut errors = vec![];
+        match FileParser::new().parse(&mut errors, filename, text) {
+            Ok(ast) => Ok(ast),
+            Err(err) => {
+                let kind = ariadne::ReportKind::Custom("parse error", ariadne::Color::Red);
+                let (message, labels) = label(err);
+                let mut report = ariadne::Report::<std::ops::Range<usize>>::build(kind, (), 0);
+                report = report.with_labels(labels);
+                if let Some(message) = message {
+                    report = report.with_message(message);
+                }
+                Err(report.finish().into())
+            }
+        }
+    }
 }
 
 fn main() {
-    let filename = "Example.zu".to_string();
-    let ast = parser::FileParser::new()
-        .parse(&filename, "\\module 'Nat'. nat : type = \\Type.")
-        .unwrap();
-
-    println!("{:#?}", ast);
+    let src_code = include_str!("../Example.zu");
+    match parser::parse_or_report("Example.zu", src_code) {
+        Ok(ast) => println!("{:#?}", ast),
+        Err(report) => {
+            report.eprint(ariadne::Source::from(src_code)).unwrap();
+        }
+    }
 }

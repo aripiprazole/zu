@@ -1,8 +1,9 @@
 use crate::ast::state;
 use crate::ast::Element;
 use std::str::FromStr;
+use lalrpop_util::ErrorRecovery;
 
-grammar(filename: &str);
+grammar<'err>(errors: &'err mut Vec<ErrorRecovery<usize, Token<'input>, &'static str>>, filename: &str);
 
 /// Parses an entire file declaration into the abstract syntax tree, so
 /// we can resolve and typecheck it.
@@ -91,6 +92,18 @@ pub Primary: crate::ast::Term<state::Quoted> = {
     value,
     location: crate::ast::Location::new(s, e, filename),
   }),
+
+  // Error handling for the parser, this is used to report errors when the
+  // parser fails to parse a term.
+  <s: @L> <error:!> <e: @R> => {
+    errors.push(error);
+
+    crate::ast::Term::Error(crate::ast::Error {
+      message: "failed to parse term".to_string(),
+      full_text: (&input[s..e]).to_string(),
+      location: crate::ast::Location::new(s, e, filename),
+    })
+  },
 }
 
 /// Parses a call with a single argument, this is a primary term followed by a
