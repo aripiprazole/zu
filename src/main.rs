@@ -1201,69 +1201,78 @@ pub mod grammar {
             string
         }
 
+        /// Pi expression
+        fn pi_expr(p: &mut Parser, m: parser::Marker) -> ast::Term<state::Quoted> {
+            let domain = match p.lookahead(0) {
+                // Pareses explicit bindings for Pi types.
+                Some(Token::LParen) if p.skips() => {
+                    let variable = variable(p, ast::Icit::Expl);
+                    expect!(p, Token::RParen, "expected `)` finish for the pi type");
+                    variable
+                }
+
+                // Parses implicit bindings for Pi types.
+                Some(Token::LBrace) if p.skips() => {
+                    let variable = variable(p, ast::Icit::Impl);
+                    expect!(p, Token::RBrace, "expected `}}` finish for the pi type");
+                    variable
+                }
+
+                // Returns an error and recover the default value for the
+                // parameter
+                _ => {
+                    expect!(p, Token::LParen, "expected `(` for the pi type");
+
+                    ast::Variable {
+                        icit: ast::Icit::Expl,
+                        text: None,
+                        location: p.location(),
+                        type_repr: None,
+                    }
+                }
+            };
+            expect!(p, Token::Arrow, "expected `->` to the codomain");
+            let codomain = expr(p);
+
+            ast::Term::Pi(ast::Pi {
+                icit: ast::Icit::Expl,
+                domain,
+                codomain: codomain.into(),
+                location: p.close(m),
+            })
+        }
+
+        /// Fun expression parser
+        fn fun_expr(p: &mut Parser, m: parser::Marker) -> ast::Term<state::Quoted> {
+            // Parses a new argument whenever it's possible to detect a
+            // new definition.
+            let mut arguments = vec![definition(p)];
+            while p.is(Token::Comma) {
+                p.advance();
+
+                arguments.push(definition(p));
+            }
+
+            ast::Term::Fun(ast::Fun {
+                arguments,
+                value: expr(p).into(), // Parses the codomain of the function.
+                location: p.close(m),
+            })
+        }
+
+        /// Group expression parser
+        fn group_expr(p: &mut Parser) -> ast::Term<state::Quoted> {
+            delimited!(p, Token::LParen, Token::RParen, expr, "expected `)`")
+        }
+
         let m = p.open();
 
         match p.lookahead(0) {
             // SECTION: Primaries
-            Some(Token::PiKw) if p.skips() => {
-                let domain = match p.lookahead(0) {
-                    // Pareses explicit bindings for Pi types.
-                    Some(Token::LParen) if p.skips() => {
-                        let variable = variable(p, ast::Icit::Expl);
-                        expect!(p, Token::RParen, "expected `)` finish for the pi type");
-                        variable
-                    }
-
-                    // Parses implicit bindings for Pi types.
-                    Some(Token::LBrace) if p.skips() => {
-                        let variable = variable(p, ast::Icit::Impl);
-                        expect!(p, Token::RBrace, "expected `}}` finish for the pi type");
-                        variable
-                    }
-
-                    // Returns an error and recover the default value for the
-                    // parameter
-                    _ => {
-                        expect!(p, Token::LParen, "expected `(` for the pi type");
-
-                        ast::Variable {
-                            icit: ast::Icit::Expl,
-                            text: None,
-                            location: p.location(),
-                            type_repr: None,
-                        }
-                    }
-                };
-                expect!(p, Token::Arrow, "expected `->` to the codomain");
-                let codomain = expr(p);
-
-                ast::Term::Pi(ast::Pi {
-                    icit: ast::Icit::Expl,
-                    domain,
-                    codomain: codomain.into(),
-                    location: p.close(m),
-                })
-            }
-            Some(Token::FunKw) if p.skips() => {
-                // Parses a new argument whenever it's possible to detect a
-                // new definition.
-                let mut arguments = vec![definition(p)];
-                while p.is(Token::Comma) {
-                    p.advance();
-
-                    arguments.push(definition(p));
-                }
-
-                ast::Term::Fun(ast::Fun {
-                    arguments,
-                    value: expr(p).into(), // Parses the codomain of the function.
-                    location: p.close(m),
-                })
-            }
+            Some(Token::PiKw) if p.skips() => pi_expr(p, m),
+            Some(Token::FunKw) if p.skips() => fun_expr(p, m),
             Some(Token::ElimKw) if p.skips() => todo!(),
-            Some(Token::LParen) => {
-                delimited!(p, Token::LParen, Token::RParen, expr, "expected `)`")
-            }
+            Some(Token::LParen) => group_expr(p),
 
             // SECTION: Literals
             // Parses a constructor
