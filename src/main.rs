@@ -772,7 +772,7 @@ pub mod lexer {
 
 /// The parsing part of the language.
 pub mod parser {
-    use std::cell::Cell;
+    use std::{cell::Cell, ops::Range};
 
     use crate::{
         failure::DiagId,
@@ -780,13 +780,16 @@ pub mod parser {
     };
 
     use super::*;
-    use logos::{Logos, Span};
+    use logos::{Logos, Source, Span};
 
     /// The parser implementation, which turns tokens into the abstract syntax tree,
     /// it's the main part of the compiler.
     pub struct Parser<'src> {
         pub lexer: Vec<(Result<lexer::Token, LexerError>, Span)>,
         pub failures: Vec<failure::Failure>,
+
+        /// The source code file name.
+        filename: String,
 
         /// The source code.
         src: &'src str,
@@ -808,8 +811,9 @@ pub mod parser {
         /// ## Parameters
         ///
         /// - `src`: The source code to parse.
-        pub fn new(src: &'src str) -> Self {
+        pub fn new(filename: &str, src: &'src str) -> Self {
             Self {
+                filename: filename.to_string(),
                 lexer: lexer::Token::lexer(src).spanned().collect(),
                 failures: Vec::new(),
                 #[cfg(debug_assertions)]
@@ -817,6 +821,35 @@ pub mod parser {
                 index: 0,
                 src,
             }
+        }
+
+        /// Run the parser and report with ariadne.
+        pub fn parse_and_report<F, U>(&mut self, f: F) -> U
+        where
+            F: FnOnce(&mut Self) -> U,
+        {
+            use ariadne::*;
+            type AriadneSpan = (String, std::ops::Range<usize>);
+
+            let value = f(self);
+            let source = Source::from(self.src.to_string());
+
+            for error in self.failures.iter() {
+                let range = error.location.from..error.location.to;
+                Report::<AriadneSpan>::build(ReportKind::Error, self.filename.to_string(), 0)
+                    .with_code(1)
+                    .with_message(error.message.to_string())
+                    .with_label(
+                        Label::new((self.filename.clone(), range))
+                            .with_message(error.message.to_string())
+                            .with_color(Color::Red),
+                    )
+                    .finish()
+                    .eprint((self.filename.to_string(), source.clone()))
+                    .unwrap();
+            }
+
+            value
         }
 
         /// Creates a location for the latest span ever found in the parser,
@@ -1353,10 +1386,10 @@ pub mod grammar {
 
 fn main() {
     let mut p = parser::Parser::new(
+        "Example.zu",
         "-- | Defines the succ constructor\n
          A : \\pi {a : b} -> c = \\fun a, b (a _).",
     );
 
-    println!("AST: {:#?}", grammar::stmt(&mut p));
-    println!("Failures: {:#?}", p.failures);
+    println!("AST: {:#?}", p.parse_and_report(grammar::stmt));
 }
