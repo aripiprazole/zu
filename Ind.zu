@@ -12,7 +12,7 @@
 -- | Defines a simple sum aritimetic function which sums with church
 -- encoding.
 + : nat -> nat -> nat = \fun a, b
-  \elim a
+  \elim a \of
     Zero   => Zero,
     Succ n => Succ (+ n b).
 

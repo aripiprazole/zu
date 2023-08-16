@@ -754,6 +754,9 @@ pub mod lexer {
         SmDoubleArr,
 
         // SECTION: Values
+        #[regex("--.*\n")]
+        Comment,
+
         #[regex("[a-zA-Z*/+-][a-zA-Z0-9_*/+-^$@!]*")]
         Constructor,
 
@@ -1036,7 +1039,13 @@ pub mod grammar {
     const EXPR_RECOVERY: &[Token] = &[Token::RParen, Token::SmComma, Token::SmDot];
 
     pub fn definition(p: &mut Parser) -> parsed::Definition {
-        todo!()
+        let m = p.open();
+        let location = p.next_and_close(m);
+
+        parsed::Definition {
+            text: p.slice(&location),
+            location,
+        }
     }
 
     /// Parses a simple reference to a definition.
@@ -1054,6 +1063,22 @@ pub mod grammar {
         expect!(p, Token::SmDot, "expected `.` ending of statement");
     }
 
+    pub fn doc_string(p: &mut Parser) -> Option<ast::DocString> {
+        if !p.is(Token::Comment) {
+            return None
+        }
+
+        let m = p.open();
+        let location = p.next_and_close(m);
+        let text = p.slice(&location);
+
+        Some(ast::DocString {
+            full_text: (&text[2..]).into(),
+            location,
+            text,
+        })
+    }
+
     /// Parses a statement. It has the following grammar:
     ///
     /// ```txt
@@ -1061,6 +1086,13 @@ pub mod grammar {
     /// | <definition> : <expr> = <expr> . # Stmt::Binding
     pub fn stmt(p: &mut Parser) -> ast::Stmt<state::Quoted> {
         let m = p.open();
+        let mut doc_strings = vec![];
+
+        // Parse doc string whenever it's possible to add into the 
+        // documentation string list.
+        while let Some(doc_string) = doc_string(p) {
+            doc_strings.push(doc_string);
+        }
 
         match p.lookahead(0) {
             // SECTION: Signature
@@ -1076,9 +1108,9 @@ pub mod grammar {
 
                 // Constructs the binding signature.
                 ast::Stmt::Binding(ast::Binding {
-                    doc_strings: vec![],
                     location: p.close(m),
                     name: definition,
+                    doc_strings,
                     type_repr,
                     value,
                 })
@@ -1171,7 +1203,6 @@ pub mod grammar {
     /// ```
     pub fn expr(p: &mut Parser) -> ast::Term<state::Quoted> {
         let m = p.open();
-        println!("lookahead: {:?}", p.lookahead(0));
         let callee = primary(p);
         let mut arguments = vec![];
 
@@ -1196,7 +1227,7 @@ pub mod grammar {
 }
 
 fn main() {
-    let mut p = parser::Parser::new("println 10");
+    let mut p = parser::Parser::new("-- | Defines the succ constructor\nA : B = C.");
 
-    println!("ast -> {:#?}", grammar::expr(&mut p));
+    println!("AST: {:#?}", grammar::stmt(&mut p));
 }
