@@ -756,7 +756,7 @@ pub mod lexer {
         #[regex("--.*\n")]
         Comment,
 
-        #[regex("[a-zA-Z*/+-][a-zA-Z0-9_*/+-^$@!]*")]
+        #[regex("[a-zA-Z*/+-][a-zA-Z0-9_*/+-]*")]
         Constructor,
 
         #[regex("\"\\.*\"")]
@@ -851,7 +851,10 @@ pub mod parser {
         /// Close a marker and get a location from it
         #[must_use]
         pub fn close(&mut self, Marker(latest): Marker) -> ast::Location {
-            if self.is_eof() {
+            if self.is_eof() && self.lexer.last().is_some() {
+                // Return latest location before EOF
+                return self.create_location(self.lexer.last().unwrap().1.clone());
+            } else if self.is_eof() {
                 return latest; // Return latest location before EOF
             }
 
@@ -893,7 +896,7 @@ pub mod parser {
         pub fn expect(&mut self, message: &str, kind: Token) {
             if self.lookahead(0) == Some(kind) {
                 self.advance();
-            } else if !self.is_eof() {
+            } else {
                 self.fail(message, diag_id!["unexpected-token"]);
                 self.advance(); // Advance anyways.
             }
@@ -951,13 +954,20 @@ pub mod parser {
 
         #[inline(always)]
         pub fn fail(&mut self, message: &str, id: DiagId) {
+            let token = self
+                .lexer
+                .get(self.index)
+                .cloned()
+                .or_else(|| self.lexer.last().cloned())
+                .expect("expected a token");
+
             // Don't report an error if it's the end of the file.
             self.failures.push(failure::Failure {
                 kind: failure::DiagKind::Parser,
                 level: failure::DiagLevel::Error,
                 id,
                 message: message.to_string(),
-                location: self.create_location(self.lexer[self.index].1.clone()),
+                location: self.create_location(token.1.clone()),
             });
         }
 
@@ -1048,7 +1058,8 @@ pub mod grammar {
     }
 
     /// Parses a simple reference to a definition.
-    pub fn reference(p: &mut Parser, m: parser::Marker) -> parsed::Reference {
+    pub fn reference(p: &mut Parser) -> parsed::Reference {
+        let m = p.open();
         let location = p.next_and_close(m);
 
         parsed::Reference {
@@ -1197,16 +1208,16 @@ pub mod grammar {
             Some(Token::KwPi) if p.skips() => {
                 let domain = match p.lookahead(0) {
                     // Pareses explicit bindings for Pi types.
-                    Some(Token::LParen) => {
+                    Some(Token::LParen) if p.skips() => {
                         let variable = variable(p, ast::Icit::Expl);
                         expect!(p, Token::RParen, "expected `)` finish for the pi type");
                         variable
                     }
 
                     // Parses implicit bindings for Pi types.
-                    Some(Token::LBrace) => {
+                    Some(Token::LBrace) if p.skips() => {
                         let variable = variable(p, ast::Icit::Impl);
-                        expect!(p, Token::RParen, "expected `)` finish for the pi type");
+                        expect!(p, Token::RBrace, "expected `}}` finish for the pi type");
                         variable
                     }
 
@@ -1214,6 +1225,7 @@ pub mod grammar {
                     // parameter
                     _ => {
                         expect!(p, Token::LParen, "expected `(` for the pi type");
+
                         ast::Variable {
                             icit: ast::Icit::Expl,
                             text: None,
@@ -1240,7 +1252,7 @@ pub mod grammar {
 
             // SECTION: Literals
             // Parses a constructor
-            Some(Token::Constructor) => ast::Term::Reference(reference(p, m)),
+            Some(Token::Constructor) => ast::Term::Reference(reference(p)),
             // Parses a type universe
             Some(Token::KwType) => ast::Term::Universe(ast::Universe {
                 location: p.next_and_close(m),
@@ -1301,8 +1313,8 @@ pub mod grammar {
 }
 
 fn main() {
-    let mut p =
-        parser::Parser::new("-- | Defines the succ constructor\nA : \\pi {a : b} -> c = C.");
+    let mut p = parser::Parser::new("-- | Defines the succ constructor\nA : \\pi {a : b} -> c = C.");
 
     println!("AST: {:#?}", grammar::stmt(&mut p));
+    println!("Failures: {:#?}", p.failures);
 }
