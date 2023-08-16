@@ -1,7 +1,6 @@
 #![feature(box_patterns)]
 
 use clap::Parser;
-use eyre::Context;
 
 /// The abstract syntax tree for the language.
 pub mod ast {
@@ -889,6 +888,67 @@ pub mod parser {
     }
 }
 
+/// Resolver module. It does handles the imports and the references.
+///
+/// It's the second phase of the compiler.
+pub mod resolver {
+    use std::collections::HashMap;
+
+    use crate::ast::{state, File};
+
+    type FileMap = HashMap<String, String>;
+
+    pub struct Resolver {
+        pub files: FileMap,
+        pub inputs: HashMap<String, crate::ast::File<state::Quoted>>,
+        pub errors: Vec<crate::failure::Failure>,
+        pub file: crate::ast::File<state::Quoted>,
+    }
+
+    /// Read file and parse it. Associating the file name with the file.
+    ///
+    /// It's useful for the resolver.
+    fn read_file(path: String, files: &mut FileMap) -> eyre::Result<File<state::Quoted>> {
+        let text = std::fs::read_to_string(&path)?;
+        files.insert(path.clone(), text.clone()); // Insert for error handling
+
+        match crate::parser::parse_or_report(&path, &text) {
+            Ok(ast) => Ok(ast),
+            Err(err) => {
+                err.eprint(ariadne::Source::from(text))?;
+
+                Err(eyre::eyre!("parse error"))
+            }
+        }
+    }
+
+    impl Resolver {
+        /// Creates and parses a new resolver.
+        pub fn new(file: String, inputs: Vec<String>) -> eyre::Result<Resolver> {
+            let mut files = HashMap::new();
+            let file = read_file(file, &mut files)?;
+            let mut inputs = inputs
+                .into_iter()
+                .map(|path| read_file(path, &mut files))
+                .collect::<eyre::Result<Vec<_>>>()?;
+
+            Ok(Resolver {
+                files,
+                inputs: inputs
+                    .drain(..)
+                    .map(|file| (file.name.clone(), file))
+                    .collect(),
+                errors: vec![],
+                file,
+            })
+        }
+
+        pub fn resolve_and_import(self) -> eyre::Result<File<state::Resolved>> {
+            todo!()
+        }
+    }
+}
+
 /// Simple program to run `zu` language.
 #[derive(clap::Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -904,17 +964,8 @@ pub struct Command {
 
 fn main() -> eyre::Result<()> {
     let command = Command::parse();
-    let main = std::fs::read_to_string(&command.main)
-        .wrap_err_with(|| format!("Can't read file {}", &command.main))?;
-
-    match parser::parse_or_report(&command.main, &main) {
-        Ok(ast) => println!("{:#?}", ast),
-        Err(report) => {
-            report.eprint(ariadne::Source::from(main))?;
-
-            return Err(eyre::eyre!("parse error"));
-        }
-    };
+    let resolver = resolver::Resolver::new(command.main, command.include)?;
+    resolver.resolve_and_import()?;
 
     Ok(())
 }
