@@ -838,7 +838,7 @@ pub mod parser {
 
         /// Setups the current context with the current location
         /// and a message.
-        pub fn start(&mut self, message: &str) -> parser::Marker {
+        pub fn begin(&mut self, message: &str) -> parser::Marker {
             let m = self.open();
             let old_context = std::mem::take(&mut self.context);
             self.context = Some(Context {
@@ -1195,11 +1195,9 @@ pub mod grammar {
     /// | <definition> : <expr> = <expr> . # Stmt::Binding
     pub fn stmt(p: &mut Parser) -> ast::Stmt<state::Quoted> {
         // Parses a signature definition.
-        fn signature_stmt(
-            p: &mut Parser,
-            doc_strings: Vec<ast::DocString>,
-            m: parser::Marker,
-        ) -> ast::Stmt<state::Quoted> {
+        fn signature_stmt(p: &mut Parser, docs: Vec<ast::DocString>) -> ast::Stmt<state::Quoted> {
+            let m = p.begin("signature");
+
             let definition = definition(p);
             // Parses a type representation. It can be a
             // hole, or a type.
@@ -1231,7 +1229,7 @@ pub mod grammar {
             ast::Stmt::Binding(ast::Binding {
                 location: p.close(m),
                 name: definition,
-                doc_strings,
+                doc_strings: docs,
                 type_repr,
                 value,
             })
@@ -1250,7 +1248,7 @@ pub mod grammar {
             // SECTION: Signature
             //   Parses a signature, it's a type or a value definition.
             //   Grammar: ?doc_strings <constructor> (: <expr>)? = <expr>.
-            Some(Token::Constructor) => signature_stmt(p, doc_strings, m),
+            Some(Token::Constructor) => signature_stmt(p, doc_strings),
 
             // SECTION: Induction
             Some(Token::InductiveKw) => recover!(p, m, r"`\inductive` types aren't supported yet"),
@@ -1270,7 +1268,7 @@ pub mod grammar {
 
     /// Parses a variable parameter. It has the following grammar:
     pub fn variable(p: &mut Parser, icit: ast::Icit) -> ast::Variable<state::Quoted> {
-        let m = p.start("variable");
+        let m = p.begin("variable");
         let name = definition(p);
         expect!(p, Token::Colon, "expected `:` for the pi type");
         let domain = expr(p);
@@ -1419,7 +1417,7 @@ pub mod grammar {
     /// | <expr> ((-> <expr>) *)  # Term::Pi
     /// ```
     pub fn expr(p: &mut Parser) -> ast::Term<state::Quoted> {
-        let m = p.start("expression");
+        let m = p.begin("expression");
         let callee = primary(p);
         let mut arguments = vec![];
 
@@ -1447,7 +1445,7 @@ fn main() {
     let mut p = parser::Parser::new(
         "Example.zu",
         "-- | Defines the succ constructor\n
-         A : \\pi {a : b -> c = \\fun a, b (a _).",
+         A : \\pi {a : b} -> c = \\fun a, b (a _).",
     );
 
     println!("AST: {:#?}", p.parse_and_report(grammar::stmt));
