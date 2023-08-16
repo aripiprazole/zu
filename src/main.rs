@@ -1,5 +1,8 @@
 #![feature(box_patterns)]
 
+use clap::Parser;
+use eyre::Context;
+
 /// The abstract syntax tree for the language.
 pub mod ast {
     use std::fmt::Debug;
@@ -886,12 +889,32 @@ pub mod parser {
     }
 }
 
-fn main() {
-    let src_code = include_str!("../Example.zu");
-    match parser::parse_or_report("Example.zu", src_code) {
+/// Simple program to run `zu` language.
+#[derive(clap::Parser, Debug)]
+#[command(author, version, about, long_about = None)]
+#[command(propagate_version = true)]
+pub struct Command {
+    #[arg(short, long)]
+    pub include: Vec<String>,
+
+    /// The main file to run
+    #[arg(short, long)]
+    pub main: String,
+}
+
+fn main() -> eyre::Result<()> {
+    let command = Command::parse();
+    let main = std::fs::read_to_string(&command.main)
+        .wrap_err_with(|| format!("Can't read file {}", &command.main))?;
+
+    match parser::parse_or_report(&command.main, &main) {
         Ok(ast) => println!("{:#?}", ast),
         Err(report) => {
-            report.eprint(ariadne::Source::from(src_code)).unwrap();
+            report.eprint(ariadne::Source::from(main))?;
+
+            return Err(eyre::eyre!("parse error"));
         }
-    }
+    };
+
+    Ok(())
 }
