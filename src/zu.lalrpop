@@ -81,9 +81,13 @@ pub TypeRepr: crate::ast::Term<state::Quoted> = {
 /// the base of an expression.
 pub Primary: crate::ast::Term<state::Quoted> = {
   "(" <Term> ")" => crate::ast::Term::Group(<>.into()),
-  <Reference> => crate::ast::Term::Reference(<>),
+  <r:Reference> => match r.text {
+    _ if r.text == "_" => crate::ast::Term::Hole(crate::ast::Hole {
+      location: r.location.clone(),
+    }),
+    _ => crate::ast::Term::Reference(r),
+  },
   <s: @L> "\\Type" <e: @R> => crate::ast::Term::Universe(crate::ast::Universe { location: crate::ast::Location::new(s, e, filename) }),
-  <s: @L> "_" <e: @R> => crate::ast::Term::Hole(crate::ast::Hole { location: crate::ast::Location::new(s, e, filename) }),
   <s: @L> <value:String> <e: @R> => crate::ast::Term::Str(crate::ast::Str {
     value,
     location: crate::ast::Location::new(s, e, filename),
@@ -201,11 +205,21 @@ pub DocString: crate::ast::DocString = <s: @L> <text:r"--.*\n"> <e: @R> => crate
   location: crate::ast::Location::new(s, e, filename),
 };
 
-Int: isize = <s:r"[0-9]+"> => isize::from_str(s).unwrap();
+Int: isize = <s:r"[0123456789]+"> => isize::from_str(s).unwrap();
 String: std::string::String = <text:r"'[^']*'"> => (&text[1..text.len() - 1]).to_string();
-Reference: crate::ast::parsed::Reference = <s: @L> <text:r"[a-zA-Z*/+-][a-zA-Z0-9_*/+-]*"> <e: @R> => crate::ast::parsed::Reference {
-  text: text.to_string(),
-  location: crate::ast::Location::new(s, e, filename),
+
+// Reference token text lexer
+Text: std::string::String = {
+  <text:"_"> => text.to_string(),
+  <text:r"[a-zA-Z*/+-][a-zA-Z0-9_*/+-]*"> => text.to_string(),
+}
+
+// Reference token lexer
+Reference: crate::ast::parsed::Reference = {
+  <s: @L> <text:Text> <e: @R> => crate::ast::parsed::Reference {
+    text: text.to_string(),
+    location: crate::ast::Location::new(s, e, filename),
+  }
 };
 
 /// Separated by commas, this is used for function arguments. It's useful

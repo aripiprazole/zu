@@ -2,13 +2,10 @@
 -- like functions in dependent langauges.
 nat : _ = (N : \Type) -> (N -> N) -> N -> N.
 
--- | Defines a dependent eliminator for `Zero`, `Succ` in nat
-@elim nat Zero, Succ.
-
 -- | Defines the zero constructor
-Zero : _ = \fun _, _, zero
+Zero : _ = \fun a, a, zero ->
   zero.
 
 -- | Defines the succ constructor
-Succ : _ = \fun n, N, succ, _
+Succ : _ = \fun n, N, succ, _ ->
   (n N succ zero).
