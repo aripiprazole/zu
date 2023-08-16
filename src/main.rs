@@ -715,69 +715,11 @@ pub mod ast {
     }
 }
 
-/// Error reporting module to the language.
-pub mod failure {
-    use super::*;
-
-    pub const UNRESOLVED_REFERENCE: &str = "unresolved-reference";
-    pub const DUPLICATED_DEFINITION: &str = "duplicated-definition";
-
-    /// The identification of the diagnostic, it's a list of strings.
-    ///
-    /// ## Examples
-    ///
-    /// For example, if we have, "unresolved-variable", "name-of-var", it will group all the
-    /// errors with the same diagnostic id.
-    #[derive(Debug, Hash, PartialEq, Eq, Clone)]
-    pub struct DiagId(pub Vec<String>);
-
-    /// The diagnostic level, it's the severity of the diagnostic.
-    #[derive(Debug, Hash, PartialEq, Eq, Clone, Copy)]
-    pub enum DiagLevel {
-        /// The diagnostic is a warning.
-        Warning,
-
-        /// The diagnostic is an error.
-        Error,
-    }
-
-    /// The diagnostic kind, it's the severity of the diagnostic.
-    #[derive(Debug, Hash, PartialEq, Eq, Clone, Copy)]
-    pub enum DiagKind {
-        Parser,
-        Resolver,
-        Typer,
-    }
-
-    /// The diagnostic message to be presented to the user.
-    #[derive(Debug, Hash, PartialEq, Eq, Clone)]
-    pub struct Failure {
-        pub kind: DiagKind,
-        pub level: DiagLevel,
-        pub id: DiagId,
-        pub message: String,
-        pub reason: String, // the context
-        pub context: Option<ast::Location>,
-        pub location: ast::Location,
-    }
-
-    /// Type for a lot of diagnostics.
-    pub struct Report(pub Vec<Failure>);
-
-    /// Creates a new diagnostic id for types with `Display`.
-    #[macro_export]
-    macro_rules! diag_id {
-        ($($x:expr),+ $(,)?) => {
-            $crate::failure::DiagId(vec![$($x.to_string()),+])
-        };
-    }
-}
-
 /// Parser LALRPOP mod.
 pub mod parser {
-    use ariadne::Fmt;
-    use lalrpop_util::{lalrpop_mod, ParseError};
+    use lalrpop_util::lalrpop_mod;
 
+    use miette::SourceSpan;
     pub use zu::*;
 
     lalrpop_mod! {
@@ -788,6 +730,32 @@ pub mod parser {
 
     /// The parsed file type.
     type FileQt = crate::ast::File<crate::ast::state::Quoted>;
+
+    #[derive(miette::Diagnostic, thiserror::Error, Debug)]
+    #[error("oops: multiple errors")]
+    #[diagnostic()]
+    pub struct ParseError {
+        // Note source code by no labels
+        #[source_code]
+        source_code: String,
+        // The source code above is used for these errors
+        #[related]
+        related: Vec<InnerError>,
+    }
+
+    #[derive(miette::Diagnostic, thiserror::Error, Debug)]
+    #[error("oops")]
+    #[diagnostic()]
+    pub struct InnerError {
+        /// Span of the error, it's basically the location of the
+        /// error in the source code.
+        #[label]
+        err_span: SourceSpan,
+
+        /// The help message
+        #[help]
+        help: String,
+    }
 
     fn fmt_expected(expected: &[String]) -> String {
         let mut f = String::new();
@@ -807,44 +775,32 @@ pub mod parser {
 
     /// Builds an ariadne label from a parse error. It's to construct the report
     /// for the user.
-    fn label(err: ParseError<usize, Token<'_>, &str>) -> (String, Vec<ariadne::Label>) {
+    fn label(err: lalrpop_util::ParseError<usize, Token<'_>, &str>) -> InnerError {
+        use lalrpop_util::ParseError::*;
+
         match err {
-            ParseError::InvalidToken { location } => {
-                let span = location..location;
-                let message = format!("invalid token at {}", location);
-                let labels =
-                    vec![ariadne::Label::new(span)
-                        .with_message(message.clone().fg(ariadne::Color::Red))];
-                (message, labels)
-            }
-            ParseError::UnrecognizedEof { location, expected } => {
-                let span = location..location;
-                let labels = vec![ariadne::Label::new(span)
-                    .with_message(fmt_expected(&expected).fg(ariadne::Color::Red))];
-                ("unexpected end of file".into(), labels)
-            }
-            ParseError::UnrecognizedToken { token, expected } => {
-                let span = token.0..token.2;
-                let labels = vec![ariadne::Label::new(span)
-                    .with_message(fmt_expected(&expected).fg(ariadne::Color::Red))];
-                (format!("unrecognized token {}", token.1), labels)
-            }
-            ParseError::ExtraToken { ref token } => {
-                let span = token.0..token.2;
-                let message = format!("extra token {}", token.1);
-                let labels =
-                    vec![ariadne::Label::new(span).with_message(message.fg(ariadne::Color::Red))];
-                ("extra token detected".into(), labels)
-            }
-            ParseError::User { error } => (error.into(), vec![]),
+            InvalidToken { location } => InnerError {
+                err_span: SourceSpan::from(location..location),
+                help: "invalid token".into(),
+            },
+            UnrecognizedEof { location, expected } => InnerError {
+                err_span: SourceSpan::from(location..location),
+                help: format!("expected one of {} but found eof", fmt_expected(&expected)),
+            },
+            UnrecognizedToken { token, expected } => InnerError {
+                err_span: SourceSpan::from(token.0..token.2),
+                help: format!("expected one of {}", fmt_expected(&expected)),
+            },
+            ExtraToken { ref token } => InnerError {
+                err_span: SourceSpan::from(token.0..token.2),
+                help: format!("extra token found {}", token.1),
+            },
+            User { error } => todo!(),
         }
     }
 
-    /// The boxed type of the parser report.
-    type ParserReport = Box<ariadne::Report<'static>>;
-
     /// Parses or report the error.
-    pub fn parse_or_report(filename: &str, text: &str) -> Result<FileQt, ParserReport> {
+    pub fn parse_or_report(filename: &str, text: &str) -> Result<FileQt, ParseError> {
         let mut errors = vec![];
         let ast = match FileParser::new().parse(&mut errors, filename, text) {
             Ok(ast) => ast,
@@ -864,27 +820,10 @@ pub mod parser {
             return Ok(ast);
         }
 
-        // Pop off the first of the errors, so we can get
-        // an error message for the report, and the rest of the
-        // errors.
-        let recovery = errors.remove(0);
-
-        // Otherwise, we have to report the error.
-        let (message, labels) = label(recovery.error);
-
-        // Build the ariadne report.
-        let kind = ariadne::ReportKind::Custom("parse error", ariadne::Color::Red);
-        let report = ariadne::Report::<std::ops::Range<usize>>::build(kind, (), 0)
-            .with_labels(labels)
-            .with_labels(
-                errors
-                    .into_iter()
-                    .flat_map(|recovery| label(recovery.error).1),
-            )
-            .with_message(message)
-            .finish();
-
-        Err(report.into())
+        Err(ParseError {
+            related: errors.into_iter().map(|error| label(error.error)).collect(),
+            source_code: text.to_string(),
+        })
     }
 }
 
@@ -894,43 +833,49 @@ pub mod parser {
 pub mod resolver {
     use std::collections::HashMap;
 
+    use miette::{Context, IntoDiagnostic};
+
     use crate::ast::{state, File};
 
     type FileMap = HashMap<String, String>;
 
+    #[derive(thiserror::Error, miette::Diagnostic, Debug)]
+    pub enum ResolutionError {
+        #[error("parse error")]
+        #[diagnostic(code(zu::resolver::parse_error))]
+        ParseError,
+    }
+
     pub struct Resolver {
         pub files: FileMap,
         pub inputs: HashMap<String, crate::ast::File<state::Quoted>>,
-        pub errors: Vec<crate::failure::Failure>,
+        pub errors: Vec<ResolutionError>,
         pub file: crate::ast::File<state::Quoted>,
     }
 
     /// Read file and parse it. Associating the file name with the file.
     ///
     /// It's useful for the resolver.
-    fn read_file(path: String, files: &mut FileMap) -> eyre::Result<File<state::Quoted>> {
-        let text = std::fs::read_to_string(&path)?;
+    fn read_file(path: String, files: &mut FileMap) -> miette::Result<File<state::Quoted>> {
+        let text = std::fs::read_to_string(&path)
+            .into_diagnostic()
+            .wrap_err_with(|| format!("Can't read file `{}`", path))?;
+
         files.insert(path.clone(), text.clone()); // Insert for error handling
 
-        match crate::parser::parse_or_report(&path, &text) {
-            Ok(ast) => Ok(ast),
-            Err(err) => {
-                err.eprint(ariadne::Source::from(text))?;
-
-                Err(eyre::eyre!("parse error"))
-            }
-        }
+        let ast = crate::parser::parse_or_report(&path, &text)?;
+        Ok(ast)
     }
 
     impl Resolver {
         /// Creates and parses a new resolver.
-        pub fn new(file: String, inputs: Vec<String>) -> eyre::Result<Resolver> {
+        pub fn new(file: String, inputs: Vec<String>) -> miette::Result<Resolver> {
             let mut files = HashMap::new();
             let file = read_file(file, &mut files)?;
             let mut inputs = inputs
                 .into_iter()
                 .map(|path| read_file(path, &mut files))
-                .collect::<eyre::Result<Vec<_>>>()?;
+                .collect::<miette::Result<Vec<_>>>()?;
 
             Ok(Resolver {
                 files,
@@ -943,7 +888,7 @@ pub mod resolver {
             })
         }
 
-        pub fn resolve_and_import(self) -> eyre::Result<File<state::Resolved>> {
+        pub fn resolve_and_import(self) -> miette::Result<File<state::Resolved>> {
             todo!()
         }
     }
@@ -962,7 +907,18 @@ pub struct Command {
     pub main: String,
 }
 
-fn main() -> eyre::Result<()> {
+fn main() -> miette::Result<()> {
+    miette::set_hook(Box::new(|_| {
+        let handler_opts = miette::MietteHandlerOpts::new()
+            .terminal_links(true)
+            .unicode(true)
+            .context_lines(2)
+            .tab_width(2)
+            .build();
+
+        Box::new(handler_opts)
+    }))?;
+
     let command = Command::parse();
     let resolver = resolver::Resolver::new(command.main, command.include)?;
     resolver.resolve_and_import()?;
