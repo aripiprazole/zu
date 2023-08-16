@@ -1,6 +1,6 @@
 \module ind.
 
-@import std.
+@import "std".
 
 -- | Defines an natural inductive type, which can be either `Zero`,
 -- or it's successor `Succ`, which takes the previous and returns the

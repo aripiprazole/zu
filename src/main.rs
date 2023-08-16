@@ -12,6 +12,7 @@ pub mod ast {
         /// having to redeclare the same types.
         pub trait State: Debug + Clone {
             type NameSet: Debug + Clone;
+            type Import: Element;
             type Reference: Element;
             type Definition: Element;
         }
@@ -24,6 +25,7 @@ pub mod ast {
             type NameSet = Vec<Option<Self::Definition>>;
             type Definition = parsed::Reference;
             type Reference = parsed::Reference;
+            type Import = parsed::Import;
         }
 
         /// Represents the resolved state, it's the state of the syntax tree when it's resolved.
@@ -34,6 +36,7 @@ pub mod ast {
             type NameSet = Option<Self::Definition>;
             type Definition = resolved::Definition;
             type Reference = resolved::Reference;
+            type Import = resolved::Import;
         }
     }
 
@@ -55,6 +58,20 @@ pub mod ast {
         }
 
         impl Element for Reference {
+            fn location(&self) -> &Location {
+                &self.location
+            }
+        }
+
+        /// Imports a name temporally until it's
+        /// propertly resolved
+        #[derive(Debug, Clone)]
+        pub struct Import {
+            pub text: String,
+            pub location: Location,
+        }
+
+        impl Element for Import {
             fn location(&self) -> &Location {
                 &self.location
             }
@@ -87,6 +104,17 @@ pub mod ast {
         impl Element for Reference {
             fn location(&self) -> &Location {
                 &self.location
+            }
+        }
+
+        /// Imports a name temporally until it's
+        /// propertly resolved
+        #[derive(Debug, Clone)]
+        pub struct Import(std::convert::Infallible);
+
+        impl Element for Import {
+            fn location(&self) -> &Location {
+                panic!("Can't construct a location for an import when it's resolved")
             }
         }
     }
@@ -279,12 +307,42 @@ pub mod ast {
     }
 
     /// Represents a command downgrade from statement, just like @eval and @type.
+    ///
+    /// ## Examples
+    ///
+    /// ```haskell
+    /// @eval 10
+    /// ```
     #[derive(Debug, Clone)]
-    pub enum CommandKind<S: state::State> {
-        Eval(Term<S>),
-        Type(Term<S>),
-        Import(Identifier),
-        Elim(S::Definition, Vec<S::Definition>),
+    pub struct ElimDef<S: state::State> {
+        pub inductive: S::Definition,
+        pub constructors: Vec<S::Definition>,
+        pub location: Location,
+    }
+
+    impl<S: state::State> Element for ElimDef<S> {
+        fn location(&self) -> &Location {
+            &self.location
+        }
+    }
+
+    /// Represents a command downgrade from statement, just like @type.
+    ///
+    /// ## Examples
+    ///
+    /// ```haskell
+    /// @type 10
+    /// ```
+    #[derive(Debug, Clone)]
+    pub struct Type<S: state::State> {
+        pub value: Term<S>,
+        pub location: Location,
+    }
+
+    impl<S: state::State> Element for Type<S> {
+        fn location(&self) -> &Location {
+            &self.location
+        }
     }
 
     /// Represents a command downgrade from statement, just like @eval and @type.
@@ -295,12 +353,12 @@ pub mod ast {
     /// @eval 10
     /// ```
     #[derive(Debug, Clone)]
-    pub struct Downgrade<S: state::State> {
-        pub kind: CommandKind<S>,
+    pub struct Eval<S: state::State> {
+        pub value: Term<S>,
         pub location: Location,
     }
 
-    impl<S: state::State> Element for Downgrade<S> {
+    impl<S: state::State> Element for Eval<S> {
         fn location(&self) -> &Location {
             &self.location
         }
@@ -318,18 +376,31 @@ pub mod ast {
         /// A binding is a statement that introduces a new binding.
         Binding(Binding<S>),
 
-        /// A downgrade is a statement that downgrades a type to a term.
-        ///
-        /// For example, `nat` is a type, but `nat` is also a term.
-        Downgrade(Downgrade<S>),
+        // SECTION: Commands
+        /// Downgrades a statement to a value.
+        Eval(Eval<S>),
+
+        /// Gets a type for a term.
+        Type(Type<S>),
+
+        /// Imports a name temporally until it's
+        /// propertly resolved
+        Import(S::Import),
+
+        /// Defines the eliminator for an inductive type.
+        ElimDef(ElimDef<S>),
     }
+
     impl<S: state::State> Debug for Stmt<S> {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
             match self {
                 Self::Error(arg0) => arg0.fmt(f),
                 Self::Inductive(arg0) => arg0.fmt(f),
                 Self::Binding(arg0) => arg0.fmt(f),
-                Self::Downgrade(arg0) => arg0.fmt(f),
+                Self::Eval(arg0) => arg0.fmt(f),
+                Self::Type(arg0) => arg0.fmt(f),
+                Self::ElimDef(arg0) => arg0.fmt(f),
+                Self::Import(arg0) => arg0.fmt(f),
             }
         }
     }
@@ -346,7 +417,10 @@ pub mod ast {
                 Stmt::Error(error) => &error.location,
                 Stmt::Inductive(inductive) => &inductive.location,
                 Stmt::Binding(binding) => &binding.location,
-                Stmt::Downgrade(downgrade) => downgrade.location(),
+                Stmt::Eval(downgrade) => &downgrade.location,
+                Stmt::Type(downgrade) => &downgrade.location,
+                Stmt::ElimDef(downgrade) => &downgrade.location,
+                Stmt::Import(downgrade) => downgrade.location(),
             }
         }
     }
