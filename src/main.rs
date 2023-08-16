@@ -534,8 +534,7 @@ pub mod ast {
     #[derive(Debug)]
     pub struct Pi<S: state::State> {
         pub icit: Icit,
-        pub name: Variable<S>,
-        pub domain: Box<Term<S>>,
+        pub domain: Variable<S>,
         pub codomain: Box<Term<S>>,
         pub location: Location,
     }
@@ -1155,6 +1154,21 @@ pub mod grammar {
         }
     }
 
+    /// Parses a variable parameter. It has the following grammar:
+    pub fn variable(p: &mut Parser, icit: ast::Icit) -> ast::Variable<state::Quoted> {
+        let m = p.open();
+        let name = definition(p);
+        expect!(p, Token::SmColon, "expected `:` for the pi type");
+        let domain = expr(p);
+
+        ast::Variable {
+            icit,
+            text: Some(name),
+            location: p.close(m),
+            type_repr: Some(domain.into()),
+        }
+    }
+
     /// Parses a primary expression. It has the following grammar:
     ///
     /// ```txt
@@ -1180,7 +1194,44 @@ pub mod grammar {
 
         match p.lookahead(0) {
             // SECTION: Primaries
-            Some(Token::KwPi) if p.skips() => todo!(),
+            Some(Token::KwPi) if p.skips() => {
+                let domain = match p.lookahead(0) {
+                    // Pareses explicit bindings for Pi types.
+                    Some(Token::LParen) => {
+                        let variable = variable(p, ast::Icit::Expl);
+                        expect!(p, Token::RParen, "expected `)` finish for the pi type");
+                        variable
+                    }
+
+                    // Parses implicit bindings for Pi types.
+                    Some(Token::LBrace) => {
+                        let variable = variable(p, ast::Icit::Impl);
+                        expect!(p, Token::RParen, "expected `)` finish for the pi type");
+                        variable
+                    }
+
+                    // Returns an error and recover the default value for the
+                    // parameter
+                    _ => {
+                        expect!(p, Token::LParen, "expected `(` for the pi type");
+                        ast::Variable {
+                            icit: ast::Icit::Expl,
+                            text: None,
+                            location: p.location(),
+                            type_repr: None,
+                        }
+                    }
+                };
+                expect!(p, Token::SmArr, "expected `->` to the codomain");
+                let codomain = expr(p);
+
+                ast::Term::Pi(ast::Pi {
+                    icit: ast::Icit::Expl,
+                    domain,
+                    codomain: codomain.into(),
+                    location: p.close(m),
+                })
+            }
             Some(Token::KwFun) if p.skips() => todo!(),
             Some(Token::KwElim) if p.skips() => todo!(),
             Some(Token::LParen) => {
@@ -1250,7 +1301,8 @@ pub mod grammar {
 }
 
 fn main() {
-    let mut p = parser::Parser::new("-- | Defines the succ constructor\nA : B = C.");
+    let mut p =
+        parser::Parser::new("-- | Defines the succ constructor\nA : \\pi {a : b} -> c = C.");
 
     println!("AST: {:#?}", grammar::stmt(&mut p));
 }
