@@ -646,6 +646,8 @@ pub mod failure {
         pub level: DiagLevel,
         pub id: DiagId,
         pub message: String,
+        pub reason: String, // the context
+        pub context: Option<ast::Location>,
         pub location: ast::Location,
     }
 
@@ -772,7 +774,8 @@ pub mod lexer {
 
 /// The parsing part of the language.
 pub mod parser {
-    use std::{cell::Cell, ops::Range};
+    use logos::{Logos, Span};
+    use std::cell::Cell;
 
     use crate::{
         failure::DiagId,
@@ -780,7 +783,13 @@ pub mod parser {
     };
 
     use super::*;
-    use logos::{Logos, Source, Span};
+
+    #[derive(Clone)]
+    pub struct Context {
+        pub message: String,
+        pub location: ast::Location,
+        pub old: Option<Box<Context>>,
+    }
 
     /// The parser implementation, which turns tokens into the abstract syntax tree,
     /// it's the main part of the compiler.
@@ -788,14 +797,16 @@ pub mod parser {
         pub lexer: Vec<(Result<lexer::Token, LexerError>, Span)>,
         pub failures: Vec<failure::Failure>,
 
+        /// The current index of the parser.
+        pub index: usize,
+
+        pub context: Option<Context>,
+
         /// The source code file name.
         filename: String,
 
         /// The source code.
         src: &'src str,
-
-        /// The current index of the parser.
-        index: usize,
 
         /// The fuel, to avoiding infinite loops.
         #[cfg(debug_assertions)]
@@ -803,6 +814,7 @@ pub mod parser {
     }
 
     /// Defines a marker for the parser. It's useful to create locations and closing it
+    #[derive(Clone)]
     pub struct Marker(ast::Location);
 
     impl<'src> Parser<'src> {
@@ -816,11 +828,25 @@ pub mod parser {
                 filename: filename.to_string(),
                 lexer: lexer::Token::lexer(src).spanned().collect(),
                 failures: Vec::new(),
+                context: None,
                 #[cfg(debug_assertions)]
                 fuel: Cell::new(256),
                 index: 0,
                 src,
             }
+        }
+
+        /// Setups the current context with the current location
+        /// and a message.
+        pub fn start(&mut self, message: &str) -> parser::Marker {
+            let m = self.open();
+            let old_context = std::mem::take(&mut self.context);
+            self.context = Some(Context {
+                message: message.to_string(),
+                location: self.location(),
+                old: old_context.map(Box::new),
+            });
+            m
         }
 
         /// Run the parser and report with ariadne.
@@ -844,6 +870,14 @@ pub mod parser {
                             .with_message(error.message.to_string())
                             .with_color(Color::Red),
                     )
+                    .with_labels(error.context.clone().map(|context| {
+                        let range = context.from..context.to;
+                        let reason = &error.reason;
+
+                        Label::new((self.filename.clone(), range))
+                            .with_message(format!("while trying to parse: {reason}"))
+                            .with_color(Color::Yellow)
+                    }))
                     .finish()
                     .eprint((self.filename.to_string(), source.clone()))
                     .unwrap();
@@ -887,6 +921,17 @@ pub mod parser {
         /// Close a marker and get a location from it
         #[must_use]
         pub fn close(&mut self, Marker(latest): Marker) -> ast::Location {
+            // Try to unwrap the context to the latest location
+            // ever find, it's useful for error handling.
+            match self.context {
+                Some(ref context) if context.location == latest => {
+                    if let Some(box ref context) = context.old {
+                        self.context = Some(context.clone());
+                    }
+                }
+                _ => {}
+            }
+
             if self.is_eof() && self.lexer.last().is_some() {
                 // Return latest location before EOF
                 return self.create_location(self.lexer.last().unwrap().1.clone());
@@ -920,7 +965,9 @@ pub mod parser {
                         level: failure::DiagLevel::Error,
                         id: diag_id!("unknown-token"),
                         message: "unknown token".to_string(),
+                        reason: "unknown token".to_string(),
                         location: self.create_location(span.clone()),
+                        context: None,
                     });
 
                     None
@@ -929,13 +976,16 @@ pub mod parser {
         }
 
         /// Expects a token, if it's not the current token, it will report an error.
-        pub fn expect(&mut self, message: &str, kind: Token) {
-            if self.lookahead(0) == Some(kind) {
-                self.advance();
-            } else {
+        pub fn expect(&mut self, advance: bool, message: &str, kind: Token) {
+            if self.lookahead(0) != Some(kind) {
                 self.fail(message, diag_id!["unexpected-token"]);
-                self.advance(); // Advance anyways.
+
+                // Don't advance if it's not the expected token.
+                if !advance {
+                    return;
+                }
             }
+            self.advance(); // Advance anyways.
         }
 
         /// Check if the parser has reached the end of the file.
@@ -990,7 +1040,7 @@ pub mod parser {
 
         #[inline(always)]
         pub fn fail(&mut self, message: &str, id: DiagId) {
-            let token = self
+            let (token, span) = self
                 .lexer
                 .get(self.index)
                 .cloned()
@@ -1003,7 +1053,16 @@ pub mod parser {
                 level: failure::DiagLevel::Error,
                 id,
                 message: message.to_string(),
-                location: self.create_location(token.1.clone()),
+                reason: match self.context {
+                    Some(ref context) => context.message.clone(),
+                    _ if self.is_eof() => "but found eof".into(),
+                    _ => match token {
+                        Ok(token) => format!("but found `{token:?}`"),
+                        _ => message.to_string(),
+                    },
+                },
+                context: self.context.clone().map(|c| c.location),
+                location: self.create_location(span.clone()),
             });
         }
 
@@ -1018,7 +1077,10 @@ pub mod parser {
     #[macro_export]
     macro_rules! expect {
         ($p:expr, $t:expr, $($arg:tt)*) => {
-            $p.expect(&format!($($arg)*), $t)
+            $p.expect(true, &format!($($arg)*), $t)
+        };
+        (@no-advance $p:expr, $t:expr, $($arg:tt)*) => {
+            $p.expect(false, &format!($($arg)*), $t)
         };
     }
 
@@ -1081,12 +1143,10 @@ pub mod grammar {
         Token::Hole,
     ];
 
-    /// The last character that can be parsed as a an expression.
-    const EXPR_RECOVERY: &[Token] = &[Token::RParen, Token::Comma, Token::Dot];
-
     pub fn definition(p: &mut Parser) -> parsed::Definition {
         let m = p.open();
-        let location = p.next_and_close(m);
+        let location = p.close(m);
+        expect!(p, Token::Constructor, "expected a definition");
 
         parsed::Definition {
             text: p.slice(&location),
@@ -1097,7 +1157,8 @@ pub mod grammar {
     /// Parses a simple reference to a definition.
     pub fn reference(p: &mut Parser) -> parsed::Reference {
         let m = p.open();
-        let location = p.next_and_close(m);
+        let location = p.close(m);
+        expect!(p, Token::Constructor, "expected a definition");
 
         parsed::Reference {
             text: p.slice(&location),
@@ -1156,8 +1217,6 @@ pub mod grammar {
                 // Return error and recover with hole default value for
                 // type repr.
                 _ => {
-                    expect!(p, Token::Eq, "expected the value of signature");
-
                     // Return hole as default type. for the signature.
                     ast::Term::Hole(ast::Hole {
                         location: definition.location.clone(),
@@ -1211,7 +1270,7 @@ pub mod grammar {
 
     /// Parses a variable parameter. It has the following grammar:
     pub fn variable(p: &mut Parser, icit: ast::Icit) -> ast::Variable<state::Quoted> {
-        let m = p.open();
+        let m = p.start("variable");
         let name = definition(p);
         expect!(p, Token::Colon, "expected `:` for the pi type");
         let domain = expr(p);
@@ -1251,21 +1310,21 @@ pub mod grammar {
                 // Pareses explicit bindings for Pi types.
                 Some(Token::LParen) if p.skips() => {
                     let variable = variable(p, ast::Icit::Expl);
-                    expect!(p, Token::RParen, "expected `)` finish for the pi type");
+                    expect!(@no-advance p, Token::RParen, "expected `)` finish for the pi type");
                     variable
                 }
 
                 // Parses implicit bindings for Pi types.
                 Some(Token::LBrace) if p.skips() => {
                     let variable = variable(p, ast::Icit::Impl);
-                    expect!(p, Token::RBrace, "expected `}}` finish for the pi type");
+                    expect!(@no-advance p, Token::RBrace, "expected `}}` finish for the pi type");
                     variable
                 }
 
                 // Returns an error and recover the default value for the
                 // parameter
                 _ => {
-                    expect!(p, Token::LParen, "expected `(` for the pi type");
+                    expect!(@no-advance p, Token::LParen, "expected `(` for the pi type");
 
                     ast::Variable {
                         icit: ast::Icit::Expl,
@@ -1360,7 +1419,7 @@ pub mod grammar {
     /// | <expr> ((-> <expr>) *)  # Term::Pi
     /// ```
     pub fn expr(p: &mut Parser) -> ast::Term<state::Quoted> {
-        let m = p.open();
+        let m = p.start("expression");
         let callee = primary(p);
         let mut arguments = vec![];
 
@@ -1388,7 +1447,7 @@ fn main() {
     let mut p = parser::Parser::new(
         "Example.zu",
         "-- | Defines the succ constructor\n
-         A : \\pi {a : b} -> c = \\fun a, b (a _).",
+         A : \\pi {a : b -> c = \\fun a, b (a _).",
     );
 
     println!("AST: {:#?}", p.parse_and_report(grammar::stmt));
