@@ -20,7 +20,7 @@ pub File: crate::ast::File<state::Quoted> = {
 /// Parses the header module declaration within the file, this is used to
 /// declare the module name.
 pub ModuleName: String = {
-  "\\module" <name:String> "." => name,
+  "module" <name:String> "." => name,
 }
 
 /// Parses a top-level statement, this is a statement that can be used
@@ -82,12 +82,10 @@ pub TypeRepr: crate::ast::Term<state::Quoted> = {
 pub Primary: crate::ast::Term<state::Quoted> = {
   "(" <Term> ")" => crate::ast::Term::Group(<>.into()),
   <r:Reference> => match r.text {
-    _ if r.text == "_" => crate::ast::Term::Hole(crate::ast::Hole {
-      location: r.location.clone(),
-    }),
+    _ if r.text == "_" => crate::ast::Term::Hole(crate::ast::Hole { location: r.location.clone() }),
+    _ if r.text == "Type" => crate::ast::Term::Universe(crate::ast::Universe { location: r.location.clone() }),
     _ => crate::ast::Term::Reference(r),
   },
-  <s: @L> "\\Type" <e: @R> => crate::ast::Term::Universe(crate::ast::Universe { location: crate::ast::Location::new(s, e, filename) }),
   <s: @L> <value:String> <e: @R> => crate::ast::Term::Str(crate::ast::Str {
     value,
     location: crate::ast::Location::new(s, e, filename),
@@ -146,7 +144,7 @@ pub Arrow: crate::ast::Term<state::Quoted> = {
 /// Parses a lambda function, this is a list of arguments followed by an arrow
 /// and a value.
 pub Fun: crate::ast::Term<state::Quoted> = {
-  <s: @L> "\\fun" <arguments:Sep<",", Reference>> "->" <value:Term> <e: @R> => crate::ast::Term::Fun(crate::ast::Fun {
+  <s: @L> "\\" <arguments:Sep<",", Reference>> "->" <value:Term> <e: @R> => crate::ast::Term::Fun(crate::ast::Fun {
     arguments,
     value: value.into(),
     location: crate::ast::Location::new(s, e, filename),

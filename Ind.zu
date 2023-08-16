@@ -1,18 +1,18 @@
-\module 'ind'.
+module 'ind'.
 
 @import 'std'.
 
 -- | Defines an natural inductive type, which can be either `Zero`,
 -- or it's successor `Succ`, which takes the previous and returns the
 -- next natural number.
-\inductive nat
+inductive nat
   Zero : nat,
   Succ : nat -> nat.
 
 -- | Defines a simple sum aritimetic function which sums with church
 -- encoding.
 + : nat -> nat -> nat = \fun a, b
-  \elim a \of
+  elim a of
     Zero   => Zero,
     Succ n => Succ (+ n b).
 
