@@ -1,13 +1,13 @@
 -- | Defines natural numbers without induction feature, it's
 -- like functions in dependent langauges.
-nat : _ = N : Ty;pe -> (N -> N) -> N -> N.
+Nat = N : Type -> (N -> N) -> N -> N.
 
-@elim nat Zero, Succ.
+@elim Nat Zero, Succ.
 
 -- | Defines the zero constructor
-Zero = \a, a, zero ->
+Zero = \_, _, zero ->
   zero.
 
 -- | Defines the succ constructor
-Succ = \n, N, succ, _ ->
+Succ = \n, N, succ, zero ->
   (n N succ zero).

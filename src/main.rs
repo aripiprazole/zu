@@ -930,11 +930,9 @@ pub struct Command {
     pub main: String,
 }
 
-pub mod zu_miette;
-
 fn main() -> miette::Result<()> {
     miette::set_hook(Box::new(|_| {
-        let handler_opts = zu_miette::MietteHandlerOpts::new()
+        let handler_opts = bupropion::MietteHandlerOpts::new()
             .terminal_links(true)
             .unicode(true)
             .context_lines(2)
@@ -953,7 +951,7 @@ fn main() -> miette::Result<()> {
                 },
             })
             .color(true)
-            .rgb_colors(zu_miette::RgbColors::Never)
+            .rgb_colors(bupropion::RgbColors::Never)
             .with_cause_chain()
             .build();
 
