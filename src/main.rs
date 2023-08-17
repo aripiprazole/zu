@@ -720,7 +720,7 @@ pub mod ast {
 pub mod parser {
     use lalrpop_util::lalrpop_mod;
 
-    use miette::{SourceSpan, NamedSource};
+    use miette::{NamedSource, SourceSpan};
     pub use zu::*;
 
     lalrpop_mod! {
@@ -745,6 +745,8 @@ pub mod parser {
         related: Vec<InnerError>,
     }
 
+    /// Inner specified error for the parser. It's useful
+    /// to debug the parser.
     #[derive(miette::Diagnostic, thiserror::Error, Debug)]
     #[error("can't parse the file")]
     #[diagnostic()]
@@ -781,6 +783,8 @@ pub mod parser {
         },
     }
 
+    /// Format an expected token message, it's
+    /// useful for the error message.
     fn fmt_expected(expected: &[String]) -> String {
         let mut f = String::new();
         if !expected.is_empty() {
@@ -795,31 +799,6 @@ pub mod parser {
             }
         }
         f
-    }
-
-    /// Builds an ariadne label from a parse error. It's to construct the report
-    /// for the user.
-    fn label(err: lalrpop_util::ParseError<usize, Token<'_>, &str>) -> InnerError {
-        use lalrpop_util::ParseError::*;
-
-        match err {
-            InvalidToken { location } => InnerError::InvalidToken {
-                err_span: SourceSpan::from(location..location),
-            },
-            UnrecognizedEof { location, expected } => InnerError::ExpectedToken {
-                err_span: SourceSpan::from(location..location),
-                expected,
-            },
-            UnrecognizedToken { token, expected } => InnerError::UnrecoginzedToken {
-                err_span: SourceSpan::from(token.0..token.2),
-                expected,
-            },
-            ExtraToken { ref token } => InnerError::ExtraToken {
-                err_span: SourceSpan::from(token.0..token.2),
-                token: token.1.to_string(),
-            },
-            User { .. } => todo!(),
-        }
     }
 
     /// Parses or report the error.
@@ -844,7 +823,31 @@ pub mod parser {
         }
 
         Err(ParseError {
-            related: errors.into_iter().map(|error| label(error.error)).collect(),
+            related: errors
+                .into_iter()
+                .map(|recovery| {
+                    use lalrpop_util::ParseError::*;
+
+                    match recovery.error {
+                        InvalidToken { location } => InnerError::InvalidToken {
+                            err_span: SourceSpan::from(location..location),
+                        },
+                        UnrecognizedEof { location, expected } => InnerError::ExpectedToken {
+                            err_span: SourceSpan::from(location..location),
+                            expected,
+                        },
+                        UnrecognizedToken { token, expected } => InnerError::UnrecoginzedToken {
+                            err_span: SourceSpan::from(token.0..token.2),
+                            expected,
+                        },
+                        ExtraToken { ref token } => InnerError::ExtraToken {
+                            err_span: SourceSpan::from(token.0..token.2),
+                            token: token.1.to_string(),
+                        },
+                        User { .. } => todo!(),
+                    }
+                })
+                .collect(),
             source_code: NamedSource::new(filename, text.to_string()),
         })
     }
@@ -943,7 +946,10 @@ fn main() -> miette::Result<()> {
                     ..ThemeCharacters::unicode()
                 },
                 styles: ThemeStyles {
-                    error: owo_colors::Style::new().on_bright_red().bright_white().bold(),
+                    error: owo_colors::Style::new()
+                        .on_bright_red()
+                        .bright_white()
+                        .bold(),
                     link: owo_colors::Style::new().dimmed(),
                     linum: owo_colors::Style::new().dimmed(),
                     highlights: vec![owo_colors::Style::new().bright_red()],
