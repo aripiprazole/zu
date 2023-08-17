@@ -482,6 +482,12 @@ impl GraphicalReportHandler {
         diagnostic: &(dyn Diagnostic),
     ) -> fmt::Result {
         writeln!(f)?;
+        let severity_style = match diagnostic.severity() {
+            Some(Severity::Error) | None => self.theme.styles.error,
+            Some(Severity::Warning) => self.theme.styles.warning,
+            Some(Severity::Advice) => self.theme.styles.advice,
+        };
+        write!(f, "{} ", " FAILURE ".style(severity_style))?;
         self.render_header(f, diagnostic)?;
         self.render_causes(f, diagnostic)?;
         let src = diagnostic.source_code();
@@ -523,12 +529,11 @@ impl GraphicalReportHandler {
             writeln!(f, "{}", header)?;
             writeln!(f)?;
         } else if let Some(code) = diagnostic.code() {
-            write!(header, "{} ", " FAILURE ".style(severity_style))?;
             if self.links == LinkStyle::Text && diagnostic.url().is_some() {
                 let url = diagnostic.url().unwrap(); // safe
                 write!(header, " ({})", url.style(self.theme.styles.link))?;
             }
-            write!(header, "{}", code)?;
+            write!(header, "{}", format!("[{code}] ").style(severity_style))?;
             write!(f, "{}", header)?;
         }
         Ok(())
@@ -549,6 +554,7 @@ impl GraphicalReportHandler {
             .subsequent_indent(&rest_indent);
 
         writeln!(f, "{}", textwrap::fill(&diagnostic.to_string(), opts))?;
+        writeln!(f)?;
 
         if !self.with_cause_chain {
             return Ok(());
@@ -761,13 +767,19 @@ impl GraphicalReportHandler {
             .len();
 
         // Header
-        write!(f, "{}", " ".repeat(linum_width + 2))?;
+        write!(
+            f,
+            "{}{}{}",
+            " ".repeat(linum_width + 2),
+            self.theme.characters.ltop.style(self.theme.styles.linum),
+            self.theme.characters.hbar.style(self.theme.styles.linum),
+        )?;
 
         if let Some(source_name) = contents.name() {
             let source_name = source_name.style(self.theme.styles.link);
             writeln!(
                 f,
-                "[{}:{}:{}]",
+                " {}:{}:{}",
                 source_name,
                 contents.line() + 1,
                 contents.column() + 1
@@ -775,8 +787,11 @@ impl GraphicalReportHandler {
         } else if lines.len() <= 1 {
             writeln!(f, "{}", self.theme.characters.hbar.to_string().repeat(3))?;
         } else {
-            writeln!(f, "[{}:{}]", contents.line() + 1, contents.column() + 1)?;
+            writeln!(f, "{}:{}", contents.line() + 1, contents.column() + 1)?;
         }
+
+        self.write_no_linum(f, linum_width)?;
+        writeln!(f)?;
 
         // Now it's time for the fun part--actually rendering everything!
         for line in &lines {
@@ -820,7 +835,16 @@ impl GraphicalReportHandler {
                 }
             }
         }
-        writeln!(f, "{}", " ".repeat(linum_width + 2))?;
+
+        self.write_no_linum(f, linum_width)?;
+        writeln!(f)?;
+
+        writeln!(
+            f,
+            "{}{} ",
+            " ".repeat(linum_width + 2),
+            "=".style(self.theme.styles.linum)
+        )?;
         Ok(())
     }
 
@@ -870,7 +894,7 @@ impl GraphicalReportHandler {
                 arrow = true;
                 break;
             } else if line.span_flyby(hl) {
-                gutter.push_str(&chars.vbar.style(hl.style).to_string());
+                gutter.push_str(&chars.vbar.to_string());
             } else {
                 gutter.push(' ');
             }
@@ -922,9 +946,9 @@ impl GraphicalReportHandler {
     fn write_linum(&self, f: &mut impl fmt::Write, width: usize, linum: usize) -> fmt::Result {
         write!(
             f,
-            " {:width$} {} ",
+            " {:width$} {}   ",
             linum.style(self.theme.styles.linum),
-            self.theme.characters.vbar,
+            self.theme.characters.vbar.style(self.theme.styles.linum),
             width = width
         )?;
         Ok(())
@@ -933,9 +957,12 @@ impl GraphicalReportHandler {
     fn write_no_linum(&self, f: &mut impl fmt::Write, width: usize) -> fmt::Result {
         write!(
             f,
-            " {:width$} {} ",
+            " {:width$} {}   ",
             "",
-            self.theme.characters.vbar_break,
+            self.theme
+                .characters
+                .vbar_break
+                .style(self.theme.styles.linum),
             width = width
         )?;
         Ok(())
@@ -1153,11 +1180,21 @@ impl GraphicalReportHandler {
 
 impl ReportHandler for GraphicalReportHandler {
     fn debug(&self, diagnostic: &(dyn Diagnostic), f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut string = String::new();
         if f.alternate() {
             return fmt::Debug::fmt(diagnostic, f);
         }
 
-        self.render_report(f, diagnostic)
+        self.render_report(&mut string, diagnostic)?;
+
+        // Increase indent to
+        let string = string
+            .split('\n')
+            .map(|a| format!("  {a}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        write!(f, "{string}")
     }
 
     fn display(

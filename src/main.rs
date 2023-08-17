@@ -720,7 +720,7 @@ pub mod ast {
 pub mod parser {
     use lalrpop_util::lalrpop_mod;
 
-    use miette::SourceSpan;
+    use miette::{SourceSpan, NamedSource};
     pub use zu::*;
 
     lalrpop_mod! {
@@ -734,11 +734,12 @@ pub mod parser {
 
     #[derive(miette::Diagnostic, thiserror::Error, Debug)]
     #[error("could not parse due the following errors")]
-    #[diagnostic(code(zu::parse_error))]
+    #[diagnostic()]
     pub struct ParseError {
         // Note source code by no labels
         #[source_code]
-        source_code: String,
+        source_code: NamedSource,
+
         // The source code above is used for these errors
         #[related]
         related: Vec<InnerError>,
@@ -844,7 +845,7 @@ pub mod parser {
 
         Err(ParseError {
             related: errors.into_iter().map(|error| label(error.error)).collect(),
-            source_code: text.to_string(),
+            source_code: NamedSource::new(filename, text.to_string()),
         })
     }
 }
@@ -940,17 +941,19 @@ fn main() -> miette::Result<()> {
             .tab_width(2)
             .graphical_theme(miette::GraphicalTheme {
                 characters: ThemeCharacters {
+                    uarrow: '^',
                     ..ThemeCharacters::unicode()
                 },
                 styles: ThemeStyles {
-                    error: owo_colors::Style::new().white().on_bright_red().bold(),
-                    highlights: vec![owo_colors::Style::new().red()],
+                    error: owo_colors::Style::new().on_bright_red().bright_white().bold(),
+                    link: owo_colors::Style::new().dimmed(),
+                    linum: owo_colors::Style::new().dimmed(),
+                    highlights: vec![owo_colors::Style::new().bright_red()],
                     ..ThemeStyles::ansi()
                 },
             })
             .color(true)
-            .rgb_colors(zu_miette::RgbColors::Always)
-            .footer(" ".into())
+            .rgb_colors(zu_miette::RgbColors::Never)
             .with_cause_chain()
             .build();
 
