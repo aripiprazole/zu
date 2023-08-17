@@ -1,6 +1,6 @@
 -- | Defines natural numbers without induction feature, it's
 -- like functions in dependent langauges.
-nat : _ = N : Type -> (N -> N) -> N -> N.
+nat : _ = N : Ty;pe -> (N -> N) -> N -> N.
 
 @elim nat Zero, Succ.
 

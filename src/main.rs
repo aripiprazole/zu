@@ -1,6 +1,7 @@
 #![feature(box_patterns)]
 
 use clap::Parser;
+use miette::{ThemeCharacters, ThemeStyles};
 
 /// The abstract syntax tree for the language.
 pub mod ast {
@@ -732,7 +733,7 @@ pub mod parser {
     type FileQt = crate::ast::File<crate::ast::state::Quoted>;
 
     #[derive(miette::Diagnostic, thiserror::Error, Debug)]
-    #[error("oops: multiple errors")]
+    #[error("could not parse due the following errors")]
     #[diagnostic()]
     pub struct ParseError {
         // Note source code by no labels
@@ -744,12 +745,12 @@ pub mod parser {
     }
 
     #[derive(miette::Diagnostic, thiserror::Error, Debug)]
-    #[error("oops")]
+    #[error("can't parse the file")]
     #[diagnostic()]
     pub struct InnerError {
         /// Span of the error, it's basically the location of the
         /// error in the source code.
-        #[label]
+        #[label("here")]
         err_span: SourceSpan,
 
         /// The help message
@@ -762,7 +763,7 @@ pub mod parser {
         if !expected.is_empty() {
             for (i, e) in expected.iter().enumerate() {
                 let sep = match i {
-                    0 => "Expected one of",
+                    0 => "expected one of",
                     _ if i < expected.len() - 1 => ",",
                     // Last expected message to be written
                     _ => " or",
@@ -785,17 +786,17 @@ pub mod parser {
             },
             UnrecognizedEof { location, expected } => InnerError {
                 err_span: SourceSpan::from(location..location),
-                help: format!("expected one of {} but found eof", fmt_expected(&expected)),
+                help: fmt_expected(&expected),
             },
             UnrecognizedToken { token, expected } => InnerError {
                 err_span: SourceSpan::from(token.0..token.2),
-                help: format!("expected one of {}", fmt_expected(&expected)),
+                help: fmt_expected(&expected),
             },
             ExtraToken { ref token } => InnerError {
                 err_span: SourceSpan::from(token.0..token.2),
                 help: format!("extra token found {}", token.1),
             },
-            User { error } => todo!(),
+            User { .. } => todo!(),
         }
     }
 
@@ -907,13 +908,31 @@ pub struct Command {
     pub main: String,
 }
 
+pub mod zu_miette;
+
 fn main() -> miette::Result<()> {
     miette::set_hook(Box::new(|_| {
-        let handler_opts = miette::MietteHandlerOpts::new()
+        let handler_opts = zu_miette::MietteHandlerOpts::new()
             .terminal_links(true)
             .unicode(true)
             .context_lines(2)
             .tab_width(2)
+            .graphical_theme(miette::GraphicalTheme {
+                characters: ThemeCharacters {
+                    error: " ".into(),
+                    warning: " ".into(),
+                    advice: " ".into(),
+                    ..ThemeCharacters::unicode()
+                },
+                styles: ThemeStyles {
+                    error: owo_colors::Style::new().white().on_red().bold(),
+                    ..ThemeStyles::ansi()
+                },
+            })
+            .color(true)
+            .rgb_colors(zu_miette::RgbColors::Always)
+            .footer(" ".into())
+            .with_cause_chain()
             .build();
 
         Box::new(handler_opts)
