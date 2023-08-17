@@ -481,6 +481,7 @@ impl GraphicalReportHandler {
         f: &mut impl fmt::Write,
         diagnostic: &(dyn Diagnostic),
     ) -> fmt::Result {
+        writeln!(f)?;
         self.render_header(f, diagnostic)?;
         self.render_causes(f, diagnostic)?;
         let src = diagnostic.source_code();
@@ -508,7 +509,7 @@ impl GraphicalReportHandler {
         if self.links == LinkStyle::Link && diagnostic.url().is_some() {
             let url = diagnostic.url().unwrap(); // safe
             let code = if let Some(code) = diagnostic.code() {
-                format!("{} ", code)
+                format!("{code}")
             } else {
                 "".to_string()
             };
@@ -522,13 +523,13 @@ impl GraphicalReportHandler {
             writeln!(f, "{}", header)?;
             writeln!(f)?;
         } else if let Some(code) = diagnostic.code() {
-            write!(header, "{}", code.style(severity_style),)?;
+            write!(header, "{} ", " FAILURE ".style(severity_style))?;
             if self.links == LinkStyle::Text && diagnostic.url().is_some() {
                 let url = diagnostic.url().unwrap(); // safe
                 write!(header, " ({})", url.style(self.theme.styles.link))?;
             }
-            writeln!(f, "{}", header)?;
-            writeln!(f)?;
+            write!(header, "{}", code)?;
+            write!(f, "{}", header)?;
         }
         Ok(())
     }
@@ -788,7 +789,7 @@ impl GraphicalReportHandler {
             self.render_line_gutter(f, max_gutter, line, &labels)?;
 
             // And _now_ we can print out the line text itself!
-            self.render_line_text(f, &line.text)?;
+            self.render_line_text(f, &labels, &line.text)?;
 
             // Next, we write all the highlights that apply to this particular line.
             let (single_line, multi_line): (Vec<_>, Vec<_>) = labels
@@ -980,14 +981,19 @@ impl GraphicalReportHandler {
     }
 
     /// Renders a line to the output formatter, replacing tabs with spaces.
-    fn render_line_text(&self, f: &mut impl fmt::Write, text: &str) -> fmt::Result {
+    fn render_line_text(
+        &self,
+        f: &mut impl fmt::Write,
+        _: &[FancySpan],
+        text: &str,
+    ) -> fmt::Result {
         for (c, width) in text.chars().zip(self.line_visual_char_width(text)) {
             if c == '\t' {
                 for _ in 0..width {
                     f.write_char(' ')?
                 }
             } else {
-                f.write_char(c)?
+                write!(f, "{}", c.style(owo_colors::Style::new().white()))?
             }
         }
         f.write_char('\n')?;
@@ -1152,6 +1158,16 @@ impl ReportHandler for GraphicalReportHandler {
         }
 
         self.render_report(f, diagnostic)
+    }
+
+    fn display(
+        &self,
+        error: &(dyn std::error::Error + 'static),
+        f: &mut core::fmt::Formatter<'_>,
+    ) -> core::fmt::Result {
+        write!(f, "{}", error)?;
+
+        Ok(())
     }
 }
 

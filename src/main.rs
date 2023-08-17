@@ -734,7 +734,7 @@ pub mod parser {
 
     #[derive(miette::Diagnostic, thiserror::Error, Debug)]
     #[error("could not parse due the following errors")]
-    #[diagnostic()]
+    #[diagnostic(code(zu::parse_error))]
     pub struct ParseError {
         // Note source code by no labels
         #[source_code]
@@ -919,13 +919,11 @@ fn main() -> miette::Result<()> {
             .tab_width(2)
             .graphical_theme(miette::GraphicalTheme {
                 characters: ThemeCharacters {
-                    error: " ".into(),
-                    warning: " ".into(),
-                    advice: " ".into(),
                     ..ThemeCharacters::unicode()
                 },
                 styles: ThemeStyles {
-                    error: owo_colors::Style::new().white().on_red().bold(),
+                    error: owo_colors::Style::new().white().on_bright_red().bold(),
+                    highlights: vec![owo_colors::Style::new().red()],
                     ..ThemeStyles::ansi()
                 },
             })
