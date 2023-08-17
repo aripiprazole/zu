@@ -747,15 +747,37 @@ pub mod parser {
     #[derive(miette::Diagnostic, thiserror::Error, Debug)]
     #[error("can't parse the file")]
     #[diagnostic()]
-    pub struct InnerError {
-        /// Span of the error, it's basically the location of the
-        /// error in the source code.
-        #[label("here")]
-        err_span: SourceSpan,
+    pub enum InnerError {
+        #[error("invalid token")]
+        #[diagnostic(code(zu::invalid_token))]
+        InvalidToken {
+            #[label = "here"]
+            err_span: SourceSpan,
+        },
 
-        /// The help message
-        #[help]
-        help: String,
+        #[error("unrecognized token, {}", fmt_expected(expected))]
+        #[diagnostic(code(zu::unrecognized_token))]
+        UnrecoginzedToken {
+            #[label = "here"]
+            err_span: SourceSpan,
+            expected: Vec<String>,
+        },
+
+        #[error("expected token, but got eof, {}", fmt_expected(expected))]
+        #[diagnostic(code(zu::expected_token))]
+        ExpectedToken {
+            #[label = "here"]
+            err_span: SourceSpan,
+            expected: Vec<String>,
+        },
+
+        #[error("extra token, {}", token)]
+        #[diagnostic(code(zu::extra_token))]
+        ExtraToken {
+            #[label = "here"]
+            err_span: SourceSpan,
+            token: String,
+        },
     }
 
     fn fmt_expected(expected: &[String]) -> String {
@@ -780,21 +802,20 @@ pub mod parser {
         use lalrpop_util::ParseError::*;
 
         match err {
-            InvalidToken { location } => InnerError {
+            InvalidToken { location } => InnerError::InvalidToken {
                 err_span: SourceSpan::from(location..location),
-                help: "invalid token".into(),
             },
-            UnrecognizedEof { location, expected } => InnerError {
+            UnrecognizedEof { location, expected } => InnerError::ExpectedToken {
                 err_span: SourceSpan::from(location..location),
-                help: fmt_expected(&expected),
+                expected,
             },
-            UnrecognizedToken { token, expected } => InnerError {
+            UnrecognizedToken { token, expected } => InnerError::UnrecoginzedToken {
                 err_span: SourceSpan::from(token.0..token.2),
-                help: fmt_expected(&expected),
+                expected,
             },
-            ExtraToken { ref token } => InnerError {
+            ExtraToken { ref token } => InnerError::ExtraToken {
                 err_span: SourceSpan::from(token.0..token.2),
-                help: format!("extra token found {}", token.1),
+                token: token.1.to_string(),
             },
             User { .. } => todo!(),
         }
@@ -843,7 +864,7 @@ pub mod resolver {
     #[derive(thiserror::Error, miette::Diagnostic, Debug)]
     pub enum ResolutionError {
         #[error("parse error")]
-        #[diagnostic(code(zu::resolver::parse_error))]
+        #[diagnostic()]
         ParseError,
     }
 
