@@ -2,8 +2,6 @@
 -- like functions in dependent langauges.
 Nat = N : Type -> (N -> N) -> N -> N.
 
-@elim Nat Zero, Succ.
-
 -- | Defines the zero constructor
 Zero = \_, _, zero ->
   zero.

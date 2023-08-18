@@ -152,10 +152,10 @@ pub Fun: crate::ast::Term<state::Quoted> = {
 }
 
 /// Represents a domain for pi expressions, this is a variable with a type.
-pub Domain: crate::ast::Variable<state::Quoted> = {
+pub Domain: crate::ast::Domain<state::Quoted> = {
   /// Parses unnamed explicit arguments, which you don't need to specify
   /// the type and neither the name.
-  <term:Call> => crate::ast::Variable {
+  <term:Call> => crate::ast::Domain {
     text: vec![None],
     location: term.location().clone(),
     type_repr: term.into(),
@@ -164,7 +164,7 @@ pub Domain: crate::ast::Variable<state::Quoted> = {
 
   // Parses explicit arguments, which you need to specify
   // the type.
-  <s: @L> <names:Sep<",", Reference>> ":" <value:Call> <e: @R> => crate::ast::Variable {
+  <s: @L> <names:Sep<",", Reference>> ":" <value:Call> <e: @R> => crate::ast::Domain {
     text: names.into_iter().map(Some).collect(),
     type_repr: value.into(),
     icit: crate::ast::Icit::Expl,
@@ -173,7 +173,7 @@ pub Domain: crate::ast::Variable<state::Quoted> = {
   
   // Parses explicit arguments, which you don't need to specify
   // the type.
-  <s: @L> "{" <names:Sep<",", Reference>> ":" <value:Term> "}" <e: @R> => crate::ast::Variable {
+  <s: @L> "{" <names:Sep<",", Reference>> ":" <value:Term> "}" <e: @R> => crate::ast::Domain {
     text: names.into_iter().map(Some).collect(),
     type_repr: value.into(),
     icit: crate::ast::Icit::Impl,

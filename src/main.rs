@@ -7,7 +7,7 @@ use miette::{ThemeCharacters, ThemeStyles};
 
 /// The abstract syntax tree for the language.
 pub mod ast {
-    use std::fmt::Debug;
+    use std::{fmt::Debug, rc::Rc};
 
     /// File definition, it contains all the statements,
     /// the module name, and a base location for it as anchor
@@ -22,6 +22,8 @@ pub mod ast {
     /// The ast GAT state. It's more likelly a Tree That Grow, with the
     /// rust features, but that's it.
     pub mod state {
+        use std::rc::Rc;
+
         use super::*;
 
         /// Represents the syntax state, if it's resolved, or just parsed, it's useful for not
@@ -49,8 +51,8 @@ pub mod ast {
         pub struct Resolved;
 
         impl State for Resolved {
-            type NameSet = Option<Self::Definition>;
-            type Definition = resolved::Definition;
+            type NameSet = Self::Definition;
+            type Definition = Rc<resolved::Definition>;
             type Reference = resolved::Reference;
             type Import = !;
         }
@@ -59,6 +61,12 @@ pub mod ast {
     impl Element for ! {
         fn location(&self) -> &Location {
             unreachable!()
+        }
+    }
+
+    impl<T: Element> Element for Rc<T> {
+        fn location(&self) -> &Location {
+            self.as_ref().location()
         }
     }
 
@@ -101,6 +109,8 @@ pub mod ast {
     }
 
     pub mod resolved {
+        use std::rc::Rc;
+
         use super::*;
 
         /// A definition. It has a text, and a location.
@@ -119,7 +129,7 @@ pub mod ast {
         /// A name access.
         #[derive(Debug, Clone)]
         pub struct Reference {
-            pub text: String,
+            pub definition: Rc<Definition>,
             pub location: Location,
         }
 
@@ -151,6 +161,12 @@ pub mod ast {
     impl Debug for Location {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
             write!(f, "Location")
+        }
+    }
+
+    impl From<Location> for miette::SourceSpan {
+        fn from(value: Location) -> Self {
+            Self::from(value.start..value.end)
         }
     }
 
@@ -250,7 +266,7 @@ pub mod ast {
     pub struct Inductive<S: state::State> {
         pub doc_strings: Vec<DocString>,
         pub name: S::Definition,
-        pub parameters: Vec<Variable<S>>,
+        pub parameters: Vec<Domain<S>>,
         pub constructors: Vec<Constructor<S>>,
         pub location: Location,
     }
@@ -540,7 +556,7 @@ pub mod ast {
 
     /// A variable. It has a name and a location.
     #[derive(Debug, Clone)]
-    pub struct Variable<S: state::State> {
+    pub struct Domain<S: state::State> {
         /// The name of the variable. The idea of the [`Option`] type, is when
         /// we have a binder like `_`, which is a placeholder for a variable for
         /// which we don't care about the name.
@@ -557,7 +573,7 @@ pub mod ast {
         pub location: Location,
     }
 
-    impl<S: state::State> Element for Variable<S> {
+    impl<S: state::State> Element for Domain<S> {
         fn location(&self) -> &Location {
             &self.location
         }
@@ -630,7 +646,7 @@ pub mod ast {
     #[derive(Debug, Clone)]
     pub struct Pi<S: state::State> {
         pub icit: Icit,
-        pub domain: Variable<S>,
+        pub domain: Domain<S>,
         pub codomain: Box<Term<S>>,
         pub location: Location,
     }
@@ -854,26 +870,75 @@ pub mod parser {
 ///
 /// It's the second phase of the compiler.
 pub mod resolver {
-    use std::collections::HashMap;
+    use std::{collections::HashMap, rc::Rc};
 
-    use miette::{Context, IntoDiagnostic};
+    use miette::{Context, IntoDiagnostic, NamedSource, SourceSpan};
 
-    use crate::ast::{state, File};
+    use crate::ast::{
+        resolved::{Definition, Reference},
+        state, Apply, Binding, Domain, ElimDef, Eval, File, Fun, Hole, Pi, Stmt, Term, Type,
+    };
 
     type FileMap = HashMap<String, String>;
 
     #[derive(thiserror::Error, miette::Diagnostic, Debug)]
-    pub enum ResolutionError {
-        #[error("parse error")]
-        #[diagnostic()]
-        ParseError,
+    pub enum InnerError {
+        #[error(transparent)]
+        #[diagnostic(transparent)]
+        Import(#[from] UnresolvedImport),
+
+        #[error(transparent)]
+        #[diagnostic(transparent)]
+        Definition(#[from] UnresolvedDefinition),
+    }
+
+    #[derive(thiserror::Error, miette::Diagnostic, Debug)]
+    #[diagnostic(code(zu::resolution_failure))]
+    #[error("can't resolve the files")]
+    pub struct ResolutionFailure {
+        // The source code above is used for these errors
+        #[related]
+        related: Vec<InnerError>,
+    }
+
+    #[derive(thiserror::Error, miette::Diagnostic, Debug)]
+    #[diagnostic(code(zu::unresolved_definition))]
+    #[error("unresolved definition: {module}")]
+    pub struct UnresolvedDefinition {
+        /// The name of the import.
+        pub module: String,
+
+        /// The source code of the import.
+        #[source_code]
+        source_code: NamedSource,
+
+        /// The location of the unresolved import.
+        #[label = "this import"]
+        span: SourceSpan,
+    }
+
+    #[derive(thiserror::Error, miette::Diagnostic, Debug)]
+    #[diagnostic(code(zu::unresolved_import), help("try to import the file in the cli"))]
+    #[error("unresolved import: {module}")]
+    pub struct UnresolvedImport {
+        /// The name of the import.
+        pub module: String,
+
+        /// The source code of the import.
+        #[source_code]
+        source_code: NamedSource,
+
+        /// The location of the unresolved import.
+        #[label = "this import"]
+        span: SourceSpan,
     }
 
     pub struct Resolver {
         pub files: FileMap,
         pub inputs: HashMap<String, crate::ast::File<state::Quoted>>,
-        pub errors: Vec<ResolutionError>,
-        pub file: crate::ast::File<state::Quoted>,
+        pub errors: Vec<InnerError>,
+        pub scope: HashMap<String, Rc<crate::ast::resolved::Definition>>,
+        pub main: crate::ast::File<state::Quoted>,
     }
 
     /// Read file and parse it. Associating the file name with the file.
@@ -882,7 +947,7 @@ pub mod resolver {
     fn read_file(path: String, files: &mut FileMap) -> miette::Result<File<state::Quoted>> {
         let text = std::fs::read_to_string(&path)
             .into_diagnostic()
-            .wrap_err_with(|| format!("Can't read file `{}`", path))?;
+            .wrap_err_with(|| format!("can't read file `{}`", path))?;
 
         files.insert(path.clone(), text.clone()); // Insert for error handling
 
@@ -907,12 +972,279 @@ pub mod resolver {
                     .map(|file| (file.name.clone(), file))
                     .collect(),
                 errors: vec![],
-                file,
+                scope: HashMap::new(),
+                main: file,
             })
         }
 
-        pub fn resolve_and_import(self) -> miette::Result<File<state::Resolved>> {
-            todo!()
+        /// Resolves and imports the files.
+        pub fn resolve_and_import(mut self) -> miette::Result<File<state::Resolved>> {
+            let file = std::mem::take(&mut self.main);
+            let file = self.file(file);
+
+            if !self.errors.is_empty() {
+                return Err(ResolutionFailure {
+                    related: self.errors,
+                }
+                .into());
+            }
+
+            Ok(file)
+        }
+
+        // Iterates the statements of the file and collects the errors.
+        fn file(&mut self, file: File<state::Quoted>) -> File<state::Resolved> {
+            File {
+                name: file.name,
+                stmts: file
+                    .stmts
+                    .into_iter()
+                    .flat_map(|stmt| self.stmt(stmt))
+                    .collect(),
+                location: file.location,
+            }
+        }
+
+        /// Evaluates a statement, resolving the references.
+        fn stmt(&mut self, s: Stmt<state::Quoted>) -> Vec<Stmt<state::Resolved>> {
+            vec![match s {
+                Stmt::Error(error) => Stmt::Error(error),
+                Stmt::Eval(stmt) => Stmt::Eval(Eval {
+                    value: self.term(stmt.value),
+                    location: stmt.location,
+                }),
+                Stmt::Type(stmt) => Stmt::Type(Type {
+                    value: self.term(stmt.value),
+                    location: stmt.location,
+                }),
+                Stmt::Binding(stmt) => {
+                    let name = stmt.name.text.clone();
+                    let definition = Rc::new(Definition {
+                        location: stmt.location.clone(),
+                        text: stmt.name.text.clone(),
+                    });
+
+                    // Adds the definition to the scope.
+                    self.scope.insert(name, definition.clone());
+
+                    // Resolve the type and the value of the binding.
+                    Stmt::Binding(Binding {
+                        doc_strings: stmt.doc_strings,
+                        name: definition,
+                        location: stmt.location,
+                        type_repr: self.term(stmt.type_repr),
+                        value: self.term(stmt.value),
+                    })
+                }
+                Stmt::Inductive(_) => todo!(),
+                Stmt::Import(import) => {
+                    let Some(file) = self.inputs.get(&import.text).cloned() else {
+                        let error = InnerError::Import(UnresolvedImport {
+                            module: import.text.clone(),
+                            source_code: NamedSource::new(
+                                &import.location.filename,
+                                self.files.get(&import.location.filename).unwrap().clone(),
+                            ),
+                            span: import.location.clone().into(),
+                        });
+                        self.errors.push(error);
+
+                        return vec![];
+                    };
+
+                    // Resolve the file and concatenate the statements.
+                    return self.file(file).stmts;
+                }
+                Stmt::ElimDef(elim_def) => Stmt::ElimDef(ElimDef {
+                    // Resolve the inductive type and the constructors.
+                    inductive: self
+                        .find_reference(elim_def.inductive.clone())
+                        .unwrap_or_else(|| {
+                            Rc::new(Definition {
+                                location: elim_def.location.clone(),
+                                text: elim_def.inductive.text.clone(),
+                            })
+                        }),
+                    // Resolve the constructors.
+                    constructors: elim_def
+                        .constructors
+                        .into_iter()
+                        .map(|constructor| {
+                            self.find_reference(constructor.clone()).unwrap_or_else(|| {
+                                Rc::new(Definition {
+                                    location: constructor.location.clone(),
+                                    text: constructor.text.clone(),
+                                })
+                            })
+                        })
+                        .collect(),
+                    location: elim_def.location,
+                }),
+            }]
+        }
+
+        /// Resolves a term. It's useful to resolve the references.
+        ///
+        /// It's the main function of the resolver.
+        pub fn term(&mut self, term: Term<state::Quoted>) -> Term<state::Resolved> {
+            match term {
+                Term::Elim(_) => todo!(),
+                Term::Error(error) => Term::Error(error),
+                Term::Universe(universe) => Term::Universe(universe),
+                Term::Int(int) => Term::Int(int),
+                Term::Str(str) => Term::Str(str),
+                Term::Group(group) => Term::Group(self.term(*group).into()),
+                Term::Hole(hole) => Term::Hole(hole),
+                Term::Fun(fun) => self.fork(|local| {
+                    // Resolve the arguments of the function. It's useful to
+                    // define the parameters into the scope.
+                    let arguments = fun
+                        .arguments
+                        .into_iter()
+                        .map(|parameter| {
+                            let definition = Rc::new(Definition {
+                                location: parameter.location.clone(),
+                                text: parameter.text.clone(),
+                            });
+
+                            // Adds the definition to the scope.
+                            local
+                                .scope
+                                .insert(parameter.text.clone(), definition.clone());
+
+                            definition
+                        })
+                        .collect();
+
+                    Term::Fun(Fun {
+                        arguments,
+                        value: local.term(*fun.value).into(),
+                        location: fun.location,
+                    })
+                }),
+                Term::Apply(apply) => {
+                    // Resolve the callee and the arguments.
+                    Term::Apply(Apply {
+                        callee: self.term(*apply.callee).into(),
+                        arguments: apply
+                            .arguments
+                            .into_iter()
+                            .map(|argument| self.term(argument))
+                            .collect(),
+                        location: apply.location,
+                    })
+                }
+                Term::Reference(reference) => self
+                    .find_reference(reference.clone())
+                    .map(|definition| {
+                        // Create a new reference to the definition of `reference.text`
+                        // of the reference.
+                        Term::Reference(Reference {
+                            definition,
+                            location: reference.location.clone(),
+                        })
+                    })
+                    .unwrap_or_else(|| {
+                        // If can't find the definition, it will fallback to a hole.
+                        Term::Hole(Hole {
+                            location: reference.location,
+                        })
+                    }),
+                Term::Pi(pi) => {
+                    self.fork(|local| {
+                        // Make up the domain of the pi type. It's useful to
+                        // resolve the domain.
+                        let domain = local.create_domain(pi.domain);
+
+                        // Resolve the codomain of the pi type.
+                        let codomain = local.term(*pi.codomain);
+
+                        // Fold the domain into a bunch of pi, just like `x, y : A -> B` into
+                        // `x : A -> y : A -> B`.
+                        domain.into_iter().fold(codomain, |acc, next| {
+                            Term::Pi(Pi {
+                                icit: next.icit,
+                                domain: next,
+                                codomain: acc.into(),
+                                location: pi.location.clone(),
+                            })
+                        })
+                    })
+                }
+            }
+        }
+
+        // Transform a domain into one or more domains.
+        fn create_domain(&mut self, domain: Domain<state::Quoted>) -> Vec<Domain<state::Resolved>> {
+            let mut parameters = vec![];
+            let type_repr = self.term(*domain.type_repr);
+            for reference in domain.text {
+                // Tries to get the location of the reference, if it's not
+                // possible, it will fallback to the location of the domain.
+                let location = match reference {
+                    Some(ref name) => name.location.clone(),
+                    None => domain.location.clone(),
+                };
+
+                let definition = Rc::new(Definition {
+                    location: location.clone(),
+                    text: match reference {
+                        Some(name) => name.text,
+                        None => "_".into(),
+                    },
+                });
+
+                // Adds the definition to the scope.
+                self.scope
+                    .insert(definition.text.clone(), definition.clone());
+
+                // Adds the definition to the scope.
+                parameters.push(Domain {
+                    text: definition,
+                    location,
+                    type_repr: type_repr.clone().into(),
+                    icit: domain.icit,
+                });
+            }
+
+            parameters
+        }
+
+        // Find a reference and returns the definition.
+        fn find_reference(
+            &mut self,
+            reference: crate::ast::parsed::Reference,
+        ) -> Option<Rc<Definition>> {
+            match self.scope.get(&reference.text) {
+                Some(value) => value.clone().into(),
+                None => {
+                    // If can't find the definition, it will fallback to a hole.
+                    self.errors
+                        .push(InnerError::Definition(UnresolvedDefinition {
+                            module: reference.text.clone(),
+                            source_code: NamedSource::new(
+                                &reference.location.filename,
+                                self.files
+                                    .get(&reference.location.filename)
+                                    .unwrap()
+                                    .clone(),
+                            ),
+                            span: reference.location.clone().into(),
+                        }));
+
+                    None
+                }
+            }
+        }
+
+        /// Creates a new fork of the current scope, with a new
+        /// scope.
+        fn fork<U, F: FnOnce(&mut Self) -> U>(&mut self, f: F) -> U {
+            let new_scope = self.scope.clone();
+            let scope = std::mem::replace(&mut self.scope, new_scope);
+            let value = f(self);
+            self.scope = scope;
+            value
         }
     }
 }
