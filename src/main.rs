@@ -1,4 +1,6 @@
+#![feature(never_type)]
 #![feature(box_patterns)]
+#![feature(exhaustive_patterns)]
 
 use clap::Parser;
 use miette::{ThemeCharacters, ThemeStyles};
@@ -50,7 +52,13 @@ pub mod ast {
             type NameSet = Option<Self::Definition>;
             type Definition = resolved::Definition;
             type Reference = resolved::Reference;
-            type Import = resolved::Import;
+            type Import = !;
+        }
+    }
+
+    impl Element for ! {
+        fn location(&self) -> &Location {
+            unreachable!()
         }
     }
 
@@ -118,17 +126,6 @@ pub mod ast {
         impl Element for Reference {
             fn location(&self) -> &Location {
                 &self.location
-            }
-        }
-
-        /// Imports a name temporally until it's
-        /// propertly resolved
-        #[derive(Debug, Clone)]
-        pub struct Import(std::convert::Infallible);
-
-        impl Element for Import {
-            fn location(&self) -> &Location {
-                panic!("Can't construct a location for an import when it's resolved")
             }
         }
     }
