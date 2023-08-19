@@ -15,7 +15,7 @@ pub mod ast {
     pub struct File<S: state::State> {
         pub name: String,
         pub stmts: Vec<Stmt<S>>,
-        pub location: Location,
+        pub location: S::Location,
     }
 
     /// The ast GAT state. It's more likelly a Tree That Grow, with the
@@ -29,20 +29,22 @@ pub mod ast {
         /// having to redeclare the same types.
         pub trait State: Default + Debug + Clone {
             type NameSet: Debug + Clone;
-            type Import: Element;
-            type Reference: Element;
-            type Definition: Element;
+            type Import: Element<Self>;
+            type Reference: Element<Self>;
+            type Definition: Element<Self>;
+            type Location: Debug + Clone;
         }
 
         /// Represents the parsed state, it's the state of the syntax tree when it's just parsed.
         #[derive(Default, Debug, Clone)]
-        pub struct Quoted;
+        pub struct Syntax;
 
-        impl State for Quoted {
+        impl State for Syntax {
             type NameSet = Vec<Option<Self::Definition>>;
-            type Definition = parsed::Reference;
-            type Reference = parsed::Reference;
-            type Import = parsed::Import;
+            type Definition = syntax::Reference;
+            type Reference = syntax::Reference;
+            type Import = syntax::Import;
+            type Location = Location;
         }
 
         /// Represents the resolved state, it's the state of the syntax tree when it's resolved.
@@ -54,16 +56,29 @@ pub mod ast {
             type Definition = Rc<resolved::Definition>;
             type Reference = resolved::Reference;
             type Import = !;
+            type Location = Location;
+        }
+
+        /// Represents the quoted state, it's the state of the syntax tree when it's quoted.
+        #[derive(Default, Debug, Clone)]
+        pub struct Quoted;
+
+        impl State for Quoted {
+            type NameSet = Self::Definition;
+            type Definition = Rc<resolved::Definition>;
+            type Reference = resolved::Reference;
+            type Import = !;
+            type Location = ();
         }
     }
 
-    impl Element for ! {
+    impl<S: state::State> Element<S> for ! {
         fn location(&self) -> &Location {
             unreachable!()
         }
     }
 
-    impl<T: Element> Element for Rc<T> {
+    impl<S: state::State, T: Element<S>> Element<S> for Rc<T> {
         fn location(&self) -> &Location {
             self.as_ref().location()
         }
@@ -76,7 +91,7 @@ pub mod ast {
         Binding,
     }
 
-    pub mod parsed {
+    pub mod syntax {
         use super::*;
 
         /// A name access.
@@ -86,7 +101,7 @@ pub mod ast {
             pub location: Location,
         }
 
-        impl Element for Reference {
+        impl<S: state::State<Location = Location>> Element<S> for Reference {
             fn location(&self) -> &Location {
                 &self.location
             }
@@ -100,7 +115,7 @@ pub mod ast {
             pub location: Location,
         }
 
-        impl Element for Import {
+        impl<S: state::State<Location = Location>> Element<S> for Import {
             fn location(&self) -> &Location {
                 &self.location
             }
@@ -113,26 +128,26 @@ pub mod ast {
         use super::*;
 
         /// A definition. It has a text, and a location.
-        #[derive(Debug, Clone)]
+        #[derive(Debug, Clone, Hash)]
         pub struct Definition {
             pub text: String,
             pub location: Location,
         }
 
-        impl Element for Definition {
+        impl<S: state::State<Location = Location>> Element<S> for Definition {
             fn location(&self) -> &Location {
                 &self.location
             }
         }
 
         /// A name access.
-        #[derive(Debug, Clone)]
+        #[derive(Debug, Clone, Hash)]
         pub struct Reference {
             pub definition: Rc<Definition>,
             pub location: Location,
         }
 
-        impl Element for Reference {
+        impl<S: state::State<Location = Location>> Element<S> for Reference {
             fn location(&self) -> &Location {
                 &self.location
             }
@@ -170,13 +185,13 @@ pub mod ast {
     }
 
     /// An element. It can be a declaration, or a term.
-    pub trait Element: Debug + Clone {
-        fn location(&self) -> &Location;
+    pub trait Element<S: state::State>: Debug + Clone {
+        fn location(&self) -> &S::Location;
     }
 
     /// Error node, it does contains an error.
     #[derive(Debug, Clone)]
-    pub struct Error {
+    pub struct Error<S: state::State> {
         /// The error message.
         pub message: String,
 
@@ -184,18 +199,18 @@ pub mod ast {
         pub full_text: String,
 
         /// The location of the error.
-        pub location: Location,
+        pub location: S::Location,
     }
 
     /// Represents a recovery from an error.
-    pub trait Recovery {
+    pub trait Recovery<S: state::State> {
         /// Creates a new instance of [`Self`] when it's an error, it's
         /// useful for enums
-        fn recover_from_error(error: Error) -> Self;
+        fn recover_from_error(error: Error<S>) -> Self;
     }
 
-    impl Element for Error {
-        fn location(&self) -> &Location {
+    impl<S: state::State> Element<S> for Error<S> {
+        fn location(&self) -> &S::Location {
             &self.location
         }
     }
@@ -220,11 +235,11 @@ pub mod ast {
     pub struct Constructor<S: state::State> {
         pub name: S::Definition,
         pub type_rep: Term<S>,
-        pub location: Location,
+        pub location: S::Location,
     }
 
-    impl<S: state::State> Element for Constructor<S> {
-        fn location(&self) -> &Location {
+    impl<S: state::State> Element<S> for Constructor<S> {
+        fn location(&self) -> &S::Location {
             &self.location
         }
     }
@@ -233,14 +248,14 @@ pub mod ast {
     ///
     /// It's used to document declarations.
     #[derive(Debug, Clone)]
-    pub struct DocString {
+    pub struct DocString<S: state::State> {
         pub full_text: String,
         pub text: String,
-        pub location: Location,
+        pub location: S::Location,
     }
 
-    impl Element for DocString {
-        fn location(&self) -> &Location {
+    impl<S: state::State> Element<S> for DocString<S> {
+        fn location(&self) -> &S::Location {
             &self.location
         }
     }
@@ -250,7 +265,7 @@ pub mod ast {
     /// It's an wrapper for different types of declarations.
     pub trait Declaration<S: state::State> {
         /// The documentation of the declaration.
-        fn doc_strings(&self) -> &[DocString];
+        fn doc_strings(&self) -> &[DocString<S>];
 
         /// The attributes of the declaration.
         fn attributes(&self) -> &[Attribute<S>];
@@ -276,22 +291,22 @@ pub mod ast {
     /// ```
     #[derive(Debug, Clone)]
     pub struct Inductive<S: state::State> {
-        pub doc_strings: Vec<DocString>,
+        pub doc_strings: Vec<DocString<S>>,
         pub attributes: Vec<Attribute<S>>,
         pub name: S::Definition,
         pub parameters: Vec<Domain<S>>,
         pub constructors: Vec<Constructor<S>>,
-        pub location: Location,
+        pub location: S::Location,
     }
 
-    impl<S: state::State> Element for Inductive<S> {
-        fn location(&self) -> &Location {
+    impl<S: state::State> Element<S> for Inductive<S> {
+        fn location(&self) -> &S::Location {
             &self.location
         }
     }
 
     impl<S: state::State> Declaration<S> for Inductive<S> {
-        fn doc_strings(&self) -> &[DocString] {
+        fn doc_strings(&self) -> &[DocString<S>] {
             &self.doc_strings
         }
 
@@ -323,22 +338,22 @@ pub mod ast {
     /// ```
     #[derive(Debug, Clone)]
     pub struct Binding<S: state::State> {
-        pub doc_strings: Vec<DocString>,
+        pub doc_strings: Vec<DocString<S>>,
         pub attributes: Vec<Attribute<S>>,
         pub name: S::Definition,
         pub type_repr: Term<S>,
         pub value: Term<S>,
-        pub location: Location,
+        pub location: S::Location,
     }
 
-    impl<S: state::State> Element for Binding<S> {
-        fn location(&self) -> &Location {
+    impl<S: state::State> Element<S> for Binding<S> {
+        fn location(&self) -> &S::Location {
             &self.location
         }
     }
 
     impl<S: state::State> Declaration<S> for Binding<S> {
-        fn doc_strings(&self) -> &[DocString] {
+        fn doc_strings(&self) -> &[DocString<S>] {
             &self.doc_strings
         }
 
@@ -352,13 +367,13 @@ pub mod ast {
     }
 
     #[derive(Debug, Clone)]
-    pub struct Identifier {
+    pub struct Identifier<S: state::State> {
         pub text: String,
-        pub location: Location,
+        pub location: S::Location,
     }
 
-    impl Element for Identifier {
-        fn location(&self) -> &Location {
+    impl<S: state::State> Element<S> for Identifier<S> {
+        fn location(&self) -> &S::Location {
             &self.location
         }
     }
@@ -374,11 +389,11 @@ pub mod ast {
     pub struct ElimDef<S: state::State> {
         pub inductive: S::Definition,
         pub constructors: Vec<S::Definition>,
-        pub location: Location,
+        pub location: S::Location,
     }
 
-    impl<S: state::State> Element for ElimDef<S> {
-        fn location(&self) -> &Location {
+    impl<S: state::State> Element<S> for ElimDef<S> {
+        fn location(&self) -> &S::Location {
             &self.location
         }
     }
@@ -393,11 +408,11 @@ pub mod ast {
     #[derive(Debug, Clone)]
     pub struct Type<S: state::State> {
         pub value: Term<S>,
-        pub location: Location,
+        pub location: S::Location,
     }
 
-    impl<S: state::State> Element for Type<S> {
-        fn location(&self) -> &Location {
+    impl<S: state::State> Element<S> for Type<S> {
+        fn location(&self) -> &S::Location {
             &self.location
         }
     }
@@ -412,11 +427,11 @@ pub mod ast {
     #[derive(Debug, Clone)]
     pub struct Eval<S: state::State> {
         pub value: Term<S>,
-        pub location: Location,
+        pub location: S::Location,
     }
 
-    impl<S: state::State> Element for Eval<S> {
-        fn location(&self) -> &Location {
+    impl<S: state::State> Element<S> for Eval<S> {
+        fn location(&self) -> &S::Location {
             &self.location
         }
     }
@@ -424,7 +439,7 @@ pub mod ast {
     /// A statement. It can be an inductive type, or a downgrade.
     #[derive(Clone)]
     pub enum Stmt<S: state::State> {
-        Error(Error),
+        Error(Error<S>),
 
         /// An inductive type is a statement that introduces a new inductive
         /// type.
@@ -472,14 +487,14 @@ pub mod ast {
         }
     }
 
-    impl<S: state::State> Recovery for Stmt<S> {
-        fn recover_from_error(error: Error) -> Self {
+    impl<S: state::State> Recovery<S> for Stmt<S> {
+        fn recover_from_error(error: Error<S>) -> Self {
             Stmt::Error(error)
         }
     }
 
-    impl<S: state::State> Element for Stmt<S> {
-        fn location(&self) -> &Location {
+    impl<S: state::State> Element<S> for Stmt<S> {
+        fn location(&self) -> &S::Location {
             match self {
                 Stmt::Error(error) => &error.location,
                 Stmt::Inductive(inductive) => &inductive.location,
@@ -494,57 +509,57 @@ pub mod ast {
 
     /// Type of a type. It has a location.
     #[derive(Debug, Clone)]
-    pub struct Universe {
+    pub struct Universe<S: state::State> {
         /// The location of the integer in the source code.
-        pub location: Location,
+        pub location: S::Location,
     }
 
-    impl Element for Universe {
-        fn location(&self) -> &Location {
+    impl<S: state::State> Element<S> for Universe<S> {
+        fn location(&self) -> &S::Location {
             &self.location
         }
     }
 
     /// A hole. It has a location.
     #[derive(Debug, Clone)]
-    pub struct Hole {
+    pub struct Hole<S: state::State> {
         /// The location of the integer in the source code.
-        pub location: Location,
+        pub location: S::Location,
     }
 
-    impl Element for Hole {
-        fn location(&self) -> &Location {
+    impl<S: state::State> Element<S> for Hole<S> {
+        fn location(&self) -> &S::Location {
             &self.location
         }
     }
 
     /// Int is a integer value like `0`, `1`, `2`, etc.
     #[derive(Debug, Clone)]
-    pub struct Str {
+    pub struct Str<S: state::State> {
         pub value: String,
 
         /// The location of the source in the source code.
-        pub location: Location,
+        pub location: S::Location,
     }
 
-    impl Element for Str {
-        fn location(&self) -> &Location {
+    impl<S: state::State> Element<S> for Str<S> {
+        fn location(&self) -> &S::Location {
             &self.location
         }
     }
 
     /// Int is a integer value like `0`, `1`, `2`, etc.
     #[derive(Debug, Clone)]
-    pub struct Int {
+    pub struct Int<S: state::State> {
         /// The value of the integer.
         pub value: isize,
 
         /// The location of the integer in the source code.
-        pub location: Location,
+        pub location: S::Location,
     }
 
-    impl Element for Int {
-        fn location(&self) -> &Location {
+    impl<S: state::State> Element<S> for Int<S> {
+        fn location(&self) -> &S::Location {
             &self.location
         }
     }
@@ -556,11 +571,11 @@ pub mod ast {
     pub struct Pattern<S: state::State> {
         pub definition: S::Reference,
         pub arguments: Vec<S::Definition>,
-        pub location: Location,
+        pub location: S::Location,
     }
 
-    impl<S: state::State> Element for Pattern<S> {
-        fn location(&self) -> &Location {
+    impl<S: state::State> Element<S> for Pattern<S> {
+        fn location(&self) -> &S::Location {
             &self.location
         }
     }
@@ -570,11 +585,11 @@ pub mod ast {
     pub struct Case<S: state::State> {
         pub patterns: Vec<Pattern<S>>,
         pub value: Box<Term<S>>,
-        pub location: Location,
+        pub location: S::Location,
     }
 
-    impl<S: state::State> Element for Case<S> {
-        fn location(&self) -> &Location {
+    impl<S: state::State> Element<S> for Case<S> {
+        fn location(&self) -> &S::Location {
             &self.location
         }
     }
@@ -585,11 +600,11 @@ pub mod ast {
     #[derive(Debug, Clone)]
     pub struct Elim<S: state::State> {
         pub patterns: Vec<Pattern<S>>,
-        pub location: Location,
+        pub location: S::Location,
     }
 
-    impl<S: state::State> Element for Elim<S> {
-        fn location(&self) -> &Location {
+    impl<S: state::State> Element<S> for Elim<S> {
+        fn location(&self) -> &S::Location {
             &self.location
         }
     }
@@ -610,11 +625,11 @@ pub mod ast {
         pub icit: Icit,
 
         /// The location of the variable in the source code.
-        pub location: Location,
+        pub location: S::Location,
     }
 
-    impl<S: state::State> Element for Domain<S> {
-        fn location(&self) -> &Location {
+    impl<S: state::State> Element<S> for Domain<S> {
+        fn location(&self) -> &S::Location {
             &self.location
         }
     }
@@ -639,11 +654,11 @@ pub mod ast {
     pub struct Apply<S: state::State> {
         pub callee: Box<Term<S>>,
         pub arguments: Vec<Term<S>>,
-        pub location: Location,
+        pub location: S::Location,
     }
 
-    impl<S: state::State> Element for Apply<S> {
-        fn location(&self) -> &Location {
+    impl<S: state::State> Element<S> for Apply<S> {
+        fn location(&self) -> &S::Location {
             &self.location
         }
     }
@@ -661,11 +676,11 @@ pub mod ast {
     pub struct Fun<S: state::State> {
         pub arguments: Vec<S::Definition>,
         pub value: Box<Term<S>>,
-        pub location: Location,
+        pub location: S::Location,
     }
 
-    impl<S: state::State> Element for Fun<S> {
-        fn location(&self) -> &Location {
+    impl<S: state::State> Element<S> for Fun<S> {
+        fn location(&self) -> &S::Location {
             &self.location
         }
     }
@@ -688,11 +703,11 @@ pub mod ast {
         pub icit: Icit,
         pub domain: Domain<S>,
         pub codomain: Box<Term<S>>,
-        pub location: Location,
+        pub location: S::Location,
     }
 
-    impl<S: state::State> Element for Pi<S> {
-        fn location(&self) -> &Location {
+    impl<S: state::State> Element<S> for Pi<S> {
+        fn location(&self) -> &S::Location {
             &self.location
         }
     }
@@ -702,17 +717,17 @@ pub mod ast {
     /// It's the base of the abstract syntax tree.
     #[derive(Clone)]
     pub enum Term<S: state::State> {
-        Error(Error),
-        Universe(Universe),
-        Int(Int),
-        Str(Str),
+        Error(Error<S>),
+        Universe(Universe<S>),
+        Int(Int<S>),
+        Str(Str<S>),
         Group(Box<Term<S>>),
         Elim(Elim<S>),
         Fun(Fun<S>),
         Apply(Apply<S>),
         Pi(Pi<S>),
         Reference(S::Reference),
-        Hole(Hole),
+        Hole(Hole<S>),
     }
 
     impl<S: state::State> Term<S> {
@@ -744,14 +759,14 @@ pub mod ast {
         }
     }
 
-    impl<S: state::State> Recovery for Term<S> {
-        fn recover_from_error(error: Error) -> Self {
+    impl<S: state::State> Recovery<S> for Term<S> {
+        fn recover_from_error(error: Error<S>) -> Self {
             Term::Error(error)
         }
     }
 
-    impl<S: state::State> Element for Term<S> {
-        fn location(&self) -> &Location {
+    impl<S: state::State> Element<S> for Term<S> {
+        fn location(&self) -> &S::Location {
             match self {
                 Term::Error(error) => error.location(),
                 Term::Universe(universe) => universe.location(),
@@ -783,7 +798,7 @@ pub mod parser {
     }
 
     /// The parsed file type.
-    type FileQt = crate::ast::File<crate::ast::state::Quoted>;
+    type FileQt = crate::ast::File<crate::ast::state::Syntax>;
 
     #[derive(miette::Diagnostic, thiserror::Error, Debug)]
     #[error("could not parse due the following errors")]
@@ -1002,11 +1017,11 @@ pub mod resolver {
 
     pub struct Resolver {
         pub files: FileMap,
-        pub inputs: im_rc::HashMap<String, crate::ast::File<state::Quoted>, FxBuildHasher>,
+        pub inputs: im_rc::HashMap<String, crate::ast::File<state::Syntax>, FxBuildHasher>,
         pub errors: Vec<InnerError>,
         pub scope: im_rc::HashMap<String, Rc<crate::ast::resolved::Definition>, FxBuildHasher>,
         pub file_scope: Scope,
-        pub main: crate::ast::File<state::Quoted>,
+        pub main: crate::ast::File<state::Syntax>,
     }
 
     /// Current file scope for the resolver.
@@ -1029,7 +1044,7 @@ pub mod resolver {
     /// Read file and parse it. Associating the file name with the file.
     ///
     /// It's useful for the resolver.
-    fn read_file(path: String, files: &mut FileMap) -> miette::Result<File<state::Quoted>> {
+    fn read_file(path: String, files: &mut FileMap) -> miette::Result<File<state::Syntax>> {
         let text = std::fs::read_to_string(&path)
             .into_diagnostic()
             .wrap_err_with(|| format!("can't read file `{}`", path))?;
@@ -1079,7 +1094,7 @@ pub mod resolver {
         }
 
         // Iterates the statements of the file and collects the errors.
-        fn file(&mut self, file: File<state::Quoted>) -> File<state::Resolved> {
+        fn file(&mut self, file: File<state::Syntax>) -> File<state::Resolved> {
             // Create a default scope for the file.
             let mut scope = Scope::default();
 
@@ -1107,7 +1122,7 @@ pub mod resolver {
         }
 
         /// Defines a statement. It's useful to define the references.
-        fn define(&mut self, scope: &mut Scope, stmt: &Stmt<state::Quoted>) {
+        fn define(&mut self, scope: &mut Scope, stmt: &Stmt<state::Syntax>) {
             let Some(declaration) = stmt.as_declaration() else {
                 return;
             };
@@ -1125,7 +1140,7 @@ pub mod resolver {
         }
 
         /// Evaluates a statement, resolving the references.
-        fn resolve(&mut self, stmt: Stmt<state::Quoted>) -> Vec<Stmt<state::Resolved>> {
+        fn resolve(&mut self, stmt: Stmt<state::Syntax>) -> Vec<Stmt<state::Resolved>> {
             vec![match stmt {
                 Stmt::Error(error) => Stmt::Error(error),
                 Stmt::Eval(stmt) => Stmt::Eval(Eval {
@@ -1213,7 +1228,7 @@ pub mod resolver {
         /// Resolves a term. It's useful to resolve the references.
         ///
         /// It's the main function of the resolver.
-        fn term(&mut self, term: Term<state::Quoted>) -> Term<state::Resolved> {
+        fn term(&mut self, term: Term<state::Syntax>) -> Term<state::Resolved> {
             match term {
                 Term::Elim(_) => todo!(),
                 Term::Error(error) => Term::Error(error),
@@ -1302,13 +1317,13 @@ pub mod resolver {
         }
 
         /// Resolves an attribute. It's useful to resolve the references.
-        fn attribute(&mut self, attribute: Attribute<state::Quoted>) -> Attribute<state::Resolved> {
+        fn attribute(&mut self, attribute: Attribute<state::Syntax>) -> Attribute<state::Resolved> {
             let _ = attribute;
             todo!()
         }
 
         // Transform a domain into one or more domains.
-        fn create_domain(&mut self, domain: Domain<state::Quoted>) -> Vec<Domain<state::Resolved>> {
+        fn create_domain(&mut self, domain: Domain<state::Syntax>) -> Vec<Domain<state::Resolved>> {
             let mut parameters = vec![];
             let type_repr = self.term(*domain.type_repr);
             for reference in domain.text {
@@ -1347,7 +1362,7 @@ pub mod resolver {
         // it will report an error.
         fn find_reference(
             &mut self,
-            reference: crate::ast::parsed::Reference,
+            reference: crate::ast::syntax::Reference,
         ) -> Option<Rc<Definition>> {
             match self.scope.get(&reference.text) {
                 Some(value) => value.clone().into(),
@@ -1371,7 +1386,7 @@ pub mod resolver {
         /// Reports a possible definition for a reference.
         fn report_possible_definition(
             &mut self,
-            reference: &crate::ast::parsed::Reference,
+            reference: &crate::ast::syntax::Reference,
             definition: Rc<Definition>,
         ) {
             self.errors
@@ -1384,7 +1399,7 @@ pub mod resolver {
         }
 
         /// Reports an error for a reference.
-        fn report_unresolved(&mut self, reference: &crate::ast::parsed::Reference) {
+        fn report_unresolved(&mut self, reference: &crate::ast::syntax::Reference) {
             self.errors
                 .push(InnerError::Definition(UnresolvedDefinition {
                     module: reference.text.clone(),

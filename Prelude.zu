@@ -16,13 +16,12 @@ inductive data Eq {a} (x, y : a) where
 -- | Record for lazy evaluation
 #[derive new]
 #[do_notation IO/pure IO/>>=]
-struct IO (a : Type) where
-  value : a.
+struct IO (a : Type).
+  #[ffi]
+  IO/pure : {a} -> a -> IO a := external!.
 
-  IO/pure : {a} -> a -> IO a := IO.new.
-
-  IO/>>= : {a, b} -> IO a -> (IO a -> IO b) -> IO b :=
-    \io, f -> f io.
+  #[ffi]
+  IO/>>= : {a, b} -> IO a -> (IO a -> IO b) -> IO b := external!.
 
   -- Prints in the stdout
   --
@@ -31,11 +30,11 @@ struct IO (a : Type) where
   --  println "hello world"
   -- ```
   #[ffi]
-  IO/println : String -> IO () := sorry.
+  IO/println : String -> IO () := external!.
 
 -- Performs unsafe IO in the type level, or anywhere you are.
 --
 -- It's unsafe and should not be used.
 #[ffi]
 #[unsafe]
-unsafePerformIO : {a} -> IO a -> a := sorry.
+unsafePerformIO : {a} -> IO a -> a := external!.
