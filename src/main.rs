@@ -6,7 +6,7 @@ use clap::Parser;
 
 /// The abstract syntax tree for the language.
 pub mod ast {
-    use std::{fmt::Debug, rc::Rc};
+    use std::{fmt::Debug, rc::Rc, marker::PhantomData};
 
     /// File definition, it contains all the statements,
     /// the module name, and a base location for it as anchor
@@ -200,6 +200,13 @@ pub mod ast {
         }
     }
 
+    /// Simple attribute to the AST. It can hold a lot of things, and it's
+    /// defined primarily for the compiler.
+    #[derive(Debug, Clone)]
+    pub enum Attribute<S: state::State> {
+        _TODO(PhantomData<S>),
+    }
+
     /// A constructor for an inductive type. It has a name and a type.
     ///
     /// ## Examples
@@ -245,6 +252,9 @@ pub mod ast {
         /// The documentation of the declaration.
         fn doc_strings(&self) -> &[DocString];
 
+        /// The attributes of the declaration.
+        fn attributes(&self) -> &[Attribute<S>];
+
         /// The name of the declaration.
         fn name(&self) -> &<S as state::State>::Definition;
     }
@@ -267,6 +277,7 @@ pub mod ast {
     #[derive(Debug, Clone)]
     pub struct Inductive<S: state::State> {
         pub doc_strings: Vec<DocString>,
+        pub attributes: Vec<Attribute<S>>,
         pub name: S::Definition,
         pub parameters: Vec<Domain<S>>,
         pub constructors: Vec<Constructor<S>>,
@@ -282,6 +293,10 @@ pub mod ast {
     impl<S: state::State> Declaration<S> for Inductive<S> {
         fn doc_strings(&self) -> &[DocString] {
             &self.doc_strings
+        }
+
+        fn attributes(&self) -> &[Attribute<S>] {
+            &self.attributes
         }
 
         fn name(&self) -> &<S as state::State>::Definition {
@@ -309,6 +324,7 @@ pub mod ast {
     #[derive(Debug, Clone)]
     pub struct Binding<S: state::State> {
         pub doc_strings: Vec<DocString>,
+        pub attributes: Vec<Attribute<S>>,
         pub name: S::Definition,
         pub type_repr: Term<S>,
         pub value: Term<S>,
@@ -324,6 +340,10 @@ pub mod ast {
     impl<S: state::State> Declaration<S> for Binding<S> {
         fn doc_strings(&self) -> &[DocString] {
             &self.doc_strings
+        }
+
+        fn attributes(&self) -> &[Attribute<S>] {
+            &self.attributes
         }
 
         fn name(&self) -> &<S as state::State>::Definition {
@@ -897,8 +917,8 @@ pub mod resolver {
 
     use crate::ast::{
         resolved::{Definition, Reference},
-        state, Apply, Binding, Domain, Element, ElimDef, Eval, File, Fun, Hole, Location, Pi, Stmt,
-        Term, Type,
+        state, Apply, Attribute, Binding, Domain, ElimDef, Eval, File, Fun, Hole, Location, Pi,
+        Stmt, Term, Type,
     };
 
     type FileMap = HashMap<String, String>;
@@ -1123,12 +1143,20 @@ pub mod resolver {
                         text: stmt.name.text.clone(),
                     });
 
+                    // Resolve the attributes.
+                    let attributes = stmt
+                        .attributes
+                        .into_iter()
+                        .map(|attribute| self.attribute(attribute))
+                        .collect();
+
                     // Adds the definition to the scope.
                     self.scope.insert(name, definition.clone());
 
                     // Resolve the type and the value of the binding.
                     Stmt::Binding(Binding {
                         doc_strings: stmt.doc_strings,
+                        attributes,
                         name: definition,
                         location: stmt.location,
                         type_repr: self.term(stmt.type_repr),
@@ -1185,7 +1213,7 @@ pub mod resolver {
         /// Resolves a term. It's useful to resolve the references.
         ///
         /// It's the main function of the resolver.
-        pub fn term(&mut self, term: Term<state::Quoted>) -> Term<state::Resolved> {
+        fn term(&mut self, term: Term<state::Quoted>) -> Term<state::Resolved> {
             match term {
                 Term::Elim(_) => todo!(),
                 Term::Error(error) => Term::Error(error),
@@ -1271,6 +1299,12 @@ pub mod resolver {
                     })
                 }
             }
+        }
+
+        /// Resolves an attribute. It's useful to resolve the references.
+        fn attribute(&mut self, attribute: Attribute<state::Quoted>) -> Attribute<state::Resolved> {
+            let _ = attribute;
+            todo!()
         }
 
         // Transform a domain into one or more domains.
