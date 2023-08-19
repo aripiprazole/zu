@@ -241,9 +241,12 @@ pub mod ast {
     /// A declaration. It can be an inductive type, or a downgrade.
     ///
     /// It's an wrapper for different types of declarations.
-    pub trait Declaration: Element {
+    pub trait Declaration<S: state::State> {
         /// The documentation of the declaration.
         fn doc_strings(&self) -> &[DocString];
+
+        /// The name of the declaration.
+        fn name(&self) -> &<S as state::State>::Definition;
     }
 
     /// An inductive type. It has a name, a list of parameters, and a list of
@@ -276,9 +279,13 @@ pub mod ast {
         }
     }
 
-    impl<S: state::State> Declaration for Inductive<S> {
+    impl<S: state::State> Declaration<S> for Inductive<S> {
         fn doc_strings(&self) -> &[DocString] {
             &self.doc_strings
+        }
+
+        fn name(&self) -> &<S as state::State>::Definition {
+            &self.name
         }
     }
 
@@ -314,9 +321,13 @@ pub mod ast {
         }
     }
 
-    impl<S: state::State> Declaration for Binding<S> {
+    impl<S: state::State> Declaration<S> for Binding<S> {
         fn doc_strings(&self) -> &[DocString] {
             &self.doc_strings
+        }
+
+        fn name(&self) -> &<S as state::State>::Definition {
+            &self.name
         }
     }
 
@@ -415,6 +426,16 @@ pub mod ast {
 
         /// Defines the eliminator for an inductive type.
         ElimDef(ElimDef<S>),
+    }
+
+    impl<S: state::State> Stmt<S> {
+        pub fn as_declaration(&self) -> Option<&dyn Declaration<S>> {
+            match self {
+                Self::Inductive(inductive) => Some(inductive),
+                Self::Binding(binding) => Some(binding),
+                _ => None,
+            }
+        }
     }
 
     impl<S: state::State> Debug for Stmt<S> {
@@ -876,7 +897,8 @@ pub mod resolver {
 
     use crate::ast::{
         resolved::{Definition, Reference},
-        state, Apply, Binding, Domain, ElimDef, Eval, File, Fun, Hole, Pi, Stmt, Term, Type,
+        state, Apply, Binding, Domain, Element, ElimDef, Eval, File, Fun, Hole, Pi, Stmt, Term,
+        Type,
     };
 
     type FileMap = HashMap<String, String>;
@@ -941,6 +963,23 @@ pub mod resolver {
         pub main: crate::ast::File<state::Quoted>,
     }
 
+    /// Current file scope for the resolver.
+    #[derive(Default)]
+    struct Scope {
+        /// Possible names for the current scope. It's useful for the error messages,
+        /// for example:
+        ///
+        /// ```haskell
+        /// @eval Sim.
+        ///
+        /// Sim := 10.
+        /// ```
+        ///
+        /// The declaration `Sim` is not defined, but the resolver can suggest the
+        /// possible names for the user, in this case `Sim` is the possible name.
+        all_possible_names: im_rc::HashMap<String, Rc<Definition>, FxBuildHasher>,
+    }
+
     /// Read file and parse it. Associating the file name with the file.
     ///
     /// It's useful for the resolver.
@@ -994,20 +1033,48 @@ pub mod resolver {
 
         // Iterates the statements of the file and collects the errors.
         fn file(&mut self, file: File<state::Quoted>) -> File<state::Resolved> {
+            // Create a default scope for the file.
+            let mut scope = Scope::default();
+
+            // Define all the statements into the scope
+            for stmt in file.stmts.iter() {
+                self.define(&mut scope, &stmt);
+            }
+
             File {
                 name: file.name,
                 stmts: file
                     .stmts
                     .into_iter()
-                    .flat_map(|stmt| self.stmt(stmt))
+                    .flat_map(|stmt| self.resolve(&scope, stmt))
                     .collect(),
                 location: file.location,
             }
         }
 
+        /// Defines a statement. It's useful to define the references.
+        fn define(&mut self, scope: &mut Scope, stmt: &Stmt<state::Quoted>) {
+            let Some(declaration) = stmt.as_declaration() else {
+                return;
+            };
+
+            // Adds the definition to the scope.
+            scope.all_possible_names.insert(
+                declaration.name().text.clone(),
+                Rc::new(Definition {
+                    location: stmt.location().clone(),
+                    text: declaration.name().text.clone(),
+                }),
+            );
+        }
+
         /// Evaluates a statement, resolving the references.
-        fn stmt(&mut self, s: Stmt<state::Quoted>) -> Vec<Stmt<state::Resolved>> {
-            vec![match s {
+        fn resolve(
+            &mut self,
+            scope: &Scope,
+            stmt: Stmt<state::Quoted>,
+        ) -> Vec<Stmt<state::Resolved>> {
+            vec![match stmt {
                 Stmt::Error(error) => Stmt::Error(error),
                 Stmt::Eval(stmt) => Stmt::Eval(Eval {
                     value: self.term(stmt.value),
