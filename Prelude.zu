@@ -12,3 +12,30 @@ inductive data Eq {a} (x, y : a) where
 -- induction.
 Eq/symm : {a, b} -> a = b -> b = a := case
   Refl => Refl.
+
+-- | Record for lazy evaluation
+#[derive new]
+#[do_notation IO/pure IO/>>=]
+struct IO (a : Type) where
+  value : a.
+
+IO/pure : {a} -> a -> IO a := IO.new.
+
+IO/>>= : {a, b} -> IO a -> (IO a -> IO b) -> IO b :=
+  \io, f -> f io.
+
+-- Performs unsafe IO in the type level, or anywhere you are.
+--
+-- It's unsafe and should not be used.
+#[ffi]
+#[unsafe]
+unsafePerformIO : {a} -> IO a -> a := sorry.
+
+-- Prints in the stdout
+--
+-- ```
+-- main : Strict () := do
+--  println "hello world"
+-- ```
+#[ffi]
+IO/println : String -> IO () := sorry.
