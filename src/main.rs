@@ -3,7 +3,6 @@
 #![feature(exhaustive_patterns)]
 
 use clap::Parser;
-use miette::{ThemeCharacters, ThemeStyles};
 
 /// The abstract syntax tree for the language.
 pub mod ast {
@@ -903,7 +902,7 @@ pub mod resolver {
     }
 
     #[derive(thiserror::Error, miette::Diagnostic, Debug)]
-    #[diagnostic(code(zu::unresolved_definition))]
+    #[diagnostic(code(zu::unresolved_definition), help("maybe add an import for it?"))]
     #[error("unresolved definition: {module}")]
     pub struct UnresolvedDefinition {
         /// The name of the import.
@@ -914,7 +913,7 @@ pub mod resolver {
         source_code: NamedSource,
 
         /// The location of the unresolved import.
-        #[label = "this import"]
+        #[label = "here"]
         span: SourceSpan,
     }
 
@@ -1268,31 +1267,9 @@ pub struct Command {
 
 fn main() -> miette::Result<()> {
     miette::set_hook(Box::new(|_| {
-        let handler_opts = bupropion::MietteHandlerOpts::new()
-            .terminal_links(true)
-            .unicode(true)
-            .context_lines(2)
-            .tab_width(2)
-            .graphical_theme(miette::GraphicalTheme {
-                characters: ThemeCharacters {
-                    uarrow: '^',
-                    ..ThemeCharacters::unicode()
-                },
-                styles: ThemeStyles {
-                    error: owo_colors::Style::new()
-                        .on_bright_red()
-                        .bright_white()
-                        .bold(),
-                    link: owo_colors::Style::new().dimmed(),
-                    linum: owo_colors::Style::new().dimmed(),
-                    highlights: vec![owo_colors::Style::new().bright_red()],
-                    ..ThemeStyles::ansi()
-                },
-            })
-            .color(true)
-            .rgb_colors(bupropion::RgbColors::Never)
-            .with_cause_chain()
-            .build();
+        // Build the bupropion handler options, for specific
+        // error presenting.
+        let handler_opts = bupropion::MietteHandlerOpts::new().build();
 
         Box::new(handler_opts)
     }))?;

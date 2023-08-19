@@ -152,9 +152,9 @@ dependencies = [
 
 [[package]]
 name = "bupropion"
-version = "0.0.1"
+version = "0.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8716c3952c2ded4f47093ee0b7fdb1b4f03a67940980504a83484af74206b526"
+checksum = "7546d9accb68d29d40ba2f86e06acfb21abcf6433b96f82c8d8aae6a9ee9bff8"
 dependencies = [
  "miette",
  "owo-colors",
@@ -164,6 +164,7 @@ dependencies = [
  "terminal_size 0.2.6",
  "textwrap 0.16.0",
  "thiserror",
+ "unicode-width",
 ]
 
 [[package]]
@@ -1066,6 +1067,5 @@ dependencies = [
  "lalrpop",
  "lalrpop-util",
  "miette",
- "owo-colors",
  "thiserror",
 ]

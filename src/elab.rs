@@ -32,13 +32,13 @@ pub struct Closure {
 /// Partial renaming from Γ to Δ
 pub struct PartialRenaming {
     /// Size of Γ
-    dom: Level,
+    pub dom: Level,
 
     /// Size of Δ
-    cod: Level,
+    pub cod: Level,
 
     /// Mapping from Δ vars to Γ vars
-    ren: IntMap<Level>,
+    pub ren: IntMap<Level>,
 }
 
 pub struct Elab {
