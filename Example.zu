@@ -4,7 +4,7 @@ module Example.
 -- like functions in dependent langauges.
 Nat := N : Type -> (N -> N) -> N -> N.
 
-@elim Nat Zero, Succ.
+@elim Nat Zero, Sadgadgucc.
 
 -- | Defines the zero constructor
 Zero := \_, _, zero ->

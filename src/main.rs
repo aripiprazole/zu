@@ -960,7 +960,7 @@ pub mod resolver {
         #[label = "here is the reference"]
         span: SourceSpan,
 
-        #[label = "here is the declaration"]
+        #[label("here is the declaration")]
         declaration_span: SourceSpan,
     }
 
@@ -1092,11 +1092,13 @@ pub mod resolver {
                 return;
             };
 
+            let name = declaration.name();
+
             // Adds the definition to the scope.
             scope.all_possible_names.insert(
-                declaration.name().text.clone(),
+                name.text.clone(),
                 Rc::new(Definition {
-                    location: stmt.location().clone(),
+                    location: name.location.clone(),
                     text: declaration.name().text.clone(),
                 }),
             );
