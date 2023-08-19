@@ -15,6 +15,9 @@ miette = { version = "5.10.0", features = ["fancy"] }
 thiserror = "1.0.46"
 owo-colors = "3.5.0"
 bupropion = "0.0.1"
+intmap = "2.0.0"
+im-rc = "15.1.0"
+fxhash = "0.2.1"
 
 # Add a build-time dependency on the lalrpop library:
 [build-dependencies]

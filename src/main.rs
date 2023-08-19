@@ -872,6 +872,7 @@ pub mod parser {
 pub mod resolver {
     use std::{collections::HashMap, rc::Rc};
 
+    use fxhash::FxBuildHasher;
     use miette::{Context, IntoDiagnostic, NamedSource, SourceSpan};
 
     use crate::ast::{
@@ -935,9 +936,9 @@ pub mod resolver {
 
     pub struct Resolver {
         pub files: FileMap,
-        pub inputs: HashMap<String, crate::ast::File<state::Quoted>>,
+        pub inputs: im_rc::HashMap<String, crate::ast::File<state::Quoted>, FxBuildHasher>,
         pub errors: Vec<InnerError>,
-        pub scope: HashMap<String, Rc<crate::ast::resolved::Definition>>,
+        pub scope: im_rc::HashMap<String, Rc<crate::ast::resolved::Definition>, FxBuildHasher>,
         pub main: crate::ast::File<state::Quoted>,
     }
 
@@ -972,7 +973,7 @@ pub mod resolver {
                     .map(|file| (file.name.clone(), file))
                     .collect(),
                 errors: vec![],
-                scope: HashMap::new(),
+                scope: im_rc::HashMap::default(),
                 main: file,
             })
         }
@@ -1248,6 +1249,9 @@ pub mod resolver {
         }
     }
 }
+
+// Type elaborator, it does the type checking stuff.
+pub mod elab;
 
 /// Simple program to run `zu` language.
 #[derive(clap::Parser, Debug)]

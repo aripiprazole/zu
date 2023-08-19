@@ -20,7 +20,7 @@ pub File: crate::ast::File<state::Quoted> = {
 /// Parses the header module declaration within the file, this is used to
 /// declare the module name.
 pub ModuleName: String = {
-  "module" <name:String> "." => name,
+  "module" <name:Reference> "." => name.text,
 }
 
 /// Parses a top-level statement, this is a statement that can be used
@@ -49,15 +49,15 @@ pub Stmt: crate::ast::Stmt<state::Quoted> = {
 
   // Parses `@import` command, which set to the resolver to import to the
   // current file.
-  <s: @L> "@import" <text:String> "." <e: @R> => crate::ast::Stmt::Import(crate::ast::parsed::Import {
-    text,
+  <s: @L> "import" <import:Reference> "." <e: @R> => crate::ast::Stmt::Import(crate::ast::parsed::Import {
+    text: import.text,
     location: crate::ast::Location::new(s, e, filename),
   }),
 
   // Parses a simple signature binding, which haves a type, value and a name.
   //
   // It can be compared to a function signature, or let binding in other languages.
-  <s: @L> <doc_strings:DocString*> <name:Reference> <type_repr:TypeRepr?> "=" <value:Term> "." <e: @R> => crate::ast::Stmt::Binding(crate::ast::Binding {
+  <s: @L> <doc_strings:DocString*> <name:Reference> <type_repr:TypeRepr?> ":=" <value:Term> "." <e: @R> => crate::ast::Stmt::Binding(crate::ast::Binding {
     doc_strings,
     type_repr: match type_repr {
       Some(type_repr) => type_repr.into(),
