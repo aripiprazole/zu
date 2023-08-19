@@ -6,7 +6,7 @@ use clap::Parser;
 
 /// The abstract syntax tree for the language.
 pub mod ast {
-    use std::{fmt::Debug, rc::Rc, marker::PhantomData};
+    use std::{fmt::Debug, marker::PhantomData, rc::Rc};
 
     /// File definition, it contains all the statements,
     /// the module name, and a base location for it as anchor
@@ -1429,13 +1429,11 @@ pub struct Command {
 }
 
 fn main() -> miette::Result<()> {
-    miette::set_hook(Box::new(|_| {
+    bupropion::BupropionHandlerOpts::install(|| {
         // Build the bupropion handler options, for specific
         // error presenting.
-        let handler_opts = bupropion::MietteHandlerOpts::new().build();
-
-        Box::new(handler_opts)
-    }))?;
+        bupropion::BupropionHandlerOpts::new()
+    })?;
 
     let command = Command::parse();
     let resolver = resolver::Resolver::new(command.main, command.include)?;
