@@ -1,6 +1,7 @@
 #![feature(never_type)]
 #![feature(box_patterns)]
 #![feature(exhaustive_patterns)]
+#![feature(type_changing_struct_update)]
 
 use clap::Parser;
 
@@ -49,18 +50,6 @@ pub mod ast {
 
         /// Represents the resolved state, it's the state of the syntax tree when it's resolved.
         #[derive(Default, Debug, Clone)]
-        pub struct Resolved;
-
-        impl State for Resolved {
-            type NameSet = Self::Definition;
-            type Definition = Rc<resolved::Definition>;
-            type Reference = resolved::Reference;
-            type Import = !;
-            type Location = Location;
-        }
-
-        /// Represents the quoted state, it's the state of the syntax tree when it's quoted.
-        #[derive(Default, Debug, Clone)]
         pub struct Quoted;
 
         impl State for Quoted {
@@ -68,18 +57,18 @@ pub mod ast {
             type Definition = Rc<resolved::Definition>;
             type Reference = resolved::Reference;
             type Import = !;
-            type Location = ();
+            type Location = Location;
         }
     }
 
     impl<S: state::State> Element<S> for ! {
-        fn location(&self) -> &Location {
+        fn location(&self) -> &S::Location {
             unreachable!()
         }
     }
 
     impl<S: state::State, T: Element<S>> Element<S> for Rc<T> {
-        fn location(&self) -> &Location {
+        fn location(&self) -> &S::Location {
             self.as_ref().location()
         }
     }
@@ -932,8 +921,8 @@ pub mod resolver {
 
     use crate::ast::{
         resolved::{Definition, Reference},
-        state, Apply, Attribute, Binding, Domain, ElimDef, Eval, File, Fun, Hole, Location, Pi,
-        Stmt, Term, Type,
+        state, Apply, Attribute, Binding, DocString, Domain, ElimDef, Error, Eval, File, Fun, Hole,
+        Int, Location, Pi, Stmt, Str, Term, Type, Universe,
     };
 
     type FileMap = HashMap<String, String>;
@@ -1079,7 +1068,7 @@ pub mod resolver {
         }
 
         /// Resolves and imports the files.
-        pub fn resolve_and_import(mut self) -> miette::Result<File<state::Resolved>> {
+        pub fn resolve_and_import(mut self) -> miette::Result<File<state::Quoted>> {
             let file = std::mem::take(&mut self.main);
             let file = self.file(file);
 
@@ -1094,7 +1083,7 @@ pub mod resolver {
         }
 
         // Iterates the statements of the file and collects the errors.
-        fn file(&mut self, file: File<state::Syntax>) -> File<state::Resolved> {
+        fn file(&mut self, file: File<state::Syntax>) -> File<state::Quoted> {
             // Create a default scope for the file.
             let mut scope = Scope::default();
 
@@ -1140,9 +1129,9 @@ pub mod resolver {
         }
 
         /// Evaluates a statement, resolving the references.
-        fn resolve(&mut self, stmt: Stmt<state::Syntax>) -> Vec<Stmt<state::Resolved>> {
+        fn resolve(&mut self, stmt: Stmt<state::Syntax>) -> Vec<Stmt<state::Quoted>> {
             vec![match stmt {
-                Stmt::Error(error) => Stmt::Error(error),
+                Stmt::Error(error) => Stmt::Error(Error { ..error }),
                 Stmt::Eval(stmt) => Stmt::Eval(Eval {
                     value: self.term(stmt.value),
                     location: stmt.location,
@@ -1158,6 +1147,13 @@ pub mod resolver {
                         text: stmt.name.text.clone(),
                     });
 
+                    // Change the type of the definition.
+                    let doc_strings = stmt
+                        .doc_strings
+                        .into_iter()
+                        .map(|doc| DocString { ..doc })
+                        .collect();
+
                     // Resolve the attributes.
                     let attributes = stmt
                         .attributes
@@ -1170,7 +1166,7 @@ pub mod resolver {
 
                     // Resolve the type and the value of the binding.
                     Stmt::Binding(Binding {
-                        doc_strings: stmt.doc_strings,
+                        doc_strings,
                         attributes,
                         name: definition,
                         location: stmt.location,
@@ -1228,15 +1224,15 @@ pub mod resolver {
         /// Resolves a term. It's useful to resolve the references.
         ///
         /// It's the main function of the resolver.
-        fn term(&mut self, term: Term<state::Syntax>) -> Term<state::Resolved> {
+        fn term(&mut self, term: Term<state::Syntax>) -> Term<state::Quoted> {
             match term {
                 Term::Elim(_) => todo!(),
-                Term::Error(error) => Term::Error(error),
-                Term::Universe(universe) => Term::Universe(universe),
-                Term::Int(int) => Term::Int(int),
-                Term::Str(str) => Term::Str(str),
+                Term::Error(error) => Term::Error(Error { ..error }),
+                Term::Universe(universe) => Term::Universe(Universe { ..universe }),
+                Term::Int(int) => Term::Int(Int { ..int }),
+                Term::Str(str) => Term::Str(Str { ..str }),
                 Term::Group(group) => Term::Group(self.term(*group).into()),
-                Term::Hole(hole) => Term::Hole(hole),
+                Term::Hole(hole) => Term::Hole(Hole { ..hole }),
                 Term::Fun(fun) => self.fork(|local| {
                     // Resolve the arguments of the function. It's useful to
                     // define the parameters into the scope.
@@ -1317,13 +1313,13 @@ pub mod resolver {
         }
 
         /// Resolves an attribute. It's useful to resolve the references.
-        fn attribute(&mut self, attribute: Attribute<state::Syntax>) -> Attribute<state::Resolved> {
+        fn attribute(&mut self, attribute: Attribute<state::Syntax>) -> Attribute<state::Quoted> {
             let _ = attribute;
             todo!()
         }
 
         // Transform a domain into one or more domains.
-        fn create_domain(&mut self, domain: Domain<state::Syntax>) -> Vec<Domain<state::Resolved>> {
+        fn create_domain(&mut self, domain: Domain<state::Syntax>) -> Vec<Domain<state::Quoted>> {
             let mut parameters = vec![];
             let type_repr = self.term(*domain.type_repr);
             for reference in domain.text {

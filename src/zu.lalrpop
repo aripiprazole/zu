@@ -7,7 +7,7 @@ grammar<'err>(errors: &'err mut Vec<ErrorRecovery<usize, Token<'input>, &'static
 
 /// Parses an entire file declaration into the abstract syntax tree, so
 /// we can resolve and typecheck it.
-pub File: crate::ast::File<state::Quoted> = {
+pub File: crate::ast::File<state::Syntax> = {
   <s: @L> <name:ModuleName?> <stmts:Stmt*> <e: @R> => crate::ast::File {
     // Remove the .zu extension from filenames, so the modules are more
     // idiomatic.
@@ -25,7 +25,7 @@ pub ModuleName: String = {
 
 /// Parses a top-level statement, this is a statement that can be used
 /// outside of a block.
-pub Stmt: crate::ast::Stmt<state::Quoted> = {
+pub Stmt: crate::ast::Stmt<state::Syntax> = {
   // SECTION: Commands
   // 
   // Parses `@eval` command, which evaluates a term and prints the result.
@@ -74,13 +74,13 @@ pub Stmt: crate::ast::Stmt<state::Quoted> = {
 
 /// Parses an optional type representation for a statement, this is a colon
 /// followed by a type representation.
-pub TypeRepr: crate::ast::Term<state::Quoted> = {
+pub TypeRepr: crate::ast::Term<state::Syntax> = {
   ":" <value:Term> => value.into(),
 }
 
 /// Primary expressions, that aren't necessary expressions but can be used as
 /// the base of an expression.
-pub Primary: crate::ast::Term<state::Quoted> = {
+pub Primary: crate::ast::Term<state::Syntax> = {
   "(" <Term> ")" => crate::ast::Term::Group(<>.into()),
   <r:Reference> => match r.text {
     _ if r.text == "_" => crate::ast::Term::Hole(crate::ast::Hole { location: r.location.clone() }),
@@ -111,7 +111,7 @@ pub Primary: crate::ast::Term<state::Quoted> = {
 
 /// Parses a call with a single argument, this is a primary term followed by a
 /// single argument.
-pub Apply: crate::ast::Term<state::Quoted> = {
+pub Apply: crate::ast::Term<state::Syntax> = {
   <s: @L> <callee:Call> <argument:Primary> <e: @R> => match callee.clone().unwrap() {
     crate::ast::Term::Apply(mut apply) => {
       apply.arguments.push(argument);
@@ -127,7 +127,7 @@ pub Apply: crate::ast::Term<state::Quoted> = {
 
 /// Parses a pi expression, this is a list of arguments followed by an arrow
 /// and a value.
-pub Pi: crate::ast::Pi<state::Quoted> = {
+pub Pi: crate::ast::Pi<state::Syntax> = {
   <s: @L> <domain:Domain> "->" <value:Arrow> <e: @R> => crate::ast::Pi {
     location: crate::ast::Location::new(s, e, filename),
     icit: crate::ast::Icit::Expl,
@@ -137,14 +137,14 @@ pub Pi: crate::ast::Pi<state::Quoted> = {
 }
 
 /// Arrow type signature, this is a domain followed by an arrow and a value.
-pub Arrow: crate::ast::Term<state::Quoted> = {
+pub Arrow: crate::ast::Term<state::Syntax> = {
   Call,
   <Pi> => crate::ast::Term::Pi(<>),
 }
 
 /// Parses a lambda function, this is a list of arguments followed by an arrow
 /// and a value.
-pub Fun: crate::ast::Term<state::Quoted> = {
+pub Fun: crate::ast::Term<state::Syntax> = {
   <s: @L> "\\" <arguments:Sep<",", Reference>> "->" <value:Term> <e: @R> => crate::ast::Term::Fun(crate::ast::Fun {
     arguments,
     value: value.into(),
@@ -153,7 +153,7 @@ pub Fun: crate::ast::Term<state::Quoted> = {
 }
 
 /// Represents a domain for pi expressions, this is a variable with a type.
-pub Domain: crate::ast::Domain<state::Quoted> = {
+pub Domain: crate::ast::Domain<state::Syntax> = {
   /// Parses unnamed explicit arguments, which you don't need to specify
   /// the type and neither the name.
   <term:Call> => crate::ast::Domain {
@@ -184,21 +184,21 @@ pub Domain: crate::ast::Domain<state::Quoted> = {
 
 /// Parses a call, this is a primary term followed by a list of arguments. It can 
 /// parse either a call or a call with a single argument.
-pub Call: crate::ast::Term<state::Quoted> = {
+pub Call: crate::ast::Term<state::Syntax> = {
   Primary,
   Apply,
 }
 
 /// Parser for expressions in the language, these are the terms but it doesn't
 /// parses as primary.
-pub Term: crate::ast::Term<state::Quoted> = {
+pub Term: crate::ast::Term<state::Syntax> = {
   Fun,
   Arrow,
 }
 
 /// Parses a relevent document string, this is a string that is used to document
 /// the code.
-pub DocString: crate::ast::DocString = <s: @L> <text:r"--.*\n"> <e: @R> => crate::ast::DocString {
+pub DocString: crate::ast::DocString<state::Syntax> = <s: @L> <text:r"--.*\n"> <e: @R> => crate::ast::DocString {
   text: (&text[2..]).to_string(),
   full_text: text.to_string(),
   location: crate::ast::Location::new(s, e, filename),
@@ -214,8 +214,8 @@ Text: std::string::String = {
 }
 
 // Reference token lexer
-Reference: crate::ast::parsed::Reference = {
-  <s: @L> <text:Text> <e: @R> => crate::ast::parsed::Reference {
+Reference: crate::ast::syntax::Reference = {
+  <s: @L> <text:Text> <e: @R> => crate::ast::syntax::Reference {
     text: text.to_string(),
     location: crate::ast::Location::new(s, e, filename),
   }

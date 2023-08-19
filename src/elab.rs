@@ -24,12 +24,12 @@ pub struct Spine {
 
 pub type Level = usize;
 
-#[derive(Debug, Clone, Hash)]
+#[derive(Debug, Clone)]
 pub struct Environment {
     pub value: Vec<Value>,
 }
 
-#[derive(Debug, Clone, Hash)]
+#[derive(Debug, Clone)]
 pub struct Closure {
     pub environment: Environment,
     pub term: Expr,
@@ -57,7 +57,7 @@ impl PartialRenaming {
 }
 
 /// The context of the elaborator
-#[derive(Debug, Clone, Hash)]
+#[derive(Debug, Clone)]
 pub struct Elab {
     pub env: Environment,
     pub level: Level,
@@ -66,26 +66,26 @@ pub struct Elab {
     pub position: crate::ast::Location,
 }
 
+pub trait Quote {
+    /// Quote a value to an expression
+    fn quote(self, nth: Level) -> Expr;
+}
+
 /// The quoted version of [`Value`], but without locations, and closures
 ///
 /// It's used to debug and build values.
-#[derive(Debug, Clone, Hash)]
-pub enum Expr {
-    Var(Level),
-    Meta(MetaVar),
-    Reference(Reference),
-    App(Box<Expr>, Box<Expr>),
-    Lam(Definition, Box<Expr>),
-    Pi(Definition, Box<Expr>, Box<Expr>),
-    Int(isize),
-    Str(String),
-    Universe,
+pub type Expr = crate::ast::Term<crate::ast::state::Quoted>;
+
+impl Quote for Value {
+    fn quote(self, nth: Level) -> Expr {
+        todo!()
+    }
 }
 
 /// Defines the type of a term, elaborated to a value
 ///
 /// The type of a term is a value, but the type of a value is a type.
-#[derive(Debug, Clone, Hash)]
+#[derive(Debug, Clone)]
 pub enum Value {
     Flexible(MetaVar, Spine),
     Rigid(Level, Spine),
