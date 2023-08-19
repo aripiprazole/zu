@@ -1,6 +1,6 @@
 use intmap::IntMap;
 
-use crate::ast::resolved::{Definition, Reference};
+use crate::ast::{quoted::Lvl, resolved::Definition, Universe};
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct MetaVar(usize);
@@ -17,12 +17,10 @@ pub enum BD {
     Defined,
 }
 
-#[derive(Debug, Clone, Hash)]
+#[derive(Debug, Clone)]
 pub struct Spine {
     pub value: Vec<Value>,
 }
-
-pub type Level = usize;
 
 #[derive(Debug, Clone)]
 pub struct Environment {
@@ -38,13 +36,13 @@ pub struct Closure {
 /// Partial renaming from Γ to Δ
 pub struct PartialRenaming {
     /// Size of Γ
-    pub dom: Level,
+    pub dom: Lvl,
 
     /// Size of Δ
-    pub cod: Level,
+    pub cod: Lvl,
 
     /// Mapping from Δ vars to Γ vars
-    pub ren: IntMap<Level>,
+    pub ren: IntMap<Lvl>,
 }
 
 impl PartialRenaming {
@@ -60,7 +58,7 @@ impl PartialRenaming {
 #[derive(Debug, Clone)]
 pub struct Elab {
     pub env: Environment,
-    pub level: Level,
+    pub level: Lvl,
     pub types: im_rc::HashMap<String, Value>,
     pub bds: im_rc::Vector<BD>,
     pub position: crate::ast::Location,
@@ -68,7 +66,7 @@ pub struct Elab {
 
 pub trait Quote {
     /// Quote a value to an expression
-    fn quote(self, nth: Level) -> Expr;
+    fn quote(self, nth: Lvl) -> Expr;
 }
 
 /// The quoted version of [`Value`], but without locations, and closures
@@ -77,8 +75,16 @@ pub trait Quote {
 pub type Expr = crate::ast::Term<crate::ast::state::Quoted>;
 
 impl Quote for Value {
-    fn quote(self, nth: Level) -> Expr {
-        todo!()
+    fn quote(self, nth: Lvl) -> Expr {
+        match self {
+            Value::Universe => Expr::Universe(Universe::default()),
+            Value::Flexible(_, _) => todo!(),
+            Value::Rigid(_, _) => todo!(),
+            Value::Lam(_) => todo!(),
+            Value::Pi(_, _, _) => todo!(),
+            Value::Int(_) => todo!(),
+            Value::Str(_) => todo!(),
+        }
     }
 }
 
@@ -87,11 +93,11 @@ impl Quote for Value {
 /// The type of a term is a value, but the type of a value is a type.
 #[derive(Debug, Clone)]
 pub enum Value {
+    Universe,
     Flexible(MetaVar, Spine),
-    Rigid(Level, Spine),
+    Rigid(Lvl, Spine),
     Lam(Closure),
     Pi(Definition, Box<Value>, Closure),
-    Universe,
     Int(isize),
     Str(String),
 }

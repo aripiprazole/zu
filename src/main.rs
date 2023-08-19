@@ -24,7 +24,7 @@ pub mod ast {
     pub mod state {
         use std::rc::Rc;
 
-        use super::*;
+        use super::{*, quoted::{Ix, Lvl}};
 
         /// Represents the syntax state, if it's resolved, or just parsed, it's useful for not
         /// having to redeclare the same types.
@@ -50,14 +50,26 @@ pub mod ast {
 
         /// Represents the resolved state, it's the state of the syntax tree when it's resolved.
         #[derive(Default, Debug, Clone)]
-        pub struct Quoted;
+        pub struct Resolved;
 
-        impl State for Quoted {
+        impl State for Resolved {
             type NameSet = Self::Definition;
             type Definition = Rc<resolved::Definition>;
             type Reference = resolved::Reference;
             type Import = !;
             type Location = Location;
+        }
+
+        /// Represents the resolved state, it's the state of the syntax tree when it's resolved.
+        #[derive(Default, Debug, Clone)]
+        pub struct Quoted;
+
+        impl State for Quoted {
+            type NameSet = Self::Definition;
+            type Definition = Lvl;
+            type Reference = Ix;
+            type Import = !;
+            type Location = ();
         }
     }
 
@@ -80,6 +92,7 @@ pub mod ast {
         Binding,
     }
 
+    /// A definition. It has a text, and a location.
     pub mod syntax {
         use super::*;
 
@@ -111,6 +124,7 @@ pub mod ast {
         }
     }
 
+    /// Resolved state, it's the state of the syntax tree when it's resolved.
     pub mod resolved {
         use std::rc::Rc;
 
@@ -139,6 +153,59 @@ pub mod ast {
         impl<S: state::State<Location = Location>> Element<S> for Reference {
             fn location(&self) -> &Location {
                 &self.location
+            }
+        }
+    }
+
+    /// Quoted state, it's the state of the syntax tree when it's quoted.
+    pub mod quoted {
+        use super::*;
+
+        /// Defines a debruijin index.
+        #[derive(Debug, Clone, Hash, Copy, PartialEq, Eq, PartialOrd, Ord)]
+        pub struct Lvl(usize);
+
+        impl std::ops::Add<usize> for Lvl {
+            type Output = Self;
+
+            fn add(self, rhs: usize) -> Self::Output {
+                Self(self.0 + rhs)
+            }
+        }
+
+        impl std::ops::AddAssign<usize> for Lvl {
+            fn add_assign(&mut self, rhs: usize) {
+                self.0 += rhs
+            }
+        }
+        
+        impl<S: state::State<Location = ()>> Element<S> for Lvl {
+            fn location(&self) -> &S::Location {
+                &()
+            }
+        }
+
+        /// Defines a debruijin index.
+        #[derive(Debug, Clone, Hash, Copy, PartialEq, Eq, PartialOrd, Ord)]
+        pub struct Ix(usize);
+
+        impl std::ops::Add<usize> for Ix {
+            type Output = Self;
+
+            fn add(self, rhs: usize) -> Self::Output {
+                Self(self.0 + rhs)
+            }
+        }
+
+        impl std::ops::AddAssign<usize> for Ix {
+            fn add_assign(&mut self, rhs: usize) {
+                self.0 += rhs
+            }
+        }
+        
+        impl<S: state::State<Location = ()>> Element<S> for Ix {
+            fn location(&self) -> &S::Location {
+                &()
             }
         }
     }
@@ -497,7 +564,7 @@ pub mod ast {
     }
 
     /// Type of a type. It has a location.
-    #[derive(Debug, Clone)]
+    #[derive(Default, Debug, Clone)]
     pub struct Universe<S: state::State> {
         /// The location of the integer in the source code.
         pub location: S::Location,
@@ -510,7 +577,7 @@ pub mod ast {
     }
 
     /// A hole. It has a location.
-    #[derive(Debug, Clone)]
+    #[derive(Default, Debug, Clone)]
     pub struct Hole<S: state::State> {
         /// The location of the integer in the source code.
         pub location: S::Location,
@@ -523,7 +590,7 @@ pub mod ast {
     }
 
     /// Int is a integer value like `0`, `1`, `2`, etc.
-    #[derive(Debug, Clone)]
+    #[derive(Default, Debug, Clone)]
     pub struct Str<S: state::State> {
         pub value: String,
 
@@ -538,7 +605,7 @@ pub mod ast {
     }
 
     /// Int is a integer value like `0`, `1`, `2`, etc.
-    #[derive(Debug, Clone)]
+    #[derive(Default, Debug, Clone)]
     pub struct Int<S: state::State> {
         /// The value of the integer.
         pub value: isize,
@@ -556,7 +623,7 @@ pub mod ast {
     /// A pattern. It has a definition, a list of arguments, and a location.
     ///
     /// It's a simple pattern for eliminator.
-    #[derive(Debug, Clone)]
+    #[derive(Default, Debug, Clone)]
     pub struct Pattern<S: state::State> {
         pub definition: S::Reference,
         pub arguments: Vec<S::Definition>,
@@ -1068,7 +1135,7 @@ pub mod resolver {
         }
 
         /// Resolves and imports the files.
-        pub fn resolve_and_import(mut self) -> miette::Result<File<state::Quoted>> {
+        pub fn resolve_and_import(mut self) -> miette::Result<File<state::Resolved>> {
             let file = std::mem::take(&mut self.main);
             let file = self.file(file);
 
@@ -1083,7 +1150,7 @@ pub mod resolver {
         }
 
         // Iterates the statements of the file and collects the errors.
-        fn file(&mut self, file: File<state::Syntax>) -> File<state::Quoted> {
+        fn file(&mut self, file: File<state::Syntax>) -> File<state::Resolved> {
             // Create a default scope for the file.
             let mut scope = Scope::default();
 
@@ -1129,7 +1196,7 @@ pub mod resolver {
         }
 
         /// Evaluates a statement, resolving the references.
-        fn resolve(&mut self, stmt: Stmt<state::Syntax>) -> Vec<Stmt<state::Quoted>> {
+        fn resolve(&mut self, stmt: Stmt<state::Syntax>) -> Vec<Stmt<state::Resolved>> {
             vec![match stmt {
                 Stmt::Error(error) => Stmt::Error(Error { ..error }),
                 Stmt::Eval(stmt) => Stmt::Eval(Eval {
@@ -1224,7 +1291,7 @@ pub mod resolver {
         /// Resolves a term. It's useful to resolve the references.
         ///
         /// It's the main function of the resolver.
-        fn term(&mut self, term: Term<state::Syntax>) -> Term<state::Quoted> {
+        fn term(&mut self, term: Term<state::Syntax>) -> Term<state::Resolved> {
             match term {
                 Term::Elim(_) => todo!(),
                 Term::Error(error) => Term::Error(Error { ..error }),
@@ -1313,13 +1380,13 @@ pub mod resolver {
         }
 
         /// Resolves an attribute. It's useful to resolve the references.
-        fn attribute(&mut self, attribute: Attribute<state::Syntax>) -> Attribute<state::Quoted> {
+        fn attribute(&mut self, attribute: Attribute<state::Syntax>) -> Attribute<state::Resolved> {
             let _ = attribute;
             todo!()
         }
 
         // Transform a domain into one or more domains.
-        fn create_domain(&mut self, domain: Domain<state::Syntax>) -> Vec<Domain<state::Quoted>> {
+        fn create_domain(&mut self, domain: Domain<state::Syntax>) -> Vec<Domain<state::Resolved>> {
             let mut parameters = vec![];
             let type_repr = self.term(*domain.type_repr);
             for reference in domain.text {
