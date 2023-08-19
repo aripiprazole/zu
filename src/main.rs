@@ -897,8 +897,8 @@ pub mod resolver {
 
     use crate::ast::{
         resolved::{Definition, Reference},
-        state, Apply, Binding, Domain, Element, ElimDef, Eval, File, Fun, Hole, Pi, Stmt, Term,
-        Type,
+        state, Apply, Binding, Domain, Element, ElimDef, Eval, File, Fun, Hole, Location, Pi, Stmt,
+        Term, Type,
     };
 
     type FileMap = HashMap<String, String>;
@@ -912,6 +912,10 @@ pub mod resolver {
         #[error(transparent)]
         #[diagnostic(transparent)]
         Definition(#[from] UnresolvedDefinition),
+
+        #[error(transparent)]
+        #[diagnostic(transparent)]
+        LaterDefinition(#[from] LaterUnresolvedDefinition),
     }
 
     #[derive(thiserror::Error, miette::Diagnostic, Debug)]
@@ -940,6 +944,27 @@ pub mod resolver {
     }
 
     #[derive(thiserror::Error, miette::Diagnostic, Debug)]
+    #[diagnostic(
+        code(zu::later_unresolved_declaration),
+        help("maybe move this declaration")
+    )]
+    #[error("unresolved definition: {module} in the current scope")]
+    pub struct LaterUnresolvedDefinition {
+        /// The name of the import.
+        pub module: String,
+
+        /// The source code of the import.
+        #[source_code]
+        source_code: NamedSource,
+
+        #[label = "here is the reference"]
+        span: SourceSpan,
+
+        #[label = "here is the declaration"]
+        declaration_span: SourceSpan,
+    }
+
+    #[derive(thiserror::Error, miette::Diagnostic, Debug)]
     #[diagnostic(code(zu::unresolved_import), help("try to import the file in the cli"))]
     #[error("unresolved import: {module}")]
     pub struct UnresolvedImport {
@@ -960,12 +985,13 @@ pub mod resolver {
         pub inputs: im_rc::HashMap<String, crate::ast::File<state::Quoted>, FxBuildHasher>,
         pub errors: Vec<InnerError>,
         pub scope: im_rc::HashMap<String, Rc<crate::ast::resolved::Definition>, FxBuildHasher>,
+        pub file_scope: Scope,
         pub main: crate::ast::File<state::Quoted>,
     }
 
     /// Current file scope for the resolver.
     #[derive(Default)]
-    struct Scope {
+    pub struct Scope {
         /// Possible names for the current scope. It's useful for the error messages,
         /// for example:
         ///
@@ -1012,6 +1038,7 @@ pub mod resolver {
                     .collect(),
                 errors: vec![],
                 scope: im_rc::HashMap::default(),
+                file_scope: Default::default(),
                 main: file,
             })
         }
@@ -1038,16 +1065,23 @@ pub mod resolver {
 
             // Define all the statements into the scope
             for stmt in file.stmts.iter() {
-                self.define(&mut scope, &stmt);
+                self.define(&mut scope, stmt);
             }
+
+            // Replace the current scope with the new one, so
+            // we can handle this scope in the future.
+            let old_scope = std::mem::take(&mut self.file_scope);
+            self.file_scope = scope;
+            let stmts = file
+                .stmts
+                .into_iter()
+                .flat_map(|stmt| self.resolve(stmt))
+                .collect();
+            self.file_scope = old_scope;
 
             File {
                 name: file.name,
-                stmts: file
-                    .stmts
-                    .into_iter()
-                    .flat_map(|stmt| self.resolve(&scope, stmt))
-                    .collect(),
+                stmts,
                 location: file.location,
             }
         }
@@ -1069,11 +1103,7 @@ pub mod resolver {
         }
 
         /// Evaluates a statement, resolving the references.
-        fn resolve(
-            &mut self,
-            scope: &Scope,
-            stmt: Stmt<state::Quoted>,
-        ) -> Vec<Stmt<state::Resolved>> {
+        fn resolve(&mut self, stmt: Stmt<state::Quoted>) -> Vec<Stmt<state::Resolved>> {
             vec![match stmt {
                 Stmt::Error(error) => Stmt::Error(error),
                 Stmt::Eval(stmt) => Stmt::Eval(Eval {
@@ -1277,7 +1307,8 @@ pub mod resolver {
             parameters
         }
 
-        // Find a reference and returns the definition.
+        // Find a reference and returns the definition. If it cant be found,
+        // it will report an error.
         fn find_reference(
             &mut self,
             reference: crate::ast::parsed::Reference,
@@ -1285,23 +1316,52 @@ pub mod resolver {
             match self.scope.get(&reference.text) {
                 Some(value) => value.clone().into(),
                 None => {
-                    // If can't find the definition, it will fallback to a hole.
-                    self.errors
-                        .push(InnerError::Definition(UnresolvedDefinition {
-                            module: reference.text.clone(),
-                            source_code: NamedSource::new(
-                                &reference.location.filename,
-                                self.files
-                                    .get(&reference.location.filename)
-                                    .unwrap()
-                                    .clone(),
-                            ),
-                            span: reference.location.clone().into(),
-                        }));
+                    let is_later_defined = self.file_scope.all_possible_names.get(&reference.text);
+
+                    if let Some(is_later_defined) = is_later_defined {
+                        // If the definition is later defined, it will report
+                        // a possible definition.
+                        self.report_possible_definition(&reference, is_later_defined.clone());
+                    } else {
+                        // If can't find the definition, it will fallback to a hole.
+                        self.report_unresolved(&reference);
+                    }
 
                     None
                 }
             }
+        }
+
+        /// Reports a possible definition for a reference.
+        fn report_possible_definition(
+            &mut self,
+            reference: &crate::ast::parsed::Reference,
+            definition: Rc<Definition>,
+        ) {
+            self.errors
+                .push(InnerError::LaterDefinition(LaterUnresolvedDefinition {
+                    module: reference.text.clone(),
+                    source_code: self.get_source_code(&reference.location),
+                    span: reference.location.clone().into(),
+                    declaration_span: definition.location.clone().into(),
+                }))
+        }
+
+        /// Reports an error for a reference.
+        fn report_unresolved(&mut self, reference: &crate::ast::parsed::Reference) {
+            self.errors
+                .push(InnerError::Definition(UnresolvedDefinition {
+                    module: reference.text.clone(),
+                    source_code: self.get_source_code(&reference.location),
+                    span: reference.location.clone().into(),
+                }))
+        }
+
+        fn get_source_code(&self, location: &Location) -> NamedSource {
+            NamedSource::new(
+                &location.filename,
+                self.files.get(&location.filename).unwrap().clone(),
+            )
         }
 
         /// Creates a new fork of the current scope, with a new
