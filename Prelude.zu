@@ -1,0 +1,14 @@
+module Prelude.
+
+-- | Defines inductive type for Leibniz equality and
+-- reflection.
+-- 
+-- Performs unification and by unification, it proves
+-- some value
+inductive data Eq {a} (x, y : a) where
+  Refl : Eq x x.
+
+-- | Defines a proof that: `a = b`, implies `b = a` by
+-- induction.
+Eq/symm : {a, b} -> a = b -> b = a := case
+  Refl => Refl.
