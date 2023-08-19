@@ -1423,8 +1423,7 @@ pub struct Command {
     #[arg(short, long)]
     pub include: Vec<String>,
 
-    /// The main file to run
-    #[arg(short, long)]
+    /// The file we would like to run, type check, etc
     pub main: String,
 }
 

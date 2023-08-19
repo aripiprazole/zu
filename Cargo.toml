@@ -13,7 +13,7 @@ lalrpop-util = { version = "0.20.0", default-features = false, features = [
 clap = { version = "4.2.4", features = ["derive"] }
 miette = { version = "5.10.0", features = ["fancy"] }
 thiserror = "1.0.46"
-bupropion = "0.0.4"
+bupropion = "0.0.5"
 intmap = "2.0.0"
 im-rc = "15.1.0"
 fxhash = "0.2.1"
