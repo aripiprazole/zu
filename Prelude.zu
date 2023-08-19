@@ -8,10 +8,10 @@ module Prelude.
 inductive data Eq {a} (x, y : a) where
   Refl : Eq x x.
 
--- | Defines a proof that: `a = b`, implies `b = a` by
--- induction.
-Eq/symm : {a, b} -> a = b -> b = a := case
-  Refl => Refl.
+  -- | Defines a proof that: `a = b`, implies `b = a` by
+  -- induction.
+  Eq/symm : {a, b} -> a = b -> b = a := case
+    Refl => Refl.
 
 -- | Record for lazy evaluation
 #[derive new]
@@ -19,10 +19,19 @@ Eq/symm : {a, b} -> a = b -> b = a := case
 struct IO (a : Type) where
   value : a.
 
-IO/pure : {a} -> a -> IO a := IO.new.
+  IO/pure : {a} -> a -> IO a := IO.new.
 
-IO/>>= : {a, b} -> IO a -> (IO a -> IO b) -> IO b :=
-  \io, f -> f io.
+  IO/>>= : {a, b} -> IO a -> (IO a -> IO b) -> IO b :=
+    \io, f -> f io.
+
+  -- Prints in the stdout
+  --
+  -- ```
+  -- main : IO () := do
+  --  println "hello world"
+  -- ```
+  #[ffi]
+  IO/println : String -> IO () := sorry.
 
 -- Performs unsafe IO in the type level, or anywhere you are.
 --
@@ -30,12 +39,3 @@ IO/>>= : {a, b} -> IO a -> (IO a -> IO b) -> IO b :=
 #[ffi]
 #[unsafe]
 unsafePerformIO : {a} -> IO a -> a := sorry.
-
--- Prints in the stdout
---
--- ```
--- main : Strict () := do
---  println "hello world"
--- ```
-#[ffi]
-IO/println : String -> IO () := sorry.
