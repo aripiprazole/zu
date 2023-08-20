@@ -4,7 +4,7 @@ use crate::ast::{
     quoted::{Lvl, MetaVar, Reference},
     resolved::Definition,
     state::Resolved,
-    Apply, Domain, Fun, Int, Pi, Str, Universe,
+    Apply, Domain, Fun, Icit, Int, Pi, Str, Universe,
 };
 
 #[derive(Debug, Clone, Copy, Hash)]
@@ -94,6 +94,12 @@ impl Quote for Value {
 
         match self {
             Value::Universe => Expr::Universe(Universe::default()),
+            Value::Flexible(meta, sp) => {
+                quote_sp(sp, Expr::Reference(Reference::MetaVar(meta)), nth)
+            }
+            Value::Rigid(lvl, sp) => {
+                quote_sp(sp, Expr::Reference(Reference::Var(lvl.into_ix(nth))), nth)
+            }
             Value::Int(value) => Expr::Int(Int {
                 value,
                 location: Default::default(),
@@ -102,29 +108,17 @@ impl Quote for Value {
                 value,
                 location: Default::default(),
             }),
-            Value::Flexible(meta, sp) => {
-                quote_sp(sp, Expr::Reference(Reference::MetaVar(meta)), nth)
-            }
-            Value::Rigid(lvl, sp) => {
-                quote_sp(sp, Expr::Reference(Reference::Var(lvl.into_ix(nth))), nth)
-            }
             Value::Lam(name, closure) => Expr::Fun(Fun {
-                arguments: Definition {
-                    text: name.text,
-                    location: Default::default(),
-                },
+                arguments: Definition::new(name.text),
                 value: closure.apply(Value::rigid(nth)).quote(nth + 1).into(),
                 location: Default::default(),
             }),
-            Value::Pi(name, domain, codomain) => Expr::Pi(Pi {
-                icit: crate::ast::Icit::Expl,
+            Value::Pi(name, icit, domain, codomain) => Expr::Pi(Pi {
+                icit,
                 domain: Domain {
-                    text: Definition {
-                        text: name.text,
-                        location: Default::default(),
-                    },
+                    text: Definition::new(name.text),
                     type_repr: domain.quote(nth).into(),
-                    icit: crate::ast::Icit::Expl,
+                    icit,
                     location: Default::default(),
                 },
                 codomain: codomain.apply(Value::rigid(nth)).quote(nth + 1).into(),
@@ -165,7 +159,7 @@ pub enum Value {
     Flexible(MetaVar, Spine),
     Rigid(Lvl, Spine),
     Lam(Definition<Resolved>, Closure),
-    Pi(Definition<Resolved>, Box<Value>, Closure),
+    Pi(Definition<Resolved>, Icit, Box<Value>, Closure),
     Int(isize),
     Str(String),
 }

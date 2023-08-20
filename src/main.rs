@@ -145,6 +145,19 @@ pub mod ast {
             pub location: S::Location,
         }
 
+        impl<S: state::State> Definition<S>
+        where
+            S::Location: Default,
+        {
+            /// Creates a new instance of [`Definition`].
+            pub fn new(text: String) -> Self {
+                Self {
+                    text,
+                    location: S::Location::default(),
+                }
+            }
+        }
+
         impl<S: state::State> Element<S> for Definition<S> {
             fn location(&self) -> &S::Location {
                 &self.location
