@@ -101,10 +101,8 @@ impl ZuTerminal {
     ///
     /// Only run this once. It's not safe to run this multiple times.
     pub unsafe fn clear(&self) -> miette::Result<()> {
-        unsafe {
-            let terminal = &mut *self.data.get();
-            terminal.clear().into_diagnostic()
-        }
+        let terminal = &mut *self.data.get();
+        terminal.clear().into_diagnostic()
     }
 
     /// Set up the miette hook
