@@ -3,15 +3,15 @@ use std::{cell::RefCell, rc::Rc};
 use intmap::IntMap;
 
 use crate::ast::{
-    quoted::{Lvl, MetaVar, Reference, BD},
+    quoted::{Ix, Lvl, MetaVar, Reference, BD},
     resolved::Definition,
     state::Resolved,
     Apply, Domain, Fun, Icit, Int, Pi, Str, Universe,
 };
 
-#[derive(Debug, Clone, Copy, Hash)]
+#[derive(Debug, Clone)]
 pub enum MetaEntry {
-    Solved(MetaVar),
+    Solved(Value),
     Unsolved,
 }
 
@@ -20,6 +20,7 @@ pub type Spine = im_rc::Vector<Value>;
 #[derive(Debug, Clone)]
 pub struct Environment {
     pub data: Vec<Value>,
+    pub metas: MetaCtx,
 }
 
 impl Environment {
@@ -27,13 +28,16 @@ impl Environment {
     pub fn create_new_value(&self, value: Value) -> Self {
         let mut data = self.data.clone();
         data.push(value);
-        Self { data }
+        Self {
+            data,
+            metas: self.metas.clone(),
+        }
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct Closure {
-    pub environment: Environment,
+    pub env: Environment,
     pub term: Expr,
 }
 
@@ -87,8 +91,8 @@ impl Elab {
     pub fn fresh_meta(&self) -> Expr {
         // Add new meta variable
         let mut next_meta = self.metas.next_meta.borrow_mut();
-        *next_meta += 1;
         let meta = MetaVar(*next_meta);
+        *next_meta += 1;
 
         // Add the unsolved meta to the context
         let mut ctx = self.metas.ctx.borrow_mut();
@@ -120,7 +124,8 @@ impl Quote for Value {
             }
 
             let u = sp.last().cloned().unwrap();
-            let sp = sp.into_iter().skip(sp.len() - 1).collect();
+            let len = sp.len();
+            let sp = sp.into_iter().skip(len - 1).collect();
 
             Expr::Apply(Apply {
                 callee: quote_sp(sp, term, nth).into(),
@@ -131,6 +136,7 @@ impl Quote for Value {
 
         match self {
             Value::Universe => Expr::Universe(Universe::default()),
+            Value::Meta(meta_var) => Expr::Reference(Reference::MetaVar(meta_var)),
             Value::Flexible(meta, sp) => {
                 quote_sp(sp, Expr::Reference(Reference::MetaVar(meta)), nth)
             }
@@ -169,8 +175,67 @@ impl Expr {
     /// Evaluates a value to a value in the WHNF.
     ///
     /// It does performs reductions.
-    pub fn eval(self, environment: Environment) -> Value {
-        todo!()
+    pub fn eval(self, env: Environment) -> Value {
+        use crate::ast::Term::*;
+
+        /// Evaluates an application
+        fn app(callee: Value, value: Value) -> Value {
+            match callee {
+                Value::Lam(_, lam) => lam.apply(value),
+                Value::Flexible(meta, mut spine) => {
+                    spine.push_back(value);
+
+                    Value::Flexible(meta, spine)
+                }
+                Value::Rigid(lvl, mut spine) => {
+                    spine.push_back(value);
+
+                    Value::Rigid(lvl, spine)
+                }
+                _ => unreachable!(),
+            }
+        }
+
+        /// Apply a mask of entries to a value
+        fn app_bd(env: Environment, value: Value, bds: im_rc::Vector<BD>) -> Value {
+            let _ = (env, value, bds);
+            todo!()
+        }
+
+        /// Evaluates meta
+        fn value_meta(env: Environment, meta: MetaVar) -> Value {
+            match env.metas.lookup(meta) {
+                MetaEntry::Solved(value) => value,
+                MetaEntry::Unsolved => Value::Meta(meta),
+            }
+        }
+
+        match self {
+            Error(_) => unreachable!(),
+            Hole(_) => unreachable!(),
+            Universe(_) => Value::Universe,
+            Int(data) => Value::Int(data.value),
+            Str(data) => Value::Str(data.value),
+            Group(box value) => value.eval(env),
+            Elim(_) => todo!("elim expr"),
+            Fun(_) => todo!("fun expr"),
+            Apply(e) => app(e.callee.eval(env.clone()), e.arguments.eval(env)),
+            Reference(self::Reference::Var(Ix(ix))) => env.data[ix].clone(), // TODO: HANDLE ERROR
+            Reference(self::Reference::MetaVar(meta)) => value_meta(env, meta),
+            Reference(self::Reference::InsertedMeta(meta, bds)) => {
+                app_bd(env.clone(), value_meta(env, meta), bds)
+            }
+            Pi(pi) => {
+                let name = Definition::new(pi.domain.text.text);
+                let domain = pi.domain.type_repr.eval(env.clone());
+                let codomain = Closure {
+                    env,
+                    term: *pi.codomain,
+                };
+
+                Value::Pi(name, pi.domain.icit, domain.into(), codomain)
+            }
+        }
     }
 }
 
@@ -192,7 +257,7 @@ impl Closure {
     /// Binds a closure with a new environment with the
     /// given value.
     pub fn apply(self, argument: Value) -> Value {
-        self.term.eval(self.environment.create_new_value(argument))
+        self.term.eval(self.env.create_new_value(argument))
     }
 }
 
@@ -208,6 +273,7 @@ pub enum Value {
     Rigid(Lvl, Spine),
     Lam(DefinitionRs, Closure),
     Pi(DefinitionRs, Icit, Box<Value>, Closure),
+    Meta(MetaVar),
     Int(isize),
     Str(String),
 }

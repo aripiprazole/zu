@@ -239,7 +239,7 @@ pub mod ast {
 
         /// Defines a debruijin index.
         #[derive(Debug, Clone, Hash, Copy, PartialEq, Eq, PartialOrd, Ord)]
-        pub struct Ix(usize);
+        pub struct Ix(pub usize);
 
         impl std::ops::Add<usize> for Ix {
             type Output = Self;

@@ -63,7 +63,7 @@ pub Stmt: crate::ast::Stmt<state::Syntax> = {
     type_repr: match type_repr {
       Some(type_repr) => type_repr.into(),
       None => crate::ast::Term::Hole(crate::ast::Hole {
-        location: name.location().clone(),
+        location: crate::ast::Location::clone(<crate::ast::syntax::Reference as crate::ast::Element<state::Syntax>>::location(&name)),
       }),
     },
     name,
