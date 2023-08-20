@@ -183,12 +183,19 @@ pub mod ast {
         use super::*;
 
         #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
-        pub struct MetaVar(usize);
+        pub enum BD {
+            Bound,
+            Defined,
+        }
 
         #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
+        pub struct MetaVar(pub usize);
+
+        #[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
         pub enum Reference {
             Var(Ix),
             MetaVar(MetaVar),
+            InsertedMeta(MetaVar, im_rc::Vector<BD>),
         }
 
         impl<S: state::State<Location = ()>> Element<S> for Reference {

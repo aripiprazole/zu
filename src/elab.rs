@@ -1,7 +1,9 @@
+use std::{cell::RefCell, rc::Rc};
+
 use intmap::IntMap;
 
 use crate::ast::{
-    quoted::{Lvl, MetaVar, Reference},
+    quoted::{Lvl, MetaVar, Reference, BD},
     resolved::Definition,
     state::Resolved,
     Apply, Domain, Fun, Icit, Int, Pi, Str, Universe,
@@ -11,12 +13,6 @@ use crate::ast::{
 pub enum MetaEntry {
     Solved(MetaVar),
     Unsolved,
-}
-
-#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
-pub enum BD {
-    Bound,
-    Defined,
 }
 
 pub type Spine = im_rc::Vector<Value>;
@@ -62,6 +58,19 @@ impl PartialRenaming {
     }
 }
 
+#[derive(Default, Debug, Clone)]
+pub struct MetaCtx {
+    pub next_meta: Rc<RefCell<usize>>,
+    pub ctx: Rc<RefCell<IntMap<MetaEntry>>>,
+}
+
+impl MetaCtx {
+    /// Lookup a meta variable in the context
+    pub fn lookup(&self, MetaVar(m): MetaVar) -> MetaEntry {
+        self.ctx.borrow().get(m as u64).cloned().unwrap()
+    }
+}
+
 /// The context of the elaborator
 #[derive(Debug, Clone)]
 pub struct Elab {
@@ -69,7 +78,26 @@ pub struct Elab {
     pub level: Lvl,
     pub types: im_rc::HashMap<String, Value>,
     pub bds: im_rc::Vector<BD>,
+    pub metas: MetaCtx,
     pub position: crate::ast::Location,
+}
+
+impl Elab {
+    /// Creates a new fresh meta variable
+    pub fn fresh_meta(&self) -> Expr {
+        // Add new meta variable
+        let mut next_meta = self.metas.next_meta.borrow_mut();
+        *next_meta += 1;
+        let meta = MetaVar(*next_meta);
+
+        // Add the unsolved meta to the context
+        let mut ctx = self.metas.ctx.borrow_mut();
+        ctx.insert(*next_meta as u64, MetaEntry::Unsolved);
+
+        // Create the reference
+        let bds = self.bds.clone();
+        Expr::Reference(Reference::InsertedMeta(meta, bds))
+    }
 }
 
 pub trait Quote {
@@ -168,6 +196,8 @@ impl Closure {
     }
 }
 
+type DefinitionRs = Definition<Resolved>;
+
 /// Defines the type of a term, elaborated to a value
 ///
 /// The type of a term is a value, but the type of a value is a type.
@@ -176,8 +206,8 @@ pub enum Value {
     Universe,
     Flexible(MetaVar, Spine),
     Rigid(Lvl, Spine),
-    Lam(Definition<Resolved>, Closure),
-    Pi(Definition<Resolved>, Icit, Box<Value>, Closure),
+    Lam(DefinitionRs, Closure),
+    Pi(DefinitionRs, Icit, Box<Value>, Closure),
     Int(isize),
     Str(String),
 }
