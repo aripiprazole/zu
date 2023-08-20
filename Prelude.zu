@@ -10,18 +10,16 @@ inductive data Eq {a} (x, y : a) where
 
   -- | Defines a proof that: `a = b`, implies `b = a` by
   -- induction.
-  Eq/symm : {a, b} -> a = b -> b = a := case
-    Refl => Refl.
+  Eq/symm : {a, b} -> a = b -> b = a
+  | Refl => Refl.
 
 -- | Record for lazy evaluation
-#[derive new]
-#[do_notation IO/pure IO/>>=]
 struct IO (a : Type).
-  #[ffi]
-  IO/pure : {a} -> a -> IO a := external!.
+  IO/pure : {a} -> a -> IO a := external "IO/pure".
+  IO/>>= : {a, b} -> IO a -> (IO a -> IO b) -> IO b := external "IO/pure".
 
-  #[ffi]
-  IO/>>= : {a, b} -> IO a -> (IO a -> IO b) -> IO b := external!.
+  @derive IO new.
+  @do_notation IO IO/pure IO/>>=.
 
   -- Prints in the stdout
   --
@@ -29,12 +27,11 @@ struct IO (a : Type).
   -- main : IO () := do
   --  println "hello world"
   -- ```
-  #[ffi]
-  IO/println : String -> IO () := external!.
+  IO/println : String -> IO () := external "IO/println".
 
 -- Performs unsafe IO in the type level, or anywhere you are.
 --
 -- It's unsafe and should not be used.
-#[ffi]
-#[unsafe]
-unsafePerformIO : {a} -> IO a -> a := external!.
+unsafePerformIO : {a} -> IO a -> a := external "unsafePerformIO".
+
+@partial unsafePerformIO.
