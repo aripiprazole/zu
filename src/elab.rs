@@ -23,7 +23,16 @@ pub type Spine = im_rc::Vector<Value>;
 
 #[derive(Debug, Clone)]
 pub struct Environment {
-    pub value: Vec<Value>,
+    pub data: Vec<Value>,
+}
+
+impl Environment {
+    /// Creates a new entry in the environment
+    pub fn create_new_value(&self, value: Value) -> Self {
+        let mut data = self.data.clone();
+        data.push(value);
+        Self { data }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -128,6 +137,15 @@ impl Quote for Value {
     }
 }
 
+impl Expr {
+    /// Evaluates a value to a value in the WHNF.
+    ///
+    /// It does performs reductions.
+    pub fn eval(self, environment: Environment) -> Value {
+        todo!()
+    }
+}
+
 impl Value {
     /// Creates a rigid variable without applications and a
     /// spine to it
@@ -146,7 +164,7 @@ impl Closure {
     /// Binds a closure with a new environment with the
     /// given value.
     pub fn apply(self, argument: Value) -> Value {
-        todo!()
+        self.term.eval(self.environment.create_new_value(argument))
     }
 }
 
