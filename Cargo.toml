@@ -17,6 +17,10 @@ bupropion = "0.0.5"
 intmap = "2.0.0"
 im-rc = "15.1.0"
 fxhash = "0.2.1"
+ratatui = "0.22.0"
+crossbeam-channel = "0.5.8"
+lazy_static = "1.4.0"
+crossterm = "0.27.0"
 
 # Add a build-time dependency on the lalrpop library:
 [build-dependencies]

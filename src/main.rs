@@ -4,6 +4,10 @@
 #![feature(type_changing_struct_update)]
 
 use clap::Parser;
+use crossbeam_channel::{Receiver, Sender};
+use lazy_static::lazy_static;
+use miette::IntoDiagnostic;
+use ratatui::prelude::Backend;
 
 /// The abstract syntax tree for the language.
 pub mod ast {
@@ -1561,6 +1565,30 @@ pub mod erase;
 /// Pretty print the elaborated ast
 pub mod show;
 
+lazy_static! {
+    static ref STATE: (Sender<State>, Receiver<State>) = crossbeam_channel::unbounded();
+
+    /// The state of the compiler.
+    pub static ref SX: Sender<State> = STATE.0.clone();
+
+    /// The state of the compiler.
+    pub static ref RX: Receiver<State> = STATE.1.clone();
+}
+
+/// Logs a new state.
+pub fn log(state: State) {
+    SX.send(state).unwrap();
+}
+
+pub struct Checking {}
+
+/// The state for the compiler UI.
+pub enum State {
+    Resize,
+    Tick,
+    Checking(Checking),
+}
+
 /// Simple program to run `zu` language.
 #[derive(clap::Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -1573,7 +1601,60 @@ pub struct Command {
     pub main: String,
 }
 
+fn input_handling() {
+    let tick_rate = std::time::Duration::from_millis(200);
+
+    std::thread::spawn(move || {
+        let mut last_tick = std::time::Instant::now();
+        loop {
+            // poll for tick rate duration, if no events, sent tick event.
+            let timeout = tick_rate
+                .checked_sub(last_tick.elapsed())
+                .unwrap_or_else(|| std::time::Duration::from_secs(0));
+            if crossterm::event::poll(timeout).unwrap() {
+                match crossterm::event::read().unwrap() {
+                    crossterm::event::Event::Key(key) => todo!(),
+                    crossterm::event::Event::Resize(_, _) => SX.send(State::Resize).unwrap(),
+                    _ => {}
+                };
+            }
+            if last_tick.elapsed() >= tick_rate {
+                SX.send(State::Tick).unwrap();
+                last_tick = std::time::Instant::now();
+            }
+        }
+    });
+}
+
+fn run_app<B: ratatui::backend::Backend>(term: &mut ratatui::Terminal<B>) -> miette::Result<()> {
+    loop {
+        // Draw the UI
+        term.draw(|f| ui(f)).into_diagnostic()?;
+
+        match RX.try_recv().into_diagnostic()? {
+            State::Checking(checking) => {}
+            State::Resize => term.autoresize().into_diagnostic()?,
+            State::Tick => todo!(),
+        }
+    }
+}
+
+/// Renders the UI
+fn ui<B: ratatui::backend::Backend>(f: &mut ratatui::Frame<B>) {
+}
+
 fn main() -> miette::Result<()> {
+    crossterm::terminal::enable_raw_mode().into_diagnostic()?;
+    let stdout = std::io::stdout();
+    let backend = ratatui::prelude::CrosstermBackend::new(stdout);
+    let mut terminal = ratatui::Terminal::with_options(
+        backend,
+        ratatui::TerminalOptions {
+            viewport: ratatui::Viewport::Inline(8),
+        },
+    )
+    .into_diagnostic()?;
+
     bupropion::BupropionHandlerOpts::install(|| {
         // Build the bupropion handler options, for specific
         // error presenting.
@@ -1583,6 +1664,9 @@ fn main() -> miette::Result<()> {
     let command = Command::parse();
     let resolver = resolver::Resolver::new(command.main, command.include)?;
     resolver.resolve_and_import()?;
+
+    crossterm::terminal::disable_raw_mode().into_diagnostic()?;
+    terminal.clear().into_diagnostic()?;
 
     Ok(())
 }
