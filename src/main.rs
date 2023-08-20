@@ -1548,6 +1548,12 @@ pub mod resolver {
 // Type elaborator, it does the type checking stuff.
 pub mod elab;
 
+/// Simplifies the tree to the quoted terms.
+pub mod erase;
+
+/// Pretty print the elaborated ast
+pub mod show;
+
 /// Simple program to run `zu` language.
 #[derive(clap::Parser, Debug)]
 #[command(author, version, about, long_about = None)]
