@@ -1,9 +1,11 @@
 use intmap::IntMap;
 
-use crate::ast::{quoted::Lvl, resolved::Definition, Universe};
-
-#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
-pub struct MetaVar(usize);
+use crate::ast::{
+    quoted::{Lvl, MetaVar, Reference},
+    resolved::Definition,
+    state::Resolved,
+    Apply, Domain, Fun, Int, Pi, Str, Universe,
+};
 
 #[derive(Debug, Clone, Copy, Hash)]
 pub enum MetaEntry {
@@ -17,10 +19,7 @@ pub enum BD {
     Defined,
 }
 
-#[derive(Debug, Clone)]
-pub struct Spine {
-    pub value: Vec<Value>,
-}
+pub type Spine = im_rc::Vector<Value>;
 
 #[derive(Debug, Clone)]
 pub struct Environment {
@@ -76,15 +75,84 @@ pub type Expr = crate::ast::Term<crate::ast::state::Quoted>;
 
 impl Quote for Value {
     fn quote(self, nth: Lvl) -> Expr {
+        /// Applies quoting for a spine of applications in
+        /// a term.
+        fn quote_sp(sp: Spine, term: Expr, nth: Lvl) -> Expr {
+            if sp.is_empty() {
+                return term;
+            }
+
+            let u = sp.last().cloned().unwrap();
+            let sp = sp.into_iter().skip(sp.len() - 1).collect();
+
+            Expr::Apply(Apply {
+                callee: quote_sp(sp, term, nth).into(),
+                arguments: u.quote(nth).into(),
+                location: Default::default(),
+            })
+        }
+
         match self {
             Value::Universe => Expr::Universe(Universe::default()),
-            Value::Flexible(_, _) => todo!(),
-            Value::Rigid(_, _) => todo!(),
-            Value::Lam(_) => todo!(),
-            Value::Pi(_, _, _) => todo!(),
-            Value::Int(_) => todo!(),
-            Value::Str(_) => todo!(),
+            Value::Int(value) => Expr::Int(Int {
+                value,
+                location: Default::default(),
+            }),
+            Value::Str(value) => Expr::Str(Str {
+                value,
+                location: Default::default(),
+            }),
+            Value::Flexible(meta, sp) => {
+                quote_sp(sp, Expr::Reference(Reference::MetaVar(meta)), nth)
+            }
+            Value::Rigid(lvl, sp) => {
+                quote_sp(sp, Expr::Reference(Reference::Var(lvl.into_ix(nth))), nth)
+            }
+            Value::Lam(name, closure) => Expr::Fun(Fun {
+                arguments: Definition {
+                    text: name.text,
+                    location: Default::default(),
+                },
+                value: closure.apply(Value::rigid(nth)).quote(nth + 1).into(),
+                location: Default::default(),
+            }),
+            Value::Pi(name, domain, codomain) => Expr::Pi(Pi {
+                icit: crate::ast::Icit::Expl,
+                domain: Domain {
+                    text: Definition {
+                        text: name.text,
+                        location: Default::default(),
+                    },
+                    type_repr: domain.quote(nth).into(),
+                    icit: crate::ast::Icit::Expl,
+                    location: Default::default(),
+                },
+                codomain: codomain.apply(Value::rigid(nth)).quote(nth + 1).into(),
+                location: Default::default(),
+            }),
         }
+    }
+}
+
+impl Value {
+    /// Creates a rigid variable without applications and a
+    /// spine to it
+    pub fn rigid(lvl: Lvl) -> Self {
+        Value::Rigid(lvl, Default::default())
+    }
+
+    /// Creates a flexible variable without applications and a
+    /// spine to it
+    pub fn flexible(meta: MetaVar) -> Self {
+        Value::Flexible(meta, Default::default())
+    }
+}
+
+impl Closure {
+    /// Binds a closure with a new environment with the
+    /// given value.
+    pub fn apply(self, argument: Value) -> Value {
+        todo!()
     }
 }
 
@@ -96,8 +164,8 @@ pub enum Value {
     Universe,
     Flexible(MetaVar, Spine),
     Rigid(Lvl, Spine),
-    Lam(Closure),
-    Pi(Definition, Box<Value>, Closure),
+    Lam(Definition<Resolved>, Closure),
+    Pi(Definition<Resolved>, Box<Value>, Closure),
     Int(isize),
     Str(String),
 }

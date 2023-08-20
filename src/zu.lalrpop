@@ -49,7 +49,7 @@ pub Stmt: crate::ast::Stmt<state::Syntax> = {
 
   // Parses `@import` command, which set to the resolver to import to the
   // current file.
-  <s: @L> "import" <import:Reference> "." <e: @R> => crate::ast::Stmt::Import(crate::ast::parsed::Import {
+  <s: @L> "import" <import:Reference> "." <e: @R> => crate::ast::Stmt::Import(crate::ast::syntax::Import {
     text: import.text,
     location: crate::ast::Location::new(s, e, filename),
   }),

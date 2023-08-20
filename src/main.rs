@@ -24,12 +24,14 @@ pub mod ast {
     pub mod state {
         use std::rc::Rc;
 
-        use super::{*, quoted::{Ix, Lvl}};
+        use super::*;
 
         /// Represents the syntax state, if it's resolved, or just parsed, it's useful for not
         /// having to redeclare the same types.
         pub trait State: Default + Debug + Clone {
             type NameSet: Debug + Clone;
+            type Arguments: Debug + Clone;
+            type Parameters: Debug + Clone;
             type Import: Element<Self>;
             type Reference: Element<Self>;
             type Definition: Element<Self>;
@@ -42,6 +44,8 @@ pub mod ast {
 
         impl State for Syntax {
             type NameSet = Vec<Option<Self::Definition>>;
+            type Arguments = Vec<Term<Self>>;
+            type Parameters = Vec<Self::Definition>;
             type Definition = syntax::Reference;
             type Reference = syntax::Reference;
             type Import = syntax::Import;
@@ -54,7 +58,9 @@ pub mod ast {
 
         impl State for Resolved {
             type NameSet = Self::Definition;
-            type Definition = Rc<resolved::Definition>;
+            type Arguments = Vec<Term<Resolved>>;
+            type Parameters = Vec<Self::Definition>;
+            type Definition = Rc<resolved::Definition<Resolved>>;
             type Reference = resolved::Reference;
             type Import = !;
             type Location = Location;
@@ -66,8 +72,10 @@ pub mod ast {
 
         impl State for Quoted {
             type NameSet = Self::Definition;
-            type Definition = Lvl;
-            type Reference = Ix;
+            type Parameters = Self::Definition;
+            type Arguments = Box<Term<Quoted>>;
+            type Definition = resolved::Definition<Quoted>;
+            type Reference = quoted::Reference;
             type Import = !;
             type Location = ();
         }
@@ -131,22 +139,22 @@ pub mod ast {
         use super::*;
 
         /// A definition. It has a text, and a location.
-        #[derive(Debug, Clone, Hash)]
-        pub struct Definition {
+        #[derive(Default, Debug, Clone, Hash)]
+        pub struct Definition<S: state::State> {
             pub text: String,
-            pub location: Location,
+            pub location: S::Location,
         }
 
-        impl<S: state::State<Location = Location>> Element<S> for Definition {
-            fn location(&self) -> &Location {
+        impl<S: state::State> Element<S> for Definition<S> {
+            fn location(&self) -> &S::Location {
                 &self.location
             }
         }
 
         /// A name access.
-        #[derive(Debug, Clone, Hash)]
+        #[derive(Debug, Clone)]
         pub struct Reference {
-            pub definition: Rc<Definition>,
+            pub definition: Rc<Definition<state::Resolved>>,
             pub location: Location,
         }
 
@@ -161,9 +169,33 @@ pub mod ast {
     pub mod quoted {
         use super::*;
 
+        #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
+        pub struct MetaVar(usize);
+
+        #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
+        pub enum Reference {
+            Var(Ix),
+            MetaVar(MetaVar),
+        }
+
+        impl<S: state::State<Location = ()>> Element<S> for Reference {
+            fn location(&self) -> &S::Location {
+                &()
+            }
+        }
+
         /// Defines a debruijin index.
         #[derive(Debug, Clone, Hash, Copy, PartialEq, Eq, PartialOrd, Ord)]
         pub struct Lvl(usize);
+
+        impl Lvl {
+            /// Transforms a level into a debruijin index.
+            pub fn into_ix(&self, Lvl(lvl0): Lvl) -> Ix {
+                let Lvl(lvl1) = self;
+
+                Ix(lvl1 - lvl0 - 1)
+            }
+        }
 
         impl std::ops::Add<usize> for Lvl {
             type Output = Self;
@@ -178,7 +210,7 @@ pub mod ast {
                 self.0 += rhs
             }
         }
-        
+
         impl<S: state::State<Location = ()>> Element<S> for Lvl {
             fn location(&self) -> &S::Location {
                 &()
@@ -202,7 +234,7 @@ pub mod ast {
                 self.0 += rhs
             }
         }
-        
+
         impl<S: state::State<Location = ()>> Element<S> for Ix {
             fn location(&self) -> &S::Location {
                 &()
@@ -709,7 +741,7 @@ pub mod ast {
     #[derive(Debug, Clone)]
     pub struct Apply<S: state::State> {
         pub callee: Box<Term<S>>,
-        pub arguments: Vec<Term<S>>,
+        pub arguments: S::Arguments,
         pub location: S::Location,
     }
 
@@ -730,7 +762,7 @@ pub mod ast {
     /// ```
     #[derive(Debug, Clone)]
     pub struct Fun<S: state::State> {
-        pub arguments: Vec<S::Definition>,
+        pub arguments: S::Parameters,
         pub value: Box<Term<S>>,
         pub location: S::Location,
     }
@@ -784,6 +816,15 @@ pub mod ast {
         Pi(Pi<S>),
         Reference(S::Reference),
         Hole(Hole<S>),
+    }
+
+    impl<S: state::State> Default for Term<S>
+    where
+        S::Location: Default,
+    {
+        fn default() -> Self {
+            Self::Hole(Hole::default())
+        }
     }
 
     impl<S: state::State> Term<S> {
@@ -988,8 +1029,9 @@ pub mod resolver {
 
     use crate::ast::{
         resolved::{Definition, Reference},
-        state, Apply, Attribute, Binding, DocString, Domain, ElimDef, Error, Eval, File, Fun, Hole,
-        Int, Location, Pi, Stmt, Str, Term, Type, Universe,
+        state::{self, Resolved},
+        syntax, Apply, Attribute, Binding, DocString, Domain, ElimDef, Error, Eval, File, Fun,
+        Hole, Int, Location, Pi, Stmt, Str, Term, Type, Universe,
     };
 
     type FileMap = HashMap<String, String>;
@@ -1075,7 +1117,7 @@ pub mod resolver {
         pub files: FileMap,
         pub inputs: im_rc::HashMap<String, crate::ast::File<state::Syntax>, FxBuildHasher>,
         pub errors: Vec<InnerError>,
-        pub scope: im_rc::HashMap<String, Rc<crate::ast::resolved::Definition>, FxBuildHasher>,
+        pub scope: im_rc::HashMap<String, Rc<Definition<Resolved>>, FxBuildHasher>,
         pub file_scope: Scope,
         pub main: crate::ast::File<state::Syntax>,
     }
@@ -1094,7 +1136,7 @@ pub mod resolver {
         ///
         /// The declaration `Sim` is not defined, but the resolver can suggest the
         /// possible names for the user, in this case `Sim` is the possible name.
-        all_possible_names: im_rc::HashMap<String, Rc<Definition>, FxBuildHasher>,
+        all_possible_names: im_rc::HashMap<String, Rc<Definition<Resolved>>, FxBuildHasher>,
     }
 
     /// Read file and parse it. Associating the file name with the file.
@@ -1425,8 +1467,8 @@ pub mod resolver {
         // it will report an error.
         fn find_reference(
             &mut self,
-            reference: crate::ast::syntax::Reference,
-        ) -> Option<Rc<Definition>> {
+            reference: syntax::Reference,
+        ) -> Option<Rc<Definition<Resolved>>> {
             match self.scope.get(&reference.text) {
                 Some(value) => value.clone().into(),
                 None => {
@@ -1449,8 +1491,8 @@ pub mod resolver {
         /// Reports a possible definition for a reference.
         fn report_possible_definition(
             &mut self,
-            reference: &crate::ast::syntax::Reference,
-            definition: Rc<Definition>,
+            reference: &syntax::Reference,
+            definition: Rc<Definition<Resolved>>,
         ) {
             self.errors
                 .push(InnerError::LaterDefinition(LaterUnresolvedDefinition {
@@ -1462,7 +1504,7 @@ pub mod resolver {
         }
 
         /// Reports an error for a reference.
-        fn report_unresolved(&mut self, reference: &crate::ast::syntax::Reference) {
+        fn report_unresolved(&mut self, reference: &syntax::Reference) {
             self.errors
                 .push(InnerError::Definition(UnresolvedDefinition {
                     module: reference.text.clone(),
