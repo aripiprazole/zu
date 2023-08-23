@@ -25,6 +25,9 @@ pub mod erase;
 /// Pretty print the elaborated ast
 pub mod show;
 
+/// State
+pub mod state;
+
 /// Simple program to run `zu` language.
 #[derive(clap::Parser, Debug)]
 #[command(author, version, about, long_about = None)]

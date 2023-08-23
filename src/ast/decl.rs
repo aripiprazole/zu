@@ -36,12 +36,12 @@ impl<S: state::State> Element<S> for Constructor<S> {
 pub struct DocString<S: state::State> {
     pub full_text: String,
     pub text: String,
-    pub location: S::Meta,
+    pub meta: S::Meta,
 }
 
 impl<S: state::State> Element<S> for DocString<S> {
     fn meta(&self) -> &S::Meta {
-        &self.location
+        &self.meta
     }
 }
 

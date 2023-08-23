@@ -152,9 +152,9 @@ dependencies = [
 
 [[package]]
 name = "bupropion"
-version = "0.0.5"
+version = "0.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "84ed7b9a3975668ffb8088b9b3f7ae132a5e275e1238155e75fc9b4d650017fd"
+checksum = "9050f4790a2ca9bc2c5aa7f56754c298a7760f43d6797b5cabb38fd3feea31a3"
 dependencies = [
  "backtrace",
  "backtrace-ext",
@@ -454,6 +454,12 @@ checksum = "3f35c735096c0293d313e8f2a641627472b83d01b937177fe76e5e2708d31e0d"
 dependencies = [
  "regex",
 ]
+
+[[package]]
+name = "lazy_static"
+version = "1.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e2abad23fbc42b3700f2f279844dc832adb2b2eb069b2df918f455c4e18cc646"
 
 [[package]]
 name = "libc"
@@ -1068,6 +1074,7 @@ dependencies = [
  "intmap",
  "lalrpop",
  "lalrpop-util",
+ "lazy_static",
  "miette",
  "thiserror",
 ]
