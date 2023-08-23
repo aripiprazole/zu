@@ -40,13 +40,6 @@ pub Stmt: crate::ast::Stmt<state::Syntax> = {
     location: crate::ast::Location::new(s, e, filename),
   }),
 
-  // Parses `@elim` command, which types a term and prints the result.
-  <s: @L> "@elim" <name:Reference> <eliminators:Sep<",", Reference>> "." <e: @R> => crate::ast::Stmt::ElimDef(crate::ast::ElimDef {
-    inductive: name,
-    constructors: eliminators,
-    location: crate::ast::Location::new(s, e, filename),
-  }),
-
   // Parses `@import` command, which set to the resolver to import to the
   // current file.
   <s: @L> "import" <import:Reference> "." <e: @R> => crate::ast::Stmt::Import(crate::ast::syntax::Import {

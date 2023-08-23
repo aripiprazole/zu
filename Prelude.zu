@@ -1,37 +1,37 @@
 module Prelude.
 
--- | Defines inductive type for Leibniz equality and
--- reflection.
--- 
--- Performs unification and by unification, it proves
--- some value
+// | Defines inductive type for Leibniz equality and
+// reflection.
+// 
+// Performs unification and by unification, it proves
+// some value
 inductive data Eq {a} (x, y : a) where
   Refl : Eq x x.
 
-  -- | Defines a proof that: `a = b`, implies `b = a` by
-  -- induction.
+  // | Defines a proof that: `a = b`, implies `b = a` by
+  // induction.
   Eq/symm : {a, b} -> a = b -> b = a
   | Refl => Refl.
 
--- | Record for lazy evaluation
-struct IO (a : Type).
-  IO/pure : {a} -> a -> IO a := external "IO/pure".
-  IO/>>= : {a, b} -> IO a -> (IO a -> IO b) -> IO b := external "IO/pure".
+// | Record for lazy evaluation
+IO : Type -> Type = opaque.
+IO/pure : {a} -> a -> IO a := external "IO/pure".
+IO/>>= : {a, b} -> IO a -> (IO a -> IO b) -> IO b := external "IO/pure".
 
-  @derive IO new.
-  @do_notation IO IO/pure IO/>>=.
+@derive IO new.
+@do_notation IO IO/pure IO/>>=.
 
-  -- Prints in the stdout
-  --
-  -- ```
-  -- main : IO () := do
-  --  println "hello world"
-  -- ```
-  IO/println : String -> IO () := external "IO/println".
+// | Prints in the stdout
+//
+// ```
+// main : IO () := do
+//  println "hello world"
+// ```
+IO/println : String -> IO () := external "IO/println".
 
--- Performs unsafe IO in the type level, or anywhere you are.
---
--- It's unsafe and should not be used.
+// | Performs unsafe IO in the type level, or anywhere you are.
+//
+// It's unsafe and should not be used.
 unsafePerformIO : {a} -> IO a -> a := external "unsafePerformIO".
 
 @partial unsafePerformIO.

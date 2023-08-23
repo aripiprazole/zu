@@ -11,5 +11,3 @@ Zero := \_, _, zero ->
 -- | Defines the succ constructor
 Succ := \n, N, succ, zero ->
   (n N succ zero).
-
-@elim Nat Zero, Succ.
