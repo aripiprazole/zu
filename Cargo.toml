@@ -18,6 +18,10 @@ intmap = "2.0.0"
 im-rc = "15.1.0"
 fxhash = "0.2.1"
 lazy_static = "1.4.0"
+crossbeam-channel = "0.5.8"
+log = "0.4.20"
+fern = "0.6.2"
+humantime = "2.1.0"
 
 # Add a build-time dependency on the lalrpop library:
 [build-dependencies]

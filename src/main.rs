@@ -4,6 +4,7 @@
 #![feature(type_changing_struct_update)]
 
 use clap::Parser;
+use miette::IntoDiagnostic;
 
 /// The abstract syntax tree for the language.
 pub mod ast;
@@ -25,9 +26,6 @@ pub mod erase;
 /// Pretty print the elaborated ast
 pub mod show;
 
-/// State
-pub mod state;
-
 /// Simple program to run `zu` language.
 #[derive(clap::Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -48,6 +46,25 @@ fn main() -> miette::Result<()> {
     })?;
 
     let command = Command::parse();
+
+    fern::Dispatch::new()
+        // Perform allocation-free log formatting
+        .format(|out, message, record| {
+            out.finish(format_args!(
+                "{}: {}",
+                record.level(),
+                message
+            ))
+        })
+        // Add blanket level filter -
+        .level(log::LevelFilter::Debug)
+        // - and per-module overrides
+        .level_for("hyper", log::LevelFilter::Info)
+        // Output to stdout, files, and other Dispatch configurations
+        .chain(std::io::stdout())
+        .apply()
+        .into_diagnostic()?;
+
     let resolver = resolver::Resolver::new(command.main, command.include)?;
     resolver.resolve_and_import()?;
 

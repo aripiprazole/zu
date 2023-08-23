@@ -169,6 +169,8 @@ impl Resolver {
 
     // Iterates the statements of the file and collects the errors.
     fn file(&mut self, file: File<state::Syntax>) -> File<state::Resolved> {
+        log::info!("loading file `{}`", file.name);
+
         // Create a default scope for the file.
         let mut scope = Scope::default();
 
