@@ -130,7 +130,7 @@ impl Quote for Value {
             Expr::Apply(Apply {
                 callee: quote_sp(sp, term, nth).into(),
                 arguments: u.quote(nth).into(),
-                location: Default::default(),
+                meta: Default::default(),
             })
         }
 
@@ -145,16 +145,16 @@ impl Quote for Value {
             }
             Value::Int(value) => Expr::Int(Int {
                 value,
-                location: Default::default(),
+                meta: Default::default(),
             }),
             Value::Str(value) => Expr::Str(Str {
                 value,
-                location: Default::default(),
+                meta: Default::default(),
             }),
             Value::Lam(name, closure) => Expr::Fun(Fun {
                 arguments: Definition::new(name.text),
                 value: closure.apply(Value::rigid(nth)).quote(nth + 1).into(),
-                location: Default::default(),
+                meta: Default::default(),
             }),
             Value::Pi(name, icit, domain, codomain) => Expr::Pi(Pi {
                 icit,
@@ -162,10 +162,10 @@ impl Quote for Value {
                     text: Definition::new(name.text),
                     type_repr: domain.quote(nth).into(),
                     icit,
-                    location: Default::default(),
+                    meta: Default::default(),
                 },
                 codomain: codomain.apply(Value::rigid(nth)).quote(nth + 1).into(),
-                location: Default::default(),
+                meta: Default::default(),
             }),
         }
     }

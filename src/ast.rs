@@ -7,7 +7,7 @@ use std::{fmt::Debug, marker::PhantomData, rc::Rc};
 pub struct File<S: state::State> {
     pub name: String,
     pub stmts: Vec<Stmt<S>>,
-    pub location: S::Location,
+    pub meta: S::Meta,
 }
 
 /// The ast GAT state. It's more likelly a Tree That Grow, with the
@@ -20,13 +20,13 @@ pub mod state {
     /// Represents the syntax state, if it's resolved, or just parsed, it's useful for not
     /// having to redeclare the same types.
     pub trait State: Default + Debug + Clone {
-        type NameSet: Debug + Clone;
-        type Arguments: Debug + Clone;
         type Parameters: Debug + Clone;
+        type Arguments: Debug + Clone;
+        type Meta: Debug + Clone;
+        type NameSet: Debug + Clone;
         type Import: Element<Self>;
         type Reference: Element<Self>;
         type Definition: Element<Self>;
-        type Location: Debug + Clone;
     }
 
     /// Represents the parsed state, it's the state of the syntax tree when it's just parsed.
@@ -40,7 +40,7 @@ pub mod state {
         type Definition = syntax::Reference;
         type Reference = syntax::Reference;
         type Import = syntax::Import;
-        type Location = Location;
+        type Meta = Location;
     }
 
     /// Represents the resolved state, it's the state of the syntax tree when it's resolved.
@@ -54,7 +54,7 @@ pub mod state {
         type Definition = Rc<resolved::Definition<Resolved>>;
         type Reference = resolved::Reference;
         type Import = !;
-        type Location = Location;
+        type Meta = Location;
     }
 
     /// Represents the resolved state, it's the state of the syntax tree when it's resolved.
@@ -68,19 +68,19 @@ pub mod state {
         type Definition = resolved::Definition<Quoted>;
         type Reference = quoted::Reference;
         type Import = !;
-        type Location = ();
+        type Meta = ();
     }
 }
 
 impl<S: state::State> Element<S> for ! {
-    fn location(&self) -> &S::Location {
+    fn meta(&self) -> &S::Meta {
         unreachable!()
     }
 }
 
 impl<S: state::State, T: Element<S>> Element<S> for Rc<T> {
-    fn location(&self) -> &S::Location {
-        self.as_ref().location()
+    fn meta(&self) -> &S::Meta {
+        self.as_ref().meta()
     }
 }
 
@@ -99,12 +99,12 @@ pub mod syntax {
     #[derive(Debug, Clone)]
     pub struct Reference {
         pub text: String,
-        pub location: Location,
+        pub meta: Location,
     }
 
-    impl<S: state::State<Location = Location>> Element<S> for Reference {
-        fn location(&self) -> &Location {
-            &self.location
+    impl<S: state::State<Meta = Location>> Element<S> for Reference {
+        fn meta(&self) -> &Location {
+            &self.meta
         }
     }
 
@@ -113,12 +113,12 @@ pub mod syntax {
     #[derive(Debug, Clone)]
     pub struct Import {
         pub text: String,
-        pub location: Location,
+        pub meta: Location,
     }
 
-    impl<S: state::State<Location = Location>> Element<S> for Import {
-        fn location(&self) -> &Location {
-            &self.location
+    impl<S: state::State<Meta = Location>> Element<S> for Import {
+        fn meta(&self) -> &Location {
+            &self.meta
         }
     }
 }
@@ -133,25 +133,25 @@ pub mod resolved {
     #[derive(Default, Debug, Clone, Hash)]
     pub struct Definition<S: state::State> {
         pub text: String,
-        pub location: S::Location,
+        pub meta: S::Meta,
     }
 
     impl<S: state::State> Definition<S>
     where
-        S::Location: Default,
+        S::Meta: Default,
     {
         /// Creates a new instance of [`Definition`].
         pub fn new(text: String) -> Self {
             Self {
                 text,
-                location: S::Location::default(),
+                meta: S::Meta::default(),
             }
         }
     }
 
     impl<S: state::State> Element<S> for Definition<S> {
-        fn location(&self) -> &S::Location {
-            &self.location
+        fn meta(&self) -> &S::Meta {
+            &self.meta
         }
     }
 
@@ -159,12 +159,12 @@ pub mod resolved {
     #[derive(Debug, Clone)]
     pub struct Reference {
         pub definition: Rc<Definition<state::Resolved>>,
-        pub location: Location,
+        pub meta: Location,
     }
 
-    impl<S: state::State<Location = Location>> Element<S> for Reference {
-        fn location(&self) -> &Location {
-            &self.location
+    impl<S: state::State<Meta = Location>> Element<S> for Reference {
+        fn meta(&self) -> &Location {
+            &self.meta
         }
     }
 }
@@ -189,8 +189,8 @@ pub mod quoted {
         InsertedMeta(MetaVar, im_rc::Vector<BD>),
     }
 
-    impl<S: state::State<Location = ()>> Element<S> for Reference {
-        fn location(&self) -> &S::Location {
+    impl<S: state::State<Meta = ()>> Element<S> for Reference {
+        fn meta(&self) -> &S::Meta {
             &()
         }
     }
@@ -222,8 +222,8 @@ pub mod quoted {
         }
     }
 
-    impl<S: state::State<Location = ()>> Element<S> for Lvl {
-        fn location(&self) -> &S::Location {
+    impl<S: state::State<Meta = ()>> Element<S> for Lvl {
+        fn meta(&self) -> &S::Meta {
             &()
         }
     }
@@ -246,8 +246,8 @@ pub mod quoted {
         }
     }
 
-    impl<S: state::State<Location = ()>> Element<S> for Ix {
-        fn location(&self) -> &S::Location {
+    impl<S: state::State<Meta = ()>> Element<S> for Ix {
+        fn meta(&self) -> &S::Meta {
             &()
         }
     }
@@ -285,7 +285,7 @@ impl From<Location> for miette::SourceSpan {
 
 /// An element. It can be a declaration, or a term.
 pub trait Element<S: state::State>: Debug + Clone {
-    fn location(&self) -> &S::Location;
+    fn meta(&self) -> &S::Meta;
 }
 
 /// Error node, it does contains an error.
@@ -298,7 +298,7 @@ pub struct Error<S: state::State> {
     pub full_text: String,
 
     /// The location of the error.
-    pub location: S::Location,
+    pub meta: S::Meta,
 }
 
 /// Represents a recovery from an error.
@@ -309,20 +309,20 @@ pub trait Recovery<S: state::State> {
 }
 
 impl<S: state::State> Element<S> for Error<S> {
-    fn location(&self) -> &S::Location {
-        &self.location
+    fn meta(&self) -> &S::Meta {
+        &self.meta
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct Identifier<S: state::State> {
     pub text: String,
-    pub location: S::Location,
+    pub meta: S::Meta,
 }
 
 impl<S: state::State> Element<S> for Identifier<S> {
-    fn location(&self) -> &S::Location {
-        &self.location
+    fn meta(&self) -> &S::Meta {
+        &self.meta
     }
 }
 
@@ -332,12 +332,12 @@ pub struct Str<S: state::State> {
     pub value: String,
 
     /// The location of the source in the source code.
-    pub location: S::Location,
+    pub meta: S::Meta,
 }
 
 impl<S: state::State> Element<S> for Str<S> {
-    fn location(&self) -> &S::Location {
-        &self.location
+    fn meta(&self) -> &S::Meta {
+        &self.meta
     }
 }
 
@@ -348,12 +348,12 @@ pub struct Int<S: state::State> {
     pub value: isize,
 
     /// The location of the integer in the source code.
-    pub location: S::Location,
+    pub meta: S::Meta,
 }
 
 impl<S: state::State> Element<S> for Int<S> {
-    fn location(&self) -> &S::Location {
-        &self.location
+    fn meta(&self) -> &S::Meta {
+        &self.meta
     }
 }
 
@@ -364,12 +364,12 @@ impl<S: state::State> Element<S> for Int<S> {
 pub struct Pattern<S: state::State> {
     pub definition: S::Reference,
     pub arguments: Vec<S::Definition>,
-    pub location: S::Location,
+    pub meta: S::Meta,
 }
 
 impl<S: state::State> Element<S> for Pattern<S> {
-    fn location(&self) -> &S::Location {
-        &self.location
+    fn meta(&self) -> &S::Meta {
+        &self.meta
     }
 }
 
@@ -378,12 +378,12 @@ impl<S: state::State> Element<S> for Pattern<S> {
 pub struct Case<S: state::State> {
     pub patterns: Vec<Pattern<S>>,
     pub value: Box<Term<S>>,
-    pub location: S::Location,
+    pub meta: S::Meta,
 }
 
 impl<S: state::State> Element<S> for Case<S> {
-    fn location(&self) -> &S::Location {
-        &self.location
+    fn meta(&self) -> &S::Meta {
+        &self.meta
     }
 }
 
@@ -393,12 +393,12 @@ impl<S: state::State> Element<S> for Case<S> {
 #[derive(Debug, Clone)]
 pub struct Elim<S: state::State> {
     pub patterns: Vec<Pattern<S>>,
-    pub location: S::Location,
+    pub meta: S::Meta,
 }
 
 impl<S: state::State> Element<S> for Elim<S> {
-    fn location(&self) -> &S::Location {
-        &self.location
+    fn meta(&self) -> &S::Meta {
+        &self.meta
     }
 }
 
@@ -413,12 +413,12 @@ impl<S: state::State> Element<S> for Elim<S> {
 pub struct Apply<S: state::State> {
     pub callee: Box<Term<S>>,
     pub arguments: S::Arguments,
-    pub location: S::Location,
+    pub meta: S::Meta,
 }
 
 impl<S: state::State> Element<S> for Apply<S> {
-    fn location(&self) -> &S::Location {
-        &self.location
+    fn meta(&self) -> &S::Meta {
+        &self.meta
     }
 }
 
@@ -435,12 +435,12 @@ impl<S: state::State> Element<S> for Apply<S> {
 pub struct Fun<S: state::State> {
     pub arguments: S::Parameters,
     pub value: Box<Term<S>>,
-    pub location: S::Location,
+    pub meta: S::Meta,
 }
 
 impl<S: state::State> Element<S> for Fun<S> {
-    fn location(&self) -> &S::Location {
-        &self.location
+    fn meta(&self) -> &S::Meta {
+        &self.meta
     }
 }
 
@@ -464,7 +464,7 @@ pub enum Term<S: state::State> {
 
 impl<S: state::State> Default for Term<S>
 where
-    S::Location: Default,
+    S::Meta: Default,
 {
     fn default() -> Self {
         Self::Hole(Hole::default())
@@ -507,19 +507,19 @@ impl<S: state::State> Recovery<S> for Term<S> {
 }
 
 impl<S: state::State> Element<S> for Term<S> {
-    fn location(&self) -> &S::Location {
+    fn meta(&self) -> &S::Meta {
         match self {
-            Term::Error(error) => error.location(),
-            Term::Universe(universe) => universe.location(),
-            Term::Int(int) => int.location(),
-            Term::Str(str) => str.location(),
-            Term::Elim(elim) => elim.location(),
-            Term::Group(group) => group.location(),
-            Term::Fun(fun) => fun.location(),
-            Term::Apply(apply) => apply.location(),
-            Term::Pi(pi) => pi.location(),
-            Term::Hole(hole) => hole.location(),
-            Term::Reference(atom) => atom.location(),
+            Term::Error(error) => error.meta(),
+            Term::Universe(universe) => universe.meta(),
+            Term::Int(int) => int.meta(),
+            Term::Str(str) => str.meta(),
+            Term::Elim(elim) => elim.meta(),
+            Term::Group(group) => group.meta(),
+            Term::Fun(fun) => fun.meta(),
+            Term::Apply(apply) => apply.meta(),
+            Term::Pi(pi) => pi.meta(),
+            Term::Hole(hole) => hole.meta(),
+            Term::Reference(atom) => atom.meta(),
         }
     }
 }

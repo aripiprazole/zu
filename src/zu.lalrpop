@@ -13,7 +13,7 @@ pub File: crate::ast::File<state::Syntax> = {
     // idiomatic.
     name: name.unwrap_or_else(|| filename.to_string().replace(".zu", "")),
     stmts,
-    location: crate::ast::Location::new(s, e, filename),
+    meta: crate::ast::Location::new(s, e, filename),
   },
 }
 
@@ -31,20 +31,20 @@ pub Stmt: crate::ast::Stmt<state::Syntax> = {
   // Parses `@eval` command, which evaluates a term and prints the result.
   <s: @L> "@eval" <value:Term> "." <e: @R> => crate::ast::Stmt::Eval(crate::ast::Eval {
     value,
-    location: crate::ast::Location::new(s, e, filename),
+    meta: crate::ast::Location::new(s, e, filename),
   }),
 
   // Parses `@type` command, which types a term and prints the result.
   <s: @L> "@type" <value:Term> "." <e: @R> => crate::ast::Stmt::Type(crate::ast::Type {
     value,
-    location: crate::ast::Location::new(s, e, filename),
+    meta: crate::ast::Location::new(s, e, filename),
   }),
 
   // Parses `@import` command, which set to the resolver to import to the
   // current file.
   <s: @L> "import" <import:Reference> "." <e: @R> => crate::ast::Stmt::Import(crate::ast::syntax::Import {
     text: import.text,
-    location: crate::ast::Location::new(s, e, filename),
+    meta: crate::ast::Location::new(s, e, filename),
   }),
 
   // Parses a simple signature binding, which haves a type, value and a name.
@@ -56,12 +56,12 @@ pub Stmt: crate::ast::Stmt<state::Syntax> = {
     type_repr: match type_repr {
       Some(type_repr) => type_repr.into(),
       None => crate::ast::Term::Hole(crate::ast::Hole {
-        location: crate::ast::Location::clone(<crate::ast::syntax::Reference as crate::ast::Element<state::Syntax>>::location(&name)),
+        meta: crate::ast::Location::clone(<crate::ast::syntax::Reference as crate::ast::Element<state::Syntax>>::meta(&name)),
       }),
     },
     name,
     value: value.into(),
-    location: crate::ast::Location::new(s, e, filename),
+    meta: crate::ast::Location::new(s, e, filename),
   }),
 }
 
@@ -76,17 +76,17 @@ pub TypeRepr: crate::ast::Term<state::Syntax> = {
 pub Primary: crate::ast::Term<state::Syntax> = {
   "(" <Term> ")" => crate::ast::Term::Group(<>.into()),
   <r:Reference> => match r.text {
-    _ if r.text == "_" => crate::ast::Term::Hole(crate::ast::Hole { location: r.location.clone() }),
-    _ if r.text == "Type" => crate::ast::Term::Universe(crate::ast::Universe { location: r.location.clone() }),
+    _ if r.text == "_" => crate::ast::Term::Hole(crate::ast::Hole { meta: r.meta.clone() }),
+    _ if r.text == "Type" => crate::ast::Term::Universe(crate::ast::Universe { meta: r.meta.clone() }),
     _ => crate::ast::Term::Reference(r),
   },
   <s: @L> <value:String> <e: @R> => crate::ast::Term::Str(crate::ast::Str {
     value,
-    location: crate::ast::Location::new(s, e, filename),
+    meta: crate::ast::Location::new(s, e, filename),
   }),
   <s: @L> <value:Int> <e: @R> => crate::ast::Term::Int(crate::ast::Int {
     value,
-    location: crate::ast::Location::new(s, e, filename),
+    meta: crate::ast::Location::new(s, e, filename),
   }),
 
   // Error handling for the parser, this is used to report errors when the
@@ -97,7 +97,7 @@ pub Primary: crate::ast::Term<state::Syntax> = {
     crate::ast::Term::Error(crate::ast::Error {
       message: "failed to parse term".to_string(),
       full_text: (&input[s..e]).to_string(),
-      location: crate::ast::Location::new(s, e, filename),
+      meta: crate::ast::Location::new(s, e, filename),
     })
   },
 }
@@ -113,7 +113,7 @@ pub Apply: crate::ast::Term<state::Syntax> = {
     _ => crate::ast::Term::Apply(crate::ast::Apply {
       callee: Box::new(callee),
       arguments: vec![argument],
-      location: crate::ast::Location::new(s, e, filename),
+      meta: crate::ast::Location::new(s, e, filename),
     }),
   },
 }
@@ -122,7 +122,7 @@ pub Apply: crate::ast::Term<state::Syntax> = {
 /// and a value.
 pub Pi: crate::ast::Pi<state::Syntax> = {
   <s: @L> <domain:Domain> "->" <value:Arrow> <e: @R> => crate::ast::Pi {
-    location: crate::ast::Location::new(s, e, filename),
+    meta: crate::ast::Location::new(s, e, filename),
     icit: crate::ast::Icit::Expl,
     codomain: value.into(),
     domain,
@@ -141,7 +141,7 @@ pub Fun: crate::ast::Term<state::Syntax> = {
   <s: @L> "\\" <arguments:Sep<",", Reference>> "->" <value:Term> <e: @R> => crate::ast::Term::Fun(crate::ast::Fun {
     arguments,
     value: value.into(),
-    location: crate::ast::Location::new(s, e, filename),
+    meta: crate::ast::Location::new(s, e, filename),
   })
 }
 
@@ -151,7 +151,7 @@ pub Domain: crate::ast::Domain<state::Syntax> = {
   /// the type and neither the name.
   <term:Call> => crate::ast::Domain {
     text: vec![None],
-    location: term.location().clone(),
+    meta: term.meta().clone(),
     type_repr: term.into(),
     icit: crate::ast::Icit::Expl,
   },
@@ -162,7 +162,7 @@ pub Domain: crate::ast::Domain<state::Syntax> = {
     text: names.into_iter().map(Some).collect(),
     type_repr: value.into(),
     icit: crate::ast::Icit::Expl,
-    location: crate::ast::Location::new(s, e, filename),
+    meta: crate::ast::Location::new(s, e, filename),
   },
   
   // Parses explicit arguments, which you don't need to specify
@@ -171,7 +171,7 @@ pub Domain: crate::ast::Domain<state::Syntax> = {
     text: names.into_iter().map(Some).collect(),
     type_repr: value.into(),
     icit: crate::ast::Icit::Impl,
-    location: crate::ast::Location::new(s, e, filename),
+    meta: crate::ast::Location::new(s, e, filename),
   },
 }
 
@@ -194,7 +194,7 @@ pub Term: crate::ast::Term<state::Syntax> = {
 pub DocString: crate::ast::DocString<state::Syntax> = <s: @L> <text:r"--.*\n"> <e: @R> => crate::ast::DocString {
   text: (&text[2..]).to_string(),
   full_text: text.to_string(),
-  location: crate::ast::Location::new(s, e, filename),
+  meta: crate::ast::Location::new(s, e, filename),
 };
 
 Int: isize = <s:r"[0123456789]+"> => isize::from_str(s).unwrap();
@@ -210,7 +210,7 @@ Text: std::string::String = {
 Reference: crate::ast::syntax::Reference = {
   <s: @L> <text:Text> <e: @R> => crate::ast::syntax::Reference {
     text: text.to_string(),
-    location: crate::ast::Location::new(s, e, filename),
+    meta: crate::ast::Location::new(s, e, filename),
   }
 };
 

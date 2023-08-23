@@ -191,7 +191,7 @@ impl Resolver {
         File {
             name: file.name,
             stmts,
-            location: file.location,
+            meta: file.meta,
         }
     }
 
@@ -207,7 +207,7 @@ impl Resolver {
         scope.all_possible_names.insert(
             name.text.clone(),
             Rc::new(Definition {
-                location: name.location.clone(),
+                meta: name.meta.clone(),
                 text: declaration.name().text.clone(),
             }),
         );
@@ -220,16 +220,16 @@ impl Resolver {
             Stmt::Error(error) => Stmt::Error(Error { ..error }),
             Stmt::Eval(stmt) => Stmt::Eval(Eval {
                 value: self.term(stmt.value),
-                location: stmt.location,
+                meta: stmt.meta,
             }),
             Stmt::Type(stmt) => Stmt::Type(Type {
                 value: self.term(stmt.value),
-                location: stmt.location,
+                meta: stmt.meta,
             }),
             Stmt::Binding(stmt) => {
                 let name = stmt.name.text.clone();
                 let definition = Rc::new(Definition {
-                    location: stmt.location.clone(),
+                    meta: stmt.meta.clone(),
                     text: stmt.name.text.clone(),
                 });
 
@@ -255,7 +255,7 @@ impl Resolver {
                     doc_strings,
                     attributes,
                     name: definition,
-                    location: stmt.location,
+                    meta: stmt.meta,
                     type_repr: self.term(stmt.type_repr),
                     value: self.term(stmt.value),
                 })
@@ -265,10 +265,10 @@ impl Resolver {
                     let error = InnerError::Import(UnresolvedImport {
                         module: import.text.clone(),
                         source_code: NamedSource::new(
-                            &import.location.filename,
-                            self.files.get(&import.location.filename).unwrap().clone(),
+                            &import.meta.filename,
+                            self.files.get(&import.meta.filename).unwrap().clone(),
                         ),
-                        span: import.location.clone().into(),
+                        span: import.meta.clone().into(),
                     });
                     self.errors.push(error);
 
@@ -301,7 +301,7 @@ impl Resolver {
                     .into_iter()
                     .map(|parameter| {
                         let definition = Rc::new(Definition {
-                            location: parameter.location.clone(),
+                            meta: parameter.meta.clone(),
                             text: parameter.text.clone(),
                         });
 
@@ -317,7 +317,7 @@ impl Resolver {
                 Term::Fun(Fun {
                     arguments,
                     value: local.term(*fun.value).into(),
-                    location: fun.location,
+                    meta: fun.meta,
                 })
             }),
             Term::Apply(apply) => {
@@ -329,7 +329,7 @@ impl Resolver {
                         .into_iter()
                         .map(|argument| self.term(argument))
                         .collect(),
-                    location: apply.location,
+                    meta: apply.meta,
                 })
             }
             Term::Reference(reference) => self
@@ -339,13 +339,13 @@ impl Resolver {
                     // of the reference.
                     Term::Reference(Reference {
                         definition,
-                        location: reference.location.clone(),
+                        meta: reference.meta.clone(),
                     })
                 })
                 .unwrap_or_else(|| {
                     // If can't find the definition, it will fallback to a hole.
                     Term::Hole(Hole {
-                        location: reference.location,
+                        meta: reference.meta,
                     })
                 }),
             Term::Pi(pi) => {
@@ -364,7 +364,7 @@ impl Resolver {
                             icit: next.icit,
                             domain: next,
                             codomain: acc.into(),
-                            location: pi.location.clone(),
+                            meta: pi.meta.clone(),
                         })
                     })
                 })
@@ -386,12 +386,12 @@ impl Resolver {
             // Tries to get the location of the reference, if it's not
             // possible, it will fallback to the location of the domain.
             let location = match reference {
-                Some(ref name) => name.location.clone(),
-                None => domain.location.clone(),
+                Some(ref name) => name.meta.clone(),
+                None => domain.meta.clone(),
             };
 
             let definition = Rc::new(Definition {
-                location: location.clone(),
+                meta: location.clone(),
                 text: match reference {
                     Some(name) => name.text,
                     None => "_".into(),
@@ -405,7 +405,7 @@ impl Resolver {
             // Adds the definition to the scope.
             parameters.push(Domain {
                 text: definition,
-                location,
+                meta: location,
                 type_repr: type_repr.clone().into(),
                 icit: domain.icit,
             });
@@ -445,9 +445,9 @@ impl Resolver {
         self.errors
             .push(InnerError::LaterDefinition(LaterUnresolvedDefinition {
                 module: reference.text.clone(),
-                source_code: self.get_source_code(&reference.location),
-                span: reference.location.clone().into(),
-                declaration_span: definition.location.clone().into(),
+                source_code: self.get_source_code(&reference.meta),
+                span: reference.meta.clone().into(),
+                declaration_span: definition.meta.clone().into(),
             }))
     }
 
@@ -456,8 +456,8 @@ impl Resolver {
         self.errors
             .push(InnerError::Definition(UnresolvedDefinition {
                 module: reference.text.clone(),
-                source_code: self.get_source_code(&reference.location),
-                span: reference.location.clone().into(),
+                source_code: self.get_source_code(&reference.meta),
+                span: reference.meta.clone().into(),
             }))
     }
 

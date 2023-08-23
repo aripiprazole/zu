@@ -10,12 +10,12 @@ use super::*;
 #[derive(Debug, Clone)]
 pub struct Type<S: state::State> {
     pub value: Term<S>,
-    pub location: S::Location,
+    pub meta: S::Meta,
 }
 
 impl<S: state::State> Element<S> for Type<S> {
-    fn location(&self) -> &S::Location {
-        &self.location
+    fn meta(&self) -> &S::Meta {
+        &self.meta
     }
 }
 
@@ -29,12 +29,12 @@ impl<S: state::State> Element<S> for Type<S> {
 #[derive(Debug, Clone)]
 pub struct Eval<S: state::State> {
     pub value: Term<S>,
-    pub location: S::Location,
+    pub meta: S::Meta,
 }
 
 impl<S: state::State> Element<S> for Eval<S> {
-    fn location(&self) -> &S::Location {
-        &self.location
+    fn meta(&self) -> &S::Meta {
+        &self.meta
     }
 }
 
@@ -58,7 +58,7 @@ pub enum Stmt<S: state::State> {
     Type(Type<S>),
 
     /// Imports a name temporally until it's
-    /// propertly resolved
+    /// propertly resolved.
     Import(S::Import),
 }
 
@@ -92,14 +92,14 @@ impl<S: state::State> Recovery<S> for Stmt<S> {
 }
 
 impl<S: state::State> Element<S> for Stmt<S> {
-    fn location(&self) -> &S::Location {
+    fn meta(&self) -> &S::Meta {
         match self {
-            Stmt::Error(error) => &error.location,
-            Stmt::Inductive(inductive) => &inductive.location,
-            Stmt::Binding(binding) => &binding.location,
-            Stmt::Eval(downgrade) => &downgrade.location,
-            Stmt::Type(downgrade) => &downgrade.location,
-            Stmt::Import(downgrade) => downgrade.location(),
+            Stmt::Error(error) => &error.meta,
+            Stmt::Inductive(inductive) => &inductive.meta,
+            Stmt::Binding(binding) => &binding.meta,
+            Stmt::Eval(downgrade) => &downgrade.meta,
+            Stmt::Type(downgrade) => &downgrade.meta,
+            Stmt::Import(downgrade) => downgrade.meta(),
         }
     }
 }

@@ -4,12 +4,12 @@ use super::*;
 #[derive(Default, Debug, Clone)]
 pub struct Universe<S: state::State> {
     /// The location of the integer in the source code.
-    pub location: S::Location,
+    pub meta: S::Meta,
 }
 
 impl<S: state::State> Element<S> for Universe<S> {
-    fn location(&self) -> &S::Location {
-        &self.location
+    fn meta(&self) -> &S::Meta {
+        &self.meta
     }
 }
 
@@ -17,12 +17,12 @@ impl<S: state::State> Element<S> for Universe<S> {
 #[derive(Default, Debug, Clone)]
 pub struct Hole<S: state::State> {
     /// The location of the integer in the source code.
-    pub location: S::Location,
+    pub meta: S::Meta,
 }
 
 impl<S: state::State> Element<S> for Hole<S> {
-    fn location(&self) -> &S::Location {
-        &self.location
+    fn meta(&self) -> &S::Meta {
+        &self.meta
     }
 }
 
@@ -42,12 +42,12 @@ pub struct Domain<S: state::State> {
     pub icit: Icit,
 
     /// The location of the variable in the source code.
-    pub location: S::Location,
+    pub meta: S::Meta,
 }
 
 impl<S: state::State> Element<S> for Domain<S> {
-    fn location(&self) -> &S::Location {
-        &self.location
+    fn meta(&self) -> &S::Meta {
+        &self.meta
     }
 }
 
@@ -64,25 +64,25 @@ pub enum Icit {
 ///
 /// ## Examples
 ///
-/// For example, the pi type `\pi (x : A) -> B`, where `x` is the name, `A` is the
+/// For example, the pi type `x : A -> B`, where `x` is the name, `A` is the
 /// domain, and `B` is the codomain.
 ///
 /// The pi type can be an arrow type too, like `A -> B`
 ///
 /// ## Implicit pi types
 ///
-/// Pi types can be implicit too, like `{%x : A} -> B`, where `x` is the name,
+/// Pi types can be implicit too, like `{x : A} -> B`, where `x` is the name,
 /// `A` is the domain, and `B` is the codomain.
 #[derive(Debug, Clone)]
 pub struct Pi<S: state::State> {
     pub icit: Icit,
     pub domain: Domain<S>,
     pub codomain: Box<Term<S>>,
-    pub location: S::Location,
+    pub meta: S::Meta,
 }
 
 impl<S: state::State> Element<S> for Pi<S> {
-    fn location(&self) -> &S::Location {
-        &self.location
+    fn meta(&self) -> &S::Meta {
+        &self.meta
     }
 }
