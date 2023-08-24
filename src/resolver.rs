@@ -4,10 +4,10 @@ use fxhash::FxBuildHasher;
 use miette::{Context, IntoDiagnostic, NamedSource, SourceSpan};
 
 use crate::ast::{
-    resolved::{Definition, Reference},
+    resolved::Reference,
     state::{self, Resolved},
-    syntax, Apply, Attribute, Binding, DocString, Domain, Error, Eval, File, Fun, Hole, Int,
-    Location, Pi, Stmt, Str, Term, Type, Universe,
+    syntax, Apply, Attribute, Binding, Definition, DocString, Domain, Error, Eval, File, Fun, Hole,
+    Int, Location, Pi, Stmt, Str, Term, Type, Universe,
 };
 
 type FileMap = HashMap<String, String>;

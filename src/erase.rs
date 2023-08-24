@@ -1,6 +1,6 @@
 use crate::ast::{
-    quoted::Ix, resolved::Definition, Apply, Case, Elim, Error, Fun, Int, Pattern, Str, Term,
-    Universe, Hole, Pi, Domain,
+    quoted::Ix, Apply, Case, Definition, Domain, Elim, Error, Fun, Hole, Int, Pattern, Pi, Str,
+    Term, Universe,
 };
 
 impl Pattern<crate::ast::state::Resolved> {

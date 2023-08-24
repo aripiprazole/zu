@@ -4,9 +4,8 @@ use intmap::IntMap;
 
 use crate::ast::{
     quoted::{Ix, Lvl, MetaVar, Reference, BD},
-    resolved::Definition,
     state::Resolved,
-    Apply, Domain, Fun, Icit, Int, Pi, Str, Universe,
+    Apply, Definition, Domain, Fun, Icit, Int, Pi, Str, Universe,
 };
 
 #[derive(Debug, Clone)]

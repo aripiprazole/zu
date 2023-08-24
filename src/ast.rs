@@ -51,7 +51,7 @@ pub mod state {
         type NameSet = Self::Definition;
         type Arguments = Vec<Term<Resolved>>;
         type Parameters = Self::Definition;
-        type Definition = Rc<resolved::Definition<Resolved>>;
+        type Definition = Rc<Definition<Resolved>>;
         type Reference = resolved::Reference;
         type Meta = Location;
         type Import = !;
@@ -65,7 +65,7 @@ pub mod state {
         type NameSet = Self::Definition;
         type Arguments = Vec<Term<Resolved>>;
         type Parameters = Self::Definition;
-        type Definition = Rc<resolved::Definition<Typed>>;
+        type Definition = Rc<Definition<Typed>>;
         type Reference = typed::Reference;
         type Meta = typed::TypedMeta;
         type Import = !;
@@ -79,7 +79,7 @@ pub mod state {
         type NameSet = Self::Definition;
         type Parameters = Self::Definition;
         type Arguments = Box<Term<Self>>;
-        type Definition = resolved::Definition<Quoted>;
+        type Definition = Definition<Quoted>;
         type Reference = quoted::Reference;
         type Import = !;
         type Meta = ();
@@ -139,35 +139,7 @@ pub mod syntax {
 
 /// Resolved state, it's the state of the syntax tree when it's resolved.
 pub mod resolved {
-    use std::rc::Rc;
-
     use super::*;
-
-    /// A definition. It has a text, and a location.
-    #[derive(Default, Debug, Clone, Hash)]
-    pub struct Definition<S: state::State> {
-        pub text: String,
-        pub meta: S::Meta,
-    }
-
-    impl<S: state::State> Definition<S>
-    where
-        S::Meta: Default,
-    {
-        /// Creates a new instance of [`Definition`].
-        pub fn new(text: String) -> Self {
-            Self {
-                text,
-                meta: S::Meta::default(),
-            }
-        }
-    }
-
-    impl<S: state::State> Element<S> for Definition<S> {
-        fn meta(&self) -> &S::Meta {
-            &self.meta
-        }
-    }
 
     /// A name access.
     #[derive(Debug, Clone)]
@@ -269,7 +241,7 @@ pub mod quoted {
 
 /// Typed state, it's the state of the syntax tree when it's typed.
 pub mod typed {
-    use super::{*, resolved::Definition};
+    use super::*;
 
     /// A type info. It contains if the type is an enum or a struct, or maybe
     /// a function type.
@@ -295,6 +267,32 @@ pub mod typed {
         fn meta(&self) -> &TypedMeta {
             &self.meta
         }
+    }
+}
+
+/// A definition. It has a text, and a location.
+#[derive(Default, Debug, Clone, Hash)]
+pub struct Definition<S: state::State> {
+    pub text: String,
+    pub meta: S::Meta,
+}
+
+impl<S: state::State> Definition<S>
+where
+    S::Meta: Default,
+{
+    /// Creates a new instance of [`Definition`].
+    pub fn new(text: String) -> Self {
+        Self {
+            text,
+            meta: S::Meta::default(),
+        }
+    }
+}
+
+impl<S: state::State> Element<S> for Definition<S> {
+    fn meta(&self) -> &S::Meta {
+        &self.meta
     }
 }
 
