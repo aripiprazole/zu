@@ -1,16 +1,19 @@
-use crate::{ast::{
-    state::State, Apply, Case, Definition, Domain, Elim, Error, Fun, Hole, Int, Pattern, Pi, Str,
-    Term, Universe, Element,
-}, pass::resolver::Resolved};
+use crate::{
+    ast::{
+        state::State, Apply, Case, Definition, Domain, Element, Elim, Error, Fun, Hole, Int,
+        Pattern, Pi, Str, Term, Universe,
+    },
+    pass::resolver::Resolved,
+};
 
 /// Represents the resolved state, it's the state of the syntax tree when it's resolved.
 #[derive(Default, Debug, Clone)]
-pub struct Quoted;
+pub struct Erased;
 
-impl State for Quoted {
+impl State for Erased {
     type Parameters = Self::Definition;
     type Arguments = Box<Term<Self>>;
-    type Definition = Definition<Quoted>;
+    type Definition = Definition<Erased>;
     type Reference = Reference;
     type Import = !;
     type Meta = ();
@@ -97,7 +100,7 @@ impl<S: State<Meta = ()>> Element<S> for Ix {
 
 impl Pattern<Resolved> {
     /// Erase a term to a term in the untyped lambda calculus.
-    pub fn erase(self) -> crate::ast::Pattern<Quoted> {
+    pub fn erase(self) -> crate::ast::Pattern<Erased> {
         Pattern {
             meta: (),
             constructor: Reference::Var(Ix(0)),
@@ -112,7 +115,7 @@ impl Pattern<Resolved> {
 
 impl Term<Resolved> {
     /// Erase a term to a term in the untyped lambda calculus.
-    pub fn erase(self) -> crate::ast::Term<Quoted> {
+    pub fn erase(self) -> crate::ast::Term<Erased> {
         match self {
             Term::Group(_) => unreachable!(),
             Term::Error(error) => Term::Error(Error { meta: (), ..error }),

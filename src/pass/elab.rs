@@ -6,7 +6,7 @@ use crate::ast::state::State;
 use crate::ast::{
     Apply, Definition, Domain, Element, Fun, Icit, Int, Location, Pi, Str, Term, Universe,
 };
-use crate::erase::{Ix, Lvl, MetaVar, Quoted, BD};
+use crate::erase::{Ix, Lvl, MetaVar, Erased, BD};
 
 use super::resolver::Resolved;
 
@@ -38,7 +38,7 @@ pub enum TypeInfo {}
 #[derive(Debug, Clone)]
 pub struct TypedMeta {
     pub type_info: TypeInfo,
-    pub type_term: Option<Term<Quoted>>,
+    pub type_term: Option<Term<Erased>>,
     pub type_value: crate::pass::elab::Value,
     pub location: Location,
 }
@@ -172,7 +172,7 @@ pub trait Quote {
 /// The quoted version of [`Value`], but without locations, and closures
 ///
 /// It's used to debug and build values.
-pub type Expr = crate::ast::Term<Quoted>;
+pub type Expr = crate::ast::Term<Erased>;
 
 impl Quote for Value {
     fn quote(self, nth: Lvl) -> Expr {

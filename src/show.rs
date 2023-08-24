@@ -1,6 +1,6 @@
 use crate::{
     ast::Term,
-    erase::{Lvl, Quoted},
+    erase::{Lvl, Erased},
     pass::elab::Value,
 };
 
@@ -10,7 +10,7 @@ use crate::{
 pub struct Show {
     pub level: Lvl,
     pub names: Vec<String>,
-    pub term: Term<Quoted>,
+    pub term: Term<Erased>,
 }
 
 impl Value {
