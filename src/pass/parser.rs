@@ -6,9 +6,9 @@ pub use crate::zu::*;
 
 /// Represents the parsed state, it's the state of the syntax tree when it's just parsed.
 #[derive(Default, Debug, Clone)]
-pub struct Syntax;
+pub struct Parsed;
 
-impl State for Syntax {
+impl State for Parsed {
     type NameSet = Vec<Option<Self::Definition>>;
     type Arguments = Vec<crate::ast::Term<Self>>;
     type Parameters = Vec<Self::Definition>;
@@ -20,7 +20,7 @@ impl State for Syntax {
     type Group = Box<crate::ast::Term<Self>>;
 }
 
-impl crate::ast::Term<Syntax> {
+impl crate::ast::Term<Parsed> {
     /// Removes the group from the term. It's useful to pattern
     /// match agains't group.
     pub fn unwrap(self) -> Self {
@@ -61,7 +61,7 @@ impl<S: State<Meta = Location>> Element<S> for Import {
 }
 
 /// The parsed file type.
-type FileQt = crate::ast::File<Syntax>;
+type FileQt = crate::ast::File<Parsed>;
 
 #[derive(miette::Diagnostic, thiserror::Error, Debug)]
 #[error("could not parse due the following errors")]

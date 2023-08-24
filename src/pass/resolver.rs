@@ -9,7 +9,7 @@ use crate::ast::{
     Hole, Int, Location, Pi, Stmt, Str, Term, Type, Universe,
 };
 
-use super::parser::{parse_or_report, Syntax};
+use super::parser::{parse_or_report, Parsed};
 
 /// Represents the resolved state, it's the state of the syntax tree when it's resolved.
 #[derive(Default, Debug, Clone)]
@@ -115,11 +115,11 @@ pub struct UnresolvedImport {
 
 pub struct Resolver {
     pub files: FileMap,
-    pub inputs: im_rc::HashMap<String, crate::ast::File<Syntax>, FxBuildHasher>,
+    pub inputs: im_rc::HashMap<String, crate::ast::File<Parsed>, FxBuildHasher>,
     pub errors: Vec<InnerError>,
     pub scope: im_rc::HashMap<String, Rc<Definition<Resolved>>, FxBuildHasher>,
     pub file_scope: Scope,
-    pub main: crate::ast::File<Syntax>,
+    pub main: crate::ast::File<Parsed>,
 }
 
 /// Current file scope for the resolver.
@@ -142,7 +142,7 @@ pub struct Scope {
 /// Read file and parse it. Associating the file name with the file.
 ///
 /// It's useful for the resolver.
-fn read_file(path: String, files: &mut FileMap) -> miette::Result<File<Syntax>> {
+fn read_file(path: String, files: &mut FileMap) -> miette::Result<File<Parsed>> {
     let text = std::fs::read_to_string(&path)
         .into_diagnostic()
         .wrap_err_with(|| format!("can't read file `{}`", path))?;
@@ -192,7 +192,7 @@ impl Resolver {
     }
 
     // Iterates the statements of the file and collects the errors.
-    fn file(&mut self, file: File<Syntax>) -> File<Resolved> {
+    fn file(&mut self, file: File<Parsed>) -> File<Resolved> {
         log::info!("loading file `{}`", file.name);
 
         // Create a default scope for the file.
@@ -222,7 +222,7 @@ impl Resolver {
     }
 
     /// Defines a statement. It's useful to define the references.
-    fn define(&mut self, scope: &mut Scope, stmt: &Stmt<Syntax>) {
+    fn define(&mut self, scope: &mut Scope, stmt: &Stmt<Parsed>) {
         let Some(declaration) = stmt.as_declaration() else {
             return;
         };
@@ -240,7 +240,7 @@ impl Resolver {
     }
 
     /// Evaluates a statement, resolving the references.
-    fn resolve(&mut self, stmt: Stmt<Syntax>) -> Vec<Stmt<Resolved>> {
+    fn resolve(&mut self, stmt: Stmt<Parsed>) -> Vec<Stmt<Resolved>> {
         vec![match stmt {
             Stmt::Inductive(_) => todo!(),
             Stmt::Error(error) => Stmt::Error(Error { ..error }),
@@ -310,7 +310,7 @@ impl Resolver {
     /// Resolves a term. It's useful to resolve the references.
     ///
     /// It's the main function of the resolver.
-    fn term(&mut self, term: Term<Syntax>) -> Term<Resolved> {
+    fn term(&mut self, term: Term<Parsed>) -> Term<Resolved> {
         match term {
             Term::Elim(_) => todo!(),
             Term::Error(error) => Term::Error(Error { ..error }),
@@ -394,13 +394,13 @@ impl Resolver {
     }
 
     /// Resolves an attribute. It's useful to resolve the references.
-    fn attribute(&mut self, attribute: Attribute<Syntax>) -> Attribute<Resolved> {
+    fn attribute(&mut self, attribute: Attribute<Parsed>) -> Attribute<Resolved> {
         let _ = attribute;
         todo!()
     }
 
     // Transform a domain into one or more domains.
-    fn create_domain(&mut self, domain: Domain<Syntax>) -> Vec<Domain<Resolved>> {
+    fn create_domain(&mut self, domain: Domain<Parsed>) -> Vec<Domain<Resolved>> {
         let mut parameters = vec![];
         let type_repr = self.term(*domain.type_repr);
         for reference in domain.name {
