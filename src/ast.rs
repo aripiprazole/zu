@@ -13,28 +13,30 @@ pub struct File<S: state::State> {
 /// The ast GAT state. It's more likelly a Tree That Grow, with the
 /// rust features, but that's it.
 pub mod state {
-    use super::*;
+    /// Retro-compatibility, just for not having to change the existing source code using
+    /// the old state import of [`crate::ast::state`].
+    pub use super::State;
+}
 
-    /// Represents the syntax state, if it's resolved, or just parsed, it's useful for not
-    /// having to redeclare the same types.
-    pub trait State: Default + Debug + Clone {
-        // SECTION: Auxiliary
-        type Parameters: Debug + Clone = Self::Definition;
-        type Arguments: Debug + Clone = Vec<Term<Self>>;
-        type NameSet: Debug + Clone = Self::Definition;
+/// Represents the syntax state, if it's resolved, or just parsed, it's useful for not
+/// having to redeclare the same types.
+pub trait State: Default + Debug + Clone {
+    // SECTION: Auxiliary
+    type Parameters: Debug + Clone = Self::Definition;
+    type Arguments: Debug + Clone = Vec<Term<Self>>;
+    type NameSet: Debug + Clone = Self::Definition;
 
-        // SECTION: Elements
-        type Definition: Element<Self> = Rc<Definition<Self>>;
-        type Closure: Element<Self> = Fun<Self>;
-        type Reference: Element<Self>;
+    // SECTION: Elements
+    type Definition: Element<Self> = Rc<Definition<Self>>;
+    type Closure: Element<Self> = Fun<Self>;
+    type Reference: Element<Self>;
 
-        // SECTION: Syntax sugars
-        type Import: Element<Self> = !;
+    // SECTION: Syntax sugars
+    type Import: Element<Self> = !;
 
-        // SECTION: Meta location
-        /// The meta type, it's the type of the location of the syntax tree.
-        type Meta: Debug + Clone = Location;
-    }
+    // SECTION: Meta location
+    /// The meta type, it's the type of the location of the syntax tree.
+    type Meta: Debug + Clone = Location;
 }
 
 impl<S: state::State> Element<S> for ! {
