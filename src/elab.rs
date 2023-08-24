@@ -4,8 +4,8 @@ use intmap::IntMap;
 
 use crate::ast::{
     quoted::{Ix, Lvl, MetaVar, Reference, BD},
-    state::Resolved,
-    Apply, Definition, Domain, Fun, Icit, Int, Pi, Str, Universe,
+    state::{Resolved, Typed},
+    Apply, Definition, Domain, Fun, Icit, Int, Pi, Str, Universe, Term,
 };
 
 #[derive(Debug, Clone)]
@@ -86,6 +86,19 @@ pub struct Elab {
 }
 
 impl Elab {
+    /// Creates a new type elaborating it into a new
+    /// value.
+    pub fn elaborate(&self, term: Expr) -> Term<Typed> {
+        let _ = term;
+        todo!()
+    }
+
+    /// Checks a term against a type
+    pub fn check(&mut self, term: Term<Resolved>, type_repr: Value) -> Expr {
+        let _ = (term, type_repr);
+        todo!()
+    }
+
     /// Creates a new fresh meta variable
     pub fn fresh_meta(&self) -> Expr {
         // Add new meta variable

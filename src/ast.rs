@@ -27,6 +27,7 @@ pub mod state {
         type Import: Element<Self>;
         type Reference: Element<Self>;
         type Definition: Element<Self>;
+        type Closure: Element<Self>;
     }
 
     /// Represents the parsed state, it's the state of the syntax tree when it's just parsed.
@@ -39,6 +40,7 @@ pub mod state {
         type Parameters = Vec<Self::Definition>;
         type Definition = syntax::Reference;
         type Reference = syntax::Reference;
+        type Closure = Fun<Self>;
         type Import = syntax::Import;
         type Meta = Location;
     }
@@ -53,6 +55,7 @@ pub mod state {
         type Parameters = Self::Definition;
         type Definition = Rc<Definition<Resolved>>;
         type Reference = resolved::Reference;
+        type Closure = Fun<Self>;
         type Meta = Location;
         type Import = !;
     }
@@ -63,10 +66,26 @@ pub mod state {
 
     impl State for Typed {
         type NameSet = Self::Definition;
-        type Arguments = Vec<Term<Resolved>>;
+        type Arguments = Vec<Term<Typed>>;
         type Parameters = Self::Definition;
         type Definition = Rc<Definition<Typed>>;
         type Reference = typed::Reference;
+        type Closure = Fun<Self>;
+        type Meta = typed::TypedMeta;
+        type Import = !;
+    }
+
+    /// Represents the resolved state, it's the state of the syntax tree when it's resolved.
+    #[derive(Default, Debug, Clone)]
+    pub struct ClosureConv;
+
+    impl State for ClosureConv {
+        type NameSet = Self::Definition;
+        type Arguments = Vec<Term<ClosureConv>>;
+        type Parameters = Self::Definition;
+        type Definition = Rc<Definition<ClosureConv>>;
+        type Reference = typed::Reference;
+        type Closure = closure_conv::Closure;
         type Meta = typed::TypedMeta;
         type Import = !;
     }
@@ -81,6 +100,7 @@ pub mod state {
         type Arguments = Box<Term<Self>>;
         type Definition = Definition<Quoted>;
         type Reference = quoted::Reference;
+        type Closure = Fun<Self>;
         type Import = !;
         type Meta = ();
     }
@@ -286,6 +306,26 @@ where
         Self {
             text,
             meta: S::Meta::default(),
+        }
+    }
+}
+
+/// Closure conversion state, it's the state of the syntax tree when it's closure converted.
+pub mod closure_conv {
+    use super::{typed::TypedMeta, *};
+
+    /// A closure converted term, it's a term that has a closure
+    /// in it. It's useful for the compiler.
+    #[derive(Debug, Clone)]
+    pub struct Closure {
+        /// Global index for closures.
+        pub index: usize,
+        pub meta: TypedMeta,
+    }
+
+    impl<S: state::State<Meta = typed::TypedMeta>> Element<S> for Closure {
+        fn meta(&self) -> &S::Meta {
+            &self.meta
         }
     }
 }
@@ -498,7 +538,7 @@ pub enum Term<S: state::State> {
     Str(Str<S>),
     Group(Box<Term<S>>),
     Elim(Elim<S>),
-    Fun(Fun<S>),
+    Fun(S::Closure),
     Apply(Apply<S>),
     Pi(Pi<S>),
     Reference(S::Reference),

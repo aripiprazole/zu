@@ -293,7 +293,7 @@ impl Resolver {
             Term::Universe(universe) => Term::Universe(Universe { ..universe }),
             Term::Int(int) => Term::Int(Int { ..int }),
             Term::Str(str) => Term::Str(Str { ..str }),
-            Term::Group(group) => Term::Group(self.term(*group).into()),
+            Term::Group(group) => self.term(*group),
             Term::Hole(hole) => Term::Hole(Hole { ..hole }),
             Term::Fun(fun) => self.fork(|local| {
                 // Resolve the arguments of the function. It's useful to
