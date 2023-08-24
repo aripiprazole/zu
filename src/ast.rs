@@ -300,6 +300,32 @@ pub enum Term<S: state::State> {
 }
 
 /// Necessary due to this [issue here](https://github.com/rust-lang/rust/issues/39959).
+/// 
+/// The bounds would be generated like the following:
+/// ```rust,norun
+/// impl <S: state::State> Clone for Term<S> where
+///     S::Arguments: Clone,
+///     S::Reference: Clone,
+///     S::Parameters: Clone,
+///     S::Definition: Clone,
+///     S::Group: Clone,
+///     S::Meta: Clone,
+///     S::Closure: Clone,
+///     ...
+/// ```
+/// 
+/// And since we have a lot of bounds, it's better to just use the `Clone` trait
+/// directly. Because it would cause the compiler to crash over an infinite loop, just like
+/// when we have types like following:
+/// 
+/// ```rust,norun
+/// enum Ast {
+///     Const(isize),
+///     App(Ast, Ast)
+/// }
+/// ```
+/// 
+/// The compiler would try this, but on the GATs.
 impl<S: state::State> Clone for Term<S> {
     fn clone(&self) -> Self {
         match self {
