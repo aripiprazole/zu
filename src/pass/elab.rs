@@ -2,11 +2,54 @@ use std::{cell::RefCell, rc::Rc};
 
 use intmap::IntMap;
 
+use crate::ast::state::State;
 use crate::ast::{
-    quoted::{Ix, Lvl, MetaVar, Reference, BD},
-    state::{Resolved, Typed},
-    Apply, Definition, Domain, Fun, Icit, Int, Pi, Str, Universe, Term,
+    Apply, Definition, Domain, Element, Fun, Icit, Int, Location, Pi, Str, Term, Universe,
 };
+use crate::erase::{Ix, Lvl, MetaVar, Quoted, BD};
+
+use super::resolver::Resolved;
+
+/// Represents the resolved state, it's the state of the syntax tree when it's resolved.
+#[derive(Default, Debug, Clone)]
+pub struct Typed;
+
+impl State for Typed {
+    type NameSet = Self::Definition;
+    type Arguments = Vec<Term<Typed>>;
+    type Parameters = Self::Definition;
+    type Definition = Rc<crate::ast::Definition<Typed>>;
+    type Reference = Reference;
+    type Closure = crate::ast::Fun<Self>;
+    type Meta = TypedMeta;
+    type Import = !;
+}
+
+/// A type info. It contains if the type is an enum or a struct, or maybe
+/// a function type.
+#[derive(Debug, Clone)]
+pub enum TypeInfo {}
+
+#[derive(Debug, Clone)]
+pub struct TypedMeta {
+    pub type_info: TypeInfo,
+    pub type_term: Option<Term<Quoted>>,
+    pub type_value: crate::pass::elab::Value,
+    pub location: Location,
+}
+
+/// A name access.
+#[derive(Debug, Clone)]
+pub struct Reference {
+    pub definition: Rc<Definition<Resolved>>,
+    pub meta: TypedMeta,
+}
+
+impl<S: State<Meta = TypedMeta>> Element<S> for Reference {
+    fn meta(&self) -> &TypedMeta {
+        &self.meta
+    }
+}
 
 #[derive(Debug, Clone)]
 pub enum MetaEntry {
@@ -112,7 +155,7 @@ impl Elab {
 
         // Create the reference
         let bds = self.bds.clone();
-        Expr::Reference(Reference::InsertedMeta(meta, bds))
+        Expr::Reference(crate::erase::Reference::InsertedMeta(meta, bds))
     }
 }
 
@@ -124,7 +167,7 @@ pub trait Quote {
 /// The quoted version of [`Value`], but without locations, and closures
 ///
 /// It's used to debug and build values.
-pub type Expr = crate::ast::Term<crate::ast::state::Quoted>;
+pub type Expr = crate::ast::Term<Quoted>;
 
 impl Quote for Value {
     fn quote(self, nth: Lvl) -> Expr {
@@ -148,13 +191,17 @@ impl Quote for Value {
 
         match self {
             Value::Universe => Expr::Universe(Universe::default()),
-            Value::Meta(meta_var) => Expr::Reference(Reference::MetaVar(meta_var)),
-            Value::Flexible(meta, sp) => {
-                quote_sp(sp, Expr::Reference(Reference::MetaVar(meta)), nth)
-            }
-            Value::Rigid(lvl, sp) => {
-                quote_sp(sp, Expr::Reference(Reference::Var(lvl.into_ix(nth))), nth)
-            }
+            Value::Meta(meta_var) => Expr::Reference(crate::erase::Reference::MetaVar(meta_var)),
+            Value::Flexible(meta, sp) => quote_sp(
+                sp,
+                Expr::Reference(crate::erase::Reference::MetaVar(meta)),
+                nth,
+            ),
+            Value::Rigid(lvl, sp) => quote_sp(
+                sp,
+                Expr::Reference(crate::erase::Reference::Var(lvl.into_ix(nth))),
+                nth,
+            ),
             Value::Int(value) => Expr::Int(Int {
                 value,
                 meta: Default::default(),
@@ -232,9 +279,9 @@ impl Expr {
             Elim(_) => todo!("elim expr"),
             Fun(_) => todo!("fun expr"),
             Apply(e) => app(e.callee.eval(env.clone()), e.arguments.eval(env)),
-            Reference(self::Reference::Var(Ix(ix))) => env.data[ix].clone(), // TODO: HANDLE ERROR
-            Reference(self::Reference::MetaVar(meta)) => value_meta(env, meta),
-            Reference(self::Reference::InsertedMeta(meta, bds)) => {
+            Reference(crate::erase::Reference::Var(Ix(ix))) => env.data[ix].clone(), // TODO: HANDLE ERROR
+            Reference(crate::erase::Reference::MetaVar(meta)) => value_meta(env, meta),
+            Reference(crate::erase::Reference::InsertedMeta(meta, bds)) => {
                 app_bd(env.clone(), value_meta(env, meta), bds)
             }
             Pi(pi) => {

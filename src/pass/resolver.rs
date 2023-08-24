@@ -4,11 +4,40 @@ use fxhash::FxBuildHasher;
 use miette::{Context, IntoDiagnostic, NamedSource, SourceSpan};
 
 use crate::ast::{
-    resolved::Reference,
-    state::{self, Resolved},
-    syntax, Apply, Attribute, Binding, Definition, DocString, Domain, Error, Eval, File, Fun, Hole,
-    Int, Location, Pi, Stmt, Str, Term, Type, Universe,
+    state::{self, State},
+    Apply, Attribute, Binding, Definition, DocString, Domain, Element, Error, Eval, File, Fun,
+    Hole, Int, Location, Pi, Stmt, Str, Term, Type, Universe,
 };
+
+use super::parser::{parse_or_report, Syntax};
+
+/// Represents the resolved state, it's the state of the syntax tree when it's resolved.
+#[derive(Default, Debug, Clone)]
+pub struct Resolved;
+
+impl State for Resolved {
+    type NameSet = Self::Definition;
+    type Arguments = Vec<crate::ast::Term<Resolved>>;
+    type Parameters = Self::Definition;
+    type Definition = Rc<crate::ast::Definition<Resolved>>;
+    type Reference = Reference;
+    type Closure = crate::ast::Fun<Self>;
+    type Meta = Location;
+    type Import = !;
+}
+
+/// A name access.
+#[derive(Debug, Clone)]
+pub struct Reference {
+    pub definition: Rc<Definition<Resolved>>,
+    pub meta: Location,
+}
+
+impl<S: state::State<Meta = Location>> Element<S> for Reference {
+    fn meta(&self) -> &Location {
+        &self.meta
+    }
+}
 
 type FileMap = HashMap<String, String>;
 
@@ -91,11 +120,11 @@ pub struct UnresolvedImport {
 
 pub struct Resolver {
     pub files: FileMap,
-    pub inputs: im_rc::HashMap<String, crate::ast::File<state::Syntax>, FxBuildHasher>,
+    pub inputs: im_rc::HashMap<String, crate::ast::File<Syntax>, FxBuildHasher>,
     pub errors: Vec<InnerError>,
     pub scope: im_rc::HashMap<String, Rc<Definition<Resolved>>, FxBuildHasher>,
     pub file_scope: Scope,
-    pub main: crate::ast::File<state::Syntax>,
+    pub main: crate::ast::File<Syntax>,
 }
 
 /// Current file scope for the resolver.
@@ -118,14 +147,14 @@ pub struct Scope {
 /// Read file and parse it. Associating the file name with the file.
 ///
 /// It's useful for the resolver.
-fn read_file(path: String, files: &mut FileMap) -> miette::Result<File<state::Syntax>> {
+fn read_file(path: String, files: &mut FileMap) -> miette::Result<File<Syntax>> {
     let text = std::fs::read_to_string(&path)
         .into_diagnostic()
         .wrap_err_with(|| format!("can't read file `{}`", path))?;
 
     files.insert(path.clone(), text.clone()); // Insert for error handling
 
-    let ast = crate::parser::parse_or_report(&path, &text)?;
+    let ast = parse_or_report(&path, &text)?;
     Ok(ast)
 }
 
@@ -153,7 +182,7 @@ impl Resolver {
     }
 
     /// Resolves and imports the files.
-    pub fn resolve_and_import(mut self) -> miette::Result<File<state::Resolved>> {
+    pub fn resolve_and_import(mut self) -> miette::Result<File<Resolved>> {
         let file = std::mem::take(&mut self.main);
         let file = self.file(file);
 
@@ -168,7 +197,7 @@ impl Resolver {
     }
 
     // Iterates the statements of the file and collects the errors.
-    fn file(&mut self, file: File<state::Syntax>) -> File<state::Resolved> {
+    fn file(&mut self, file: File<Syntax>) -> File<Resolved> {
         log::info!("loading file `{}`", file.name);
 
         // Create a default scope for the file.
@@ -198,7 +227,7 @@ impl Resolver {
     }
 
     /// Defines a statement. It's useful to define the references.
-    fn define(&mut self, scope: &mut Scope, stmt: &Stmt<state::Syntax>) {
+    fn define(&mut self, scope: &mut Scope, stmt: &Stmt<Syntax>) {
         let Some(declaration) = stmt.as_declaration() else {
             return;
         };
@@ -216,7 +245,7 @@ impl Resolver {
     }
 
     /// Evaluates a statement, resolving the references.
-    fn resolve(&mut self, stmt: Stmt<state::Syntax>) -> Vec<Stmt<state::Resolved>> {
+    fn resolve(&mut self, stmt: Stmt<Syntax>) -> Vec<Stmt<Resolved>> {
         vec![match stmt {
             Stmt::Inductive(_) => todo!(),
             Stmt::Error(error) => Stmt::Error(Error { ..error }),
@@ -286,7 +315,7 @@ impl Resolver {
     /// Resolves a term. It's useful to resolve the references.
     ///
     /// It's the main function of the resolver.
-    fn term(&mut self, term: Term<state::Syntax>) -> Term<state::Resolved> {
+    fn term(&mut self, term: Term<Syntax>) -> Term<Resolved> {
         match term {
             Term::Elim(_) => todo!(),
             Term::Error(error) => Term::Error(Error { ..error }),
@@ -370,13 +399,13 @@ impl Resolver {
     }
 
     /// Resolves an attribute. It's useful to resolve the references.
-    fn attribute(&mut self, attribute: Attribute<state::Syntax>) -> Attribute<state::Resolved> {
+    fn attribute(&mut self, attribute: Attribute<Syntax>) -> Attribute<Resolved> {
         let _ = attribute;
         todo!()
     }
 
     // Transform a domain into one or more domains.
-    fn create_domain(&mut self, domain: Domain<state::Syntax>) -> Vec<Domain<state::Resolved>> {
+    fn create_domain(&mut self, domain: Domain<Syntax>) -> Vec<Domain<Resolved>> {
         let mut parameters = vec![];
         let type_repr = self.term(*domain.type_repr);
         for reference in domain.name {
@@ -413,7 +442,10 @@ impl Resolver {
 
     // Find a reference and returns the definition. If it cant be found,
     // it will report an error.
-    fn find_reference(&mut self, reference: syntax::Reference) -> Option<Rc<Definition<Resolved>>> {
+    fn find_reference(
+        &mut self,
+        reference: crate::pass::parser::Reference,
+    ) -> Option<Rc<Definition<Resolved>>> {
         match self.scope.get(&reference.text) {
             Some(value) => value.clone().into(),
             None => {
@@ -436,7 +468,7 @@ impl Resolver {
     /// Reports a possible definition for a reference.
     fn report_possible_definition(
         &mut self,
-        reference: &syntax::Reference,
+        reference: &crate::pass::parser::Reference,
         definition: Rc<Definition<Resolved>>,
     ) {
         self.errors
@@ -449,7 +481,7 @@ impl Resolver {
     }
 
     /// Reports an error for a reference.
-    fn report_unresolved(&mut self, reference: &syntax::Reference) {
+    fn report_unresolved(&mut self, reference: &crate::pass::parser::Reference) {
         self.errors
             .push(InnerError::Definition(UnresolvedDefinition {
                 module: reference.text.clone(),

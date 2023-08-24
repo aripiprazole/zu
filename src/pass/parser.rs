@@ -1,16 +1,54 @@
-use lalrpop_util::lalrpop_mod;
+use crate::ast::{Location, state::State, Element};
 
 use miette::{NamedSource, SourceSpan};
-pub use zu::*;
 
-lalrpop_mod! {
-    #[allow(warnings)]
-    /// The parsing module
-    pub zu
+pub use crate::zu::*;
+
+/// Represents the parsed state, it's the state of the syntax tree when it's just parsed.
+#[derive(Default, Debug, Clone)]
+pub struct Syntax;
+
+impl State for Syntax {
+    type NameSet = Vec<Option<Self::Definition>>;
+    type Arguments = Vec<crate::ast::Term<Self>>;
+    type Parameters = Vec<Self::Definition>;
+    type Definition = Reference;
+    type Reference = Reference;
+    type Closure = crate::ast::Fun<Self>;
+    type Import = Import;
+    type Meta = Location;
+}
+
+/// A name access.
+#[derive(Debug, Clone)]
+pub struct Reference {
+    pub text: String,
+    pub meta: Location,
+}
+
+impl<S: State<Meta = Location>> Element<S> for Reference {
+    fn meta(&self) -> &Location {
+        &self.meta
+    }
+}
+
+
+/// Imports a name temporally until it's
+/// propertly resolved
+#[derive(Debug, Clone)]
+pub struct Import {
+    pub text: String,
+    pub meta: Location,
+}
+
+impl<S: State<Meta = Location>> Element<S> for Import {
+    fn meta(&self) -> &Location {
+        &self.meta
+    }
 }
 
 /// The parsed file type.
-type FileQt = crate::ast::File<crate::ast::state::Syntax>;
+type FileQt = crate::ast::File<Syntax>;
 
 #[derive(miette::Diagnostic, thiserror::Error, Debug)]
 #[error("could not parse due the following errors")]
@@ -84,7 +122,7 @@ fn fmt_expected(expected: &[String]) -> String {
 /// Parses or report the error.
 pub fn parse_or_report(filename: &str, text: &str) -> Result<FileQt, ParseError> {
     let mut errors = vec![];
-    let ast = match FileParser::new().parse(&mut errors, filename, text) {
+    let ast = match crate::zu::FileParser::new().parse(&mut errors, filename, text) {
         Ok(ast) => ast,
         Err(error) => {
             // Build up the list with at least one recovery error.

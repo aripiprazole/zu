@@ -1,6 +1,7 @@
 use crate::{
-    ast::{quoted::Lvl, Term},
-    elab::Value,
+    ast::Term,
+    erase::{Lvl, Quoted},
+    pass::elab::Value,
 };
 
 /// The context we need to pretty print a type right now.
@@ -9,7 +10,7 @@ use crate::{
 pub struct Show {
     pub level: Lvl,
     pub names: Vec<String>,
-    pub term: Term<crate::ast::state::Quoted>,
+    pub term: Term<Quoted>,
 }
 
 impl Value {
