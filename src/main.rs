@@ -2,6 +2,7 @@
 #![feature(box_patterns)]
 #![feature(exhaustive_patterns)]
 #![feature(type_changing_struct_update)]
+#![feature(associated_type_defaults)]
 
 use clap::Parser;
 use lalrpop_util::lalrpop_mod;

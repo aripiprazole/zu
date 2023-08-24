@@ -18,14 +18,14 @@ pub mod state {
     /// Represents the syntax state, if it's resolved, or just parsed, it's useful for not
     /// having to redeclare the same types.
     pub trait State: Default + Debug + Clone {
-        type Parameters: Debug + Clone;
-        type Arguments: Debug + Clone;
-        type Meta: Debug + Clone;
-        type NameSet: Debug + Clone;
-        type Import: Element<Self>;
+        type Parameters: Debug + Clone = Self::Definition;
+        type Arguments: Debug + Clone = Vec<Term<Self>>;
+        type Meta: Debug + Clone = Location;
+        type NameSet: Debug + Clone = Self::Definition;
+        type Import: Element<Self> = !;
         type Reference: Element<Self>;
-        type Definition: Element<Self>;
-        type Closure: Element<Self>;
+        type Definition: Element<Self> = Rc<Definition<Self>>;
+        type Closure: Element<Self> = Fun<Self>;
     }
 }
 

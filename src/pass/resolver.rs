@@ -16,14 +16,9 @@ use super::parser::{parse_or_report, Syntax};
 pub struct Resolved;
 
 impl State for Resolved {
-    type NameSet = Self::Definition;
-    type Arguments = Vec<crate::ast::Term<Resolved>>;
-    type Parameters = Self::Definition;
     type Definition = Rc<crate::ast::Definition<Resolved>>;
     type Reference = Reference;
-    type Closure = crate::ast::Fun<Self>;
     type Meta = Location;
-    type Import = !;
 }
 
 /// A name access.

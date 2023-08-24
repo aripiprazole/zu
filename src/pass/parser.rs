@@ -14,9 +14,7 @@ impl State for Syntax {
     type Parameters = Vec<Self::Definition>;
     type Definition = Reference;
     type Reference = Reference;
-    type Closure = crate::ast::Fun<Self>;
     type Import = Import;
-    type Meta = Location;
 }
 
 /// A name access.

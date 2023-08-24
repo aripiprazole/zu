@@ -1,5 +1,3 @@
-use std::rc::Rc;
-
 use crate::ast::{state::State, Element};
 
 /// Represents the resolved state, it's the state of the syntax tree when it's resolved.
@@ -7,10 +5,6 @@ use crate::ast::{state::State, Element};
 pub struct ClosureConv;
 
 impl State for ClosureConv {
-    type NameSet = Self::Definition;
-    type Arguments = Vec<crate::ast::Term<ClosureConv>>;
-    type Parameters = Self::Definition;
-    type Definition = Rc<crate::ast::Definition<ClosureConv>>;
     type Reference = crate::pass::elab::Reference;
     type Closure = Closure;
     type Meta = crate::pass::elab::TypedMeta;

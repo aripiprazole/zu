@@ -15,14 +15,8 @@ use super::resolver::Resolved;
 pub struct Typed;
 
 impl State for Typed {
-    type NameSet = Self::Definition;
-    type Arguments = Vec<Term<Typed>>;
-    type Parameters = Self::Definition;
-    type Definition = Rc<crate::ast::Definition<Typed>>;
     type Reference = Reference;
-    type Closure = crate::ast::Fun<Self>;
     type Meta = TypedMeta;
-    type Import = !;
 }
 
 /// A type info. It contains if the type is an enum or a struct, or maybe

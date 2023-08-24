@@ -8,12 +8,10 @@ use crate::{ast::{
 pub struct Quoted;
 
 impl State for Quoted {
-    type NameSet = Self::Definition;
     type Parameters = Self::Definition;
     type Arguments = Box<Term<Self>>;
     type Definition = Definition<Quoted>;
     type Reference = Reference;
-    type Closure = Fun<Self>;
     type Import = !;
     type Meta = ();
 }
