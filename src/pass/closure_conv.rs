@@ -5,10 +5,27 @@ use crate::ast::{state::State, Element};
 pub struct ClosureConv;
 
 impl State for ClosureConv {
-    type Reference = crate::pass::elab::Reference;
+    type Reference = ClosureReference;
     type Meta = crate::pass::elab::TypedMeta;
     type Closure = Closure;
     type Import = !;
+}
+
+#[derive(Debug, Clone)]
+pub enum ClosureReference {
+    /// A reference to a closure.
+    Closure(Closure),
+    /// A reference to a global.
+    Global(crate::pass::elab::Reference),
+}
+
+impl<S: State<Meta = crate::pass::elab::TypedMeta>> Element<S> for ClosureReference {
+    fn meta(&self) -> &S::Meta {
+        match self {
+            Self::Closure(c) => &c.meta,
+            Self::Global(g) => &g.meta,
+        }
+    }
 }
 
 /// A closure converted term, it's a term that has a closure
