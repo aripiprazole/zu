@@ -18,6 +18,11 @@ pub mod state {
     pub use super::State;
 }
 
+pub trait Ast<S: State> = Element<S> + Debug + Clone;
+
+/// Just to represent nodes.
+pub trait Node<S: state::State>: Ast<S> {}
+
 /// Represents the syntax state, if it's resolved, or just parsed, it's useful for not
 /// having to redeclare the same types.
 pub trait State: Default + Debug + Clone {
@@ -27,13 +32,14 @@ pub trait State: Default + Debug + Clone {
     type NameSet: Debug + Clone = Self::Definition;
 
     // SECTION: Elements
-    type Definition: Element<Self> = Rc<Definition<Self>>;
-    type Closure: Element<Self> = Fun<Self>;
-    type Reference: Element<Self>;
+    type Definition: Ast<Self> = Rc<Definition<Self>>;
+    type Closure: Ast<Self> = Fun<Self>;
+    type Elim: Ast<Self> = Elim<Self>;
+    type Reference: Ast<Self>;
 
     // SECTION: Syntax sugars
-    type Import: Element<Self> = !;
-    type Group: Element<Self> = !;
+    type Import: Ast<Self> = !;
+    type Group: Ast<Self> = !;
 
     // SECTION: Meta location
     /// The meta type, it's the type of the location of the syntax tree.
@@ -71,6 +77,8 @@ pub struct Definition<S: state::State> {
     pub text: String,
     pub meta: S::Meta,
 }
+
+impl<S: state::State> Node<S> for Definition<S> {}
 
 impl<S: state::State> Definition<S>
 where
@@ -122,7 +130,7 @@ impl From<Location> for miette::SourceSpan {
 }
 
 /// An element. It can be a declaration, or a term.
-pub trait Element<S: state::State>: Debug + Clone {
+pub trait Element<S: state::State> {
     fn meta(&self) -> &S::Meta;
 }
 
@@ -138,6 +146,8 @@ pub struct Error<S: state::State> {
     /// The location of the error.
     pub meta: S::Meta,
 }
+
+impl<S: state::State> Node<S> for Error<S> {}
 
 /// Represents a recovery from an error.
 pub trait Recovery<S: state::State> {
@@ -158,6 +168,8 @@ pub struct Identifier<S: state::State> {
     pub meta: S::Meta,
 }
 
+impl<S: state::State> Node<S> for Identifier<S> {}
+
 impl<S: state::State> Element<S> for Identifier<S> {
     fn meta(&self) -> &S::Meta {
         &self.meta
@@ -172,6 +184,8 @@ pub struct Str<S: state::State> {
     /// The location of the source in the source code.
     pub meta: S::Meta,
 }
+
+impl<S: state::State> Node<S> for Str<S> {}
 
 impl<S: state::State> Element<S> for Str<S> {
     fn meta(&self) -> &S::Meta {
@@ -189,6 +203,8 @@ pub struct Int<S: state::State> {
     pub meta: S::Meta,
 }
 
+impl<S: state::State> Node<S> for Int<S> {}
+
 impl<S: state::State> Element<S> for Int<S> {
     fn meta(&self) -> &S::Meta {
         &self.meta
@@ -205,6 +221,8 @@ pub struct Pattern<S: state::State> {
     pub meta: S::Meta,
 }
 
+impl<S: state::State> Node<S> for Pattern<S> {}
+
 impl<S: state::State> Element<S> for Pattern<S> {
     fn meta(&self) -> &S::Meta {
         &self.meta
@@ -218,6 +236,8 @@ pub struct Case<S: state::State> {
     pub value: Box<Term<S>>,
     pub meta: S::Meta,
 }
+
+impl<S: state::State> Node<S> for Case<S> {}
 
 impl<S: state::State> Element<S> for Case<S> {
     fn meta(&self) -> &S::Meta {
@@ -233,6 +253,8 @@ pub struct Elim<S: state::State> {
     pub patterns: Vec<Case<S>>,
     pub meta: S::Meta,
 }
+
+impl<S: state::State> Node<S> for Elim<S> {}
 
 impl<S: state::State> Element<S> for Elim<S> {
     fn meta(&self) -> &S::Meta {
@@ -253,6 +275,8 @@ pub struct Apply<S: state::State> {
     pub arguments: S::Arguments,
     pub meta: S::Meta,
 }
+
+impl<S: state::State> Node<S> for Apply<S> {}
 
 impl<S: state::State> Element<S> for Apply<S> {
     fn meta(&self) -> &S::Meta {
@@ -276,6 +300,8 @@ pub struct Fun<S: state::State> {
     pub meta: S::Meta,
 }
 
+impl<S: state::State> Node<S> for Fun<S> {}
+
 impl<S: state::State> Element<S> for Fun<S> {
     fn meta(&self) -> &S::Meta {
         &self.meta
@@ -286,18 +312,20 @@ impl<S: state::State> Element<S> for Fun<S> {
 ///
 /// It's the base of the abstract syntax tree.
 pub enum Term<S: state::State> {
-    Error(Error<S>),
-    Universe(Universe<S>),
+    Pi(Pi<S>),
     Int(Int<S>),
     Str(Str<S>),
-    Group(S::Group),
-    Elim(Elim<S>),
-    Fun(S::Closure),
-    Apply(Apply<S>),
-    Pi(Pi<S>),
-    Reference(S::Reference),
     Hole(Hole<S>),
+    Apply(Apply<S>),
+    Error(Error<S>),
+    Universe(Universe<S>),
+    Fun(S::Closure),
+    Elim(S::Elim),
+    Group(S::Group),
+    Reference(S::Reference),
 }
+
+impl<S: state::State> Node<S> for Term<S> {}
 
 /// Necessary due to this [issue here](https://github.com/rust-lang/rust/issues/39959).
 /// 

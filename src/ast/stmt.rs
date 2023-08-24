@@ -13,6 +13,8 @@ pub struct Type<S: state::State> {
     pub meta: S::Meta,
 }
 
+impl<S: state::State> Node<S> for Type<S> {}
+
 impl<S: state::State> Element<S> for Type<S> {
     fn meta(&self) -> &S::Meta {
         &self.meta
@@ -31,6 +33,8 @@ pub struct Eval<S: state::State> {
     pub value: Term<S>,
     pub meta: S::Meta,
 }
+
+impl<S: state::State> Node<S> for Eval<S> {}
 
 impl<S: state::State> Element<S> for Eval<S> {
     fn meta(&self) -> &S::Meta {
@@ -61,6 +65,8 @@ pub enum Stmt<S: state::State> {
     /// propertly resolved.
     Import(S::Import),
 }
+
+impl<S: state::State> Node<S> for Stmt<S> {}
 
 impl<S: state::State> Stmt<S> {
     pub fn as_declaration(&self) -> Option<&dyn Declaration<S>> {

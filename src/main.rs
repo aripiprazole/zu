@@ -1,3 +1,4 @@
+#![feature(trait_alias)]
 #![feature(never_type)]
 #![feature(box_patterns)]
 #![feature(type_changing_struct_update)]

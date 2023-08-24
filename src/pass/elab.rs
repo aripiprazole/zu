@@ -14,9 +14,20 @@ use super::resolver::Resolved;
 #[derive(Default, Debug, Clone)]
 pub struct Typed;
 
+/// Represents a node that has a type.
+pub trait TypedNode<S: State>: crate::ast::Node<S> {
+    fn type_value(&self) -> &crate::pass::elab::Value;
+}
+
 impl State for Typed {
     type Reference = Reference;
     type Meta = TypedMeta;
+}
+
+impl<S: State<Meta = TypedMeta>, T: crate::ast::Node<S>> TypedNode<S> for T {
+    fn type_value(&self) -> &crate::pass::elab::Value {
+        &self.meta().type_value
+    }
 }
 
 /// A type info. It contains if the type is an enum or a struct, or maybe

@@ -6,8 +6,8 @@ pub struct ClosureConv;
 
 impl State for ClosureConv {
     type Reference = crate::pass::elab::Reference;
-    type Closure = Closure;
     type Meta = crate::pass::elab::TypedMeta;
+    type Closure = Closure;
     type Import = !;
 }
 
