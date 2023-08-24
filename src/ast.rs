@@ -53,8 +53,22 @@ pub mod state {
         type Parameters = Self::Definition;
         type Definition = Rc<resolved::Definition<Resolved>>;
         type Reference = resolved::Reference;
-        type Import = !;
         type Meta = Location;
+        type Import = !;
+    }
+
+    /// Represents the resolved state, it's the state of the syntax tree when it's resolved.
+    #[derive(Default, Debug, Clone)]
+    pub struct Typed;
+
+    impl State for Typed {
+        type NameSet = Self::Definition;
+        type Arguments = Vec<Term<Resolved>>;
+        type Parameters = Self::Definition;
+        type Definition = Rc<resolved::Definition<Typed>>;
+        type Reference = typed::Reference;
+        type Meta = typed::TypedMeta;
+        type Import = !;
     }
 
     /// Represents the resolved state, it's the state of the syntax tree when it's resolved.
@@ -249,6 +263,37 @@ pub mod quoted {
     impl<S: state::State<Meta = ()>> Element<S> for Ix {
         fn meta(&self) -> &S::Meta {
             &()
+        }
+    }
+}
+
+/// Typed state, it's the state of the syntax tree when it's typed.
+pub mod typed {
+    use super::{*, resolved::Definition};
+
+    /// A type info. It contains if the type is an enum or a struct, or maybe
+    /// a function type.
+    #[derive(Debug, Clone)]
+    pub enum TypeInfo {}
+
+    #[derive(Debug, Clone)]
+    pub struct TypedMeta {
+        pub type_info: TypeInfo,
+        pub type_term: Option<Term<state::Quoted>>,
+        pub type_value: crate::elab::Value,
+        pub location: Location,
+    }
+
+    /// A name access.
+    #[derive(Debug, Clone)]
+    pub struct Reference {
+        pub definition: Rc<Definition<state::Resolved>>,
+        pub meta: TypedMeta,
+    }
+
+    impl<S: state::State<Meta = TypedMeta>> Element<S> for Reference {
+        fn meta(&self) -> &TypedMeta {
+            &self.meta
         }
     }
 }
