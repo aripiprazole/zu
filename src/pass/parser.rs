@@ -1,4 +1,4 @@
-use crate::ast::{Location, state::State, Element, Node};
+use crate::ast::{Location, state::State, Element};
 
 use miette::{NamedSource, SourceSpan};
 
@@ -39,8 +39,6 @@ pub struct Reference {
     pub meta: Location,
 }
 
-impl Node<Syntax> for Reference {}
-
 impl<S: State<Meta = Location>> Element<S> for Reference {
     fn meta(&self) -> &Location {
         &self.meta
@@ -55,8 +53,6 @@ pub struct Import {
     pub text: String,
     pub meta: Location,
 }
-
-impl Node<Syntax> for Import {}
 
 impl<S: State<Meta = Location>> Element<S> for Import {
     fn meta(&self) -> &Location {

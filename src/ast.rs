@@ -20,9 +20,6 @@ pub mod state {
 
 pub trait Ast<S: State> = Element<S> + Debug + Clone;
 
-/// Just to represent nodes.
-pub trait Node<S: state::State>: Ast<S> {}
-
 /// Represents the syntax state, if it's resolved, or just parsed, it's useful for not
 /// having to redeclare the same types.
 pub trait State: Default + Debug + Clone {
@@ -77,8 +74,6 @@ pub struct Definition<S: state::State> {
     pub text: String,
     pub meta: S::Meta,
 }
-
-impl<S: state::State> Node<S> for Definition<S> {}
 
 impl<S: state::State> Definition<S>
 where
@@ -147,8 +142,6 @@ pub struct Error<S: state::State> {
     pub meta: S::Meta,
 }
 
-impl<S: state::State> Node<S> for Error<S> {}
-
 /// Represents a recovery from an error.
 pub trait Recovery<S: state::State> {
     /// Creates a new instance of [`Self`] when it's an error, it's
@@ -168,8 +161,6 @@ pub struct Identifier<S: state::State> {
     pub meta: S::Meta,
 }
 
-impl<S: state::State> Node<S> for Identifier<S> {}
-
 impl<S: state::State> Element<S> for Identifier<S> {
     fn meta(&self) -> &S::Meta {
         &self.meta
@@ -184,8 +175,6 @@ pub struct Str<S: state::State> {
     /// The location of the source in the source code.
     pub meta: S::Meta,
 }
-
-impl<S: state::State> Node<S> for Str<S> {}
 
 impl<S: state::State> Element<S> for Str<S> {
     fn meta(&self) -> &S::Meta {
@@ -203,8 +192,6 @@ pub struct Int<S: state::State> {
     pub meta: S::Meta,
 }
 
-impl<S: state::State> Node<S> for Int<S> {}
-
 impl<S: state::State> Element<S> for Int<S> {
     fn meta(&self) -> &S::Meta {
         &self.meta
@@ -221,8 +208,6 @@ pub struct Pattern<S: state::State> {
     pub meta: S::Meta,
 }
 
-impl<S: state::State> Node<S> for Pattern<S> {}
-
 impl<S: state::State> Element<S> for Pattern<S> {
     fn meta(&self) -> &S::Meta {
         &self.meta
@@ -236,8 +221,6 @@ pub struct Case<S: state::State> {
     pub value: Box<Term<S>>,
     pub meta: S::Meta,
 }
-
-impl<S: state::State> Node<S> for Case<S> {}
 
 impl<S: state::State> Element<S> for Case<S> {
     fn meta(&self) -> &S::Meta {
@@ -253,8 +236,6 @@ pub struct Elim<S: state::State> {
     pub patterns: Vec<Case<S>>,
     pub meta: S::Meta,
 }
-
-impl<S: state::State> Node<S> for Elim<S> {}
 
 impl<S: state::State> Element<S> for Elim<S> {
     fn meta(&self) -> &S::Meta {
@@ -275,8 +256,6 @@ pub struct Apply<S: state::State> {
     pub arguments: S::Arguments,
     pub meta: S::Meta,
 }
-
-impl<S: state::State> Node<S> for Apply<S> {}
 
 impl<S: state::State> Element<S> for Apply<S> {
     fn meta(&self) -> &S::Meta {
@@ -300,8 +279,6 @@ pub struct Fun<S: state::State> {
     pub meta: S::Meta,
 }
 
-impl<S: state::State> Node<S> for Fun<S> {}
-
 impl<S: state::State> Element<S> for Fun<S> {
     fn meta(&self) -> &S::Meta {
         &self.meta
@@ -324,8 +301,6 @@ pub enum Term<S: state::State> {
     Group(S::Group),
     Reference(S::Reference),
 }
-
-impl<S: state::State> Node<S> for Term<S> {}
 
 /// Necessary due to this [issue here](https://github.com/rust-lang/rust/issues/39959).
 /// 

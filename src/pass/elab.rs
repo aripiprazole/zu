@@ -15,7 +15,7 @@ use super::resolver::Resolved;
 pub struct Typed;
 
 /// Represents a node that has a type.
-pub trait TypedNode<S: State>: crate::ast::Node<S> {
+pub trait TypedNode<S: State>: crate::ast::Element<S> {
     fn type_value(&self) -> &crate::pass::elab::Value;
 }
 
@@ -24,7 +24,7 @@ impl State for Typed {
     type Meta = TypedMeta;
 }
 
-impl<S: State<Meta = TypedMeta>, T: crate::ast::Node<S>> TypedNode<S> for T {
+impl<S: State<Meta = TypedMeta>, T: crate::ast::Element<S>> TypedNode<S> for T {
     fn type_value(&self) -> &crate::pass::elab::Value {
         &self.meta().type_value
     }
