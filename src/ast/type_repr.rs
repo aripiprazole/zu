@@ -32,7 +32,7 @@ pub struct Domain<S: state::State> {
     /// The name of the variable. The idea of the [`Option`] type, is when
     /// we have a binder like `_`, which is a placeholder for a variable for
     /// which we don't care about the name.
-    pub text: S::NameSet,
+    pub name: S::NameSet,
 
     /// The type of the variable. If it's in an implicit argument position,
     /// it will fallback to the type `type`.

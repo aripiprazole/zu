@@ -150,7 +150,7 @@ pub Domain: crate::ast::Domain<state::Syntax> = {
   /// Parses unnamed explicit arguments, which you don't need to specify
   /// the type and neither the name.
   <term:Call> => crate::ast::Domain {
-    text: vec![None],
+    name: vec![None],
     meta: term.meta().clone(),
     type_repr: term.into(),
     icit: crate::ast::Icit::Expl,
@@ -159,7 +159,7 @@ pub Domain: crate::ast::Domain<state::Syntax> = {
   // Parses explicit arguments, which you need to specify
   // the type.
   <s: @L> <names:Sep<",", Reference>> ":" <value:Call> <e: @R> => crate::ast::Domain {
-    text: names.into_iter().map(Some).collect(),
+    name: names.into_iter().map(Some).collect(),
     type_repr: value.into(),
     icit: crate::ast::Icit::Expl,
     meta: crate::ast::Location::new(s, e, filename),
@@ -168,7 +168,7 @@ pub Domain: crate::ast::Domain<state::Syntax> = {
   // Parses explicit arguments, which you don't need to specify
   // the type.
   <s: @L> "{" <names:Sep<",", Reference>> ":" <value:Term> "}" <e: @R> => crate::ast::Domain {
-    text: names.into_iter().map(Some).collect(),
+    name: names.into_iter().map(Some).collect(),
     type_repr: value.into(),
     icit: crate::ast::Icit::Impl,
     meta: crate::ast::Location::new(s, e, filename),

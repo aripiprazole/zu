@@ -159,7 +159,7 @@ impl Quote for Value {
             Value::Pi(name, icit, domain, codomain) => Expr::Pi(Pi {
                 icit,
                 domain: Domain {
-                    text: Definition::new(name.text),
+                    name: Definition::new(name.text),
                     type_repr: domain.quote(nth).into(),
                     icit,
                     meta: Default::default(),
@@ -226,7 +226,7 @@ impl Expr {
                 app_bd(env.clone(), value_meta(env, meta), bds)
             }
             Pi(pi) => {
-                let name = Definition::new(pi.domain.text.text);
+                let name = Definition::new(pi.domain.name.text);
                 let domain = pi.domain.type_repr.eval(env.clone());
                 let codomain = Closure {
                     env,

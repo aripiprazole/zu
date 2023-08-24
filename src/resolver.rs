@@ -298,29 +298,24 @@ impl Resolver {
             Term::Fun(fun) => self.fork(|local| {
                 // Resolve the arguments of the function. It's useful to
                 // define the parameters into the scope.
-                let arguments = fun
-                    .arguments
+                fun.arguments
                     .into_iter()
-                    .map(|parameter| {
-                        let definition = Rc::new(Definition {
+                    .fold(local.term(*fun.value), |callee, parameter| {
+                        let parameter = Rc::new(Definition {
+                            text: parameter.text,
                             meta: parameter.meta.clone(),
-                            text: parameter.text.clone(),
                         });
 
-                        // Adds the definition to the scope.
                         local
                             .scope
-                            .insert(parameter.text.clone(), definition.clone());
+                            .insert(parameter.text.clone(), parameter.clone());
 
-                        definition
+                        Term::Fun(Fun {
+                            arguments: parameter,
+                            value: callee.into(),
+                            meta: fun.meta.clone(),
+                        })
                     })
-                    .collect();
-
-                Term::Fun(Fun {
-                    arguments,
-                    value: local.term(*fun.value).into(),
-                    meta: fun.meta,
-                })
             }),
             Term::Apply(apply) => {
                 // Resolve the callee and the arguments.
@@ -384,7 +379,7 @@ impl Resolver {
     fn create_domain(&mut self, domain: Domain<state::Syntax>) -> Vec<Domain<state::Resolved>> {
         let mut parameters = vec![];
         let type_repr = self.term(*domain.type_repr);
-        for reference in domain.text {
+        for reference in domain.name {
             // Tries to get the location of the reference, if it's not
             // possible, it will fallback to the location of the domain.
             let location = match reference {
@@ -406,7 +401,7 @@ impl Resolver {
 
             // Adds the definition to the scope.
             parameters.push(Domain {
-                text: definition,
+                name: definition,
                 meta: location,
                 type_repr: type_repr.clone().into(),
                 icit: domain.icit,

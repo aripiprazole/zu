@@ -50,7 +50,7 @@ pub mod state {
     impl State for Resolved {
         type NameSet = Self::Definition;
         type Arguments = Vec<Term<Resolved>>;
-        type Parameters = Vec<Self::Definition>;
+        type Parameters = Self::Definition;
         type Definition = Rc<resolved::Definition<Resolved>>;
         type Reference = resolved::Reference;
         type Import = !;
@@ -64,7 +64,7 @@ pub mod state {
     impl State for Quoted {
         type NameSet = Self::Definition;
         type Parameters = Self::Definition;
-        type Arguments = Box<Term<Quoted>>;
+        type Arguments = Box<Term<Self>>;
         type Definition = resolved::Definition<Quoted>;
         type Reference = quoted::Reference;
         type Import = !;
@@ -362,7 +362,7 @@ impl<S: state::State> Element<S> for Int<S> {
 /// It's a simple pattern for eliminator.
 #[derive(Default, Debug, Clone)]
 pub struct Pattern<S: state::State> {
-    pub definition: S::Reference,
+    pub constructor: S::Reference,
     pub arguments: Vec<S::Definition>,
     pub meta: S::Meta,
 }
@@ -392,7 +392,7 @@ impl<S: state::State> Element<S> for Case<S> {
 /// It's a simple eliminator for inductive types.
 #[derive(Debug, Clone)]
 pub struct Elim<S: state::State> {
-    pub patterns: Vec<Pattern<S>>,
+    pub patterns: Vec<Case<S>>,
     pub meta: S::Meta,
 }
 
