@@ -266,10 +266,10 @@ impl Expr {
         match self {
             Error(_) => unreachable!(),
             Hole(_) => unreachable!(),
+            Group(_) => unreachable!(),
             Universe(_) => Value::Universe,
             Int(data) => Value::Int(data.value),
             Str(data) => Value::Str(data.value),
-            Group(box value) => value.eval(env),
             Elim(_) => todo!("elim expr"),
             Fun(_) => todo!("fun expr"),
             Apply(e) => app(e.callee.eval(env.clone()), e.arguments.eval(env)),

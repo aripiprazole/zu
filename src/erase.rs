@@ -114,12 +114,12 @@ impl Term<Resolved> {
     /// Erase a term to a term in the untyped lambda calculus.
     pub fn erase(self) -> crate::ast::Term<Quoted> {
         match self {
+            Term::Group(_) => unreachable!(),
             Term::Error(error) => Term::Error(Error { meta: (), ..error }),
             Term::Universe(_) => Term::Universe(Universe { meta: () }),
             Term::Hole(_) => Term::Hole(Hole { meta: () }),
             Term::Int(v) => Term::Int(Int { meta: (), ..v }),
             Term::Str(v) => Term::Str(Str { meta: (), ..v }),
-            Term::Group(box v) => v.erase(),
             Term::Elim(elim) => Term::Elim(Elim {
                 meta: (),
                 patterns: elim

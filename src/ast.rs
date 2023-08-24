@@ -33,6 +33,7 @@ pub trait State: Default + Debug + Clone {
 
     // SECTION: Syntax sugars
     type Import: Element<Self> = !;
+    type Group: Element<Self> = !;
 
     // SECTION: Meta location
     /// The meta type, it's the type of the location of the syntax tree.
@@ -46,6 +47,12 @@ impl<S: state::State> Element<S> for ! {
 }
 
 impl<S: state::State, T: Element<S>> Element<S> for Rc<T> {
+    fn meta(&self) -> &S::Meta {
+        self.as_ref().meta()
+    }
+}
+
+impl<S: state::State, T: Element<S>> Element<S> for Box<T> {
     fn meta(&self) -> &S::Meta {
         self.as_ref().meta()
     }
@@ -278,13 +285,12 @@ impl<S: state::State> Element<S> for Fun<S> {
 /// A term. It can be an integer, a variable, an application, or a pi type.
 ///
 /// It's the base of the abstract syntax tree.
-#[derive(Clone)]
 pub enum Term<S: state::State> {
     Error(Error<S>),
     Universe(Universe<S>),
     Int(Int<S>),
     Str(Str<S>),
-    Group(Box<Term<S>>),
+    Group(S::Group),
     Elim(Elim<S>),
     Fun(S::Closure),
     Apply(Apply<S>),
@@ -293,23 +299,31 @@ pub enum Term<S: state::State> {
     Hole(Hole<S>),
 }
 
+/// Necessary due to this [issue here](https://github.com/rust-lang/rust/issues/39959).
+impl<S: state::State> Clone for Term<S> {
+    fn clone(&self) -> Self {
+        match self {
+            Self::Error(arg0) => Self::Error(arg0.clone()),
+            Self::Universe(arg0) => Self::Universe(arg0.clone()),
+            Self::Int(arg0) => Self::Int(arg0.clone()),
+            Self::Str(arg0) => Self::Str(arg0.clone()),
+            Self::Group(arg0) => Self::Group(arg0.clone()),
+            Self::Elim(arg0) => Self::Elim(arg0.clone()),
+            Self::Fun(arg0) => Self::Fun(arg0.clone()),
+            Self::Apply(arg0) => Self::Apply(arg0.clone()),
+            Self::Pi(arg0) => Self::Pi(arg0.clone()),
+            Self::Reference(arg0) => Self::Reference(arg0.clone()),
+            Self::Hole(arg0) => Self::Hole(arg0.clone()),
+        }
+    }
+}
+
 impl<S: state::State> Default for Term<S>
 where
     S::Meta: Default,
 {
     fn default() -> Self {
         Self::Hole(Hole::default())
-    }
-}
-
-impl<S: state::State> Term<S> {
-    /// Removes the group from the term. It's useful to pattern
-    /// match agains't group.
-    pub fn unwrap(self) -> Self {
-        match self {
-            Self::Group(arg0) => *arg0.clone(),
-            _ => self,
-        }
     }
 }
 

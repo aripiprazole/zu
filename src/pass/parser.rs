@@ -14,8 +14,23 @@ impl State for Syntax {
     type Parameters = Vec<Self::Definition>;
     type Definition = Reference;
     type Reference = Reference;
+
+    // SECTION: Syntax sugars
     type Import = Import;
+    type Group = Box<crate::ast::Term<Self>>;
 }
+
+impl crate::ast::Term<Syntax> {
+    /// Removes the group from the term. It's useful to pattern
+    /// match agains't group.
+    pub fn unwrap(self) -> Self {
+        match self {
+            Self::Group(arg0) => *arg0.clone(),
+            _ => self,
+        }
+    }
+}
+
 
 /// A name access.
 #[derive(Debug, Clone)]
