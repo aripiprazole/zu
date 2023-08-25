@@ -424,31 +424,25 @@ impl Resolver {
                 meta: anno.meta,
             }),
             Term::Fun(fun) => self.fork(|local| {
-                for argument in fun.arguments.iter() {
-                    let parameter = Rc::new(Definition {
-                        text: parameter.text,
-                        meta: parameter.meta.clone(),
-                    });
-
-                    local
-                        .scope
-                        .insert(parameter.text.clone(), parameter.clone());
-                }
-
                 // Resolve the arguments of the function. It's useful to
                 // define the parameters into the scope.
                 fun.arguments
                     .into_iter()
-                    .fold(local.term(*fun.value), |callee, parameter| {
+                    .map(|argument| {
+                        // This is needed so we can access the names in the context.
+                        let name = argument.text.clone();
                         let parameter = Rc::new(Definition {
-                            text: parameter.text,
-                            meta: parameter.meta.clone(),
+                            text: argument.text.clone(),
+                            meta: argument.meta.clone(),
                         });
 
-                        local
-                            .scope
-                            .insert(parameter.text.clone(), parameter.clone());
+                        local.scope.insert(name, parameter.clone());
 
+                        parameter
+                    })
+                    .collect::<Vec<_>>()
+                    .into_iter()
+                    .fold(local.term(*fun.value), |callee, parameter| {
                         Term::Fun(Fun {
                             arguments: parameter,
                             value: callee.into(),
