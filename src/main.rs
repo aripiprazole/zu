@@ -8,19 +8,25 @@ use clap::Parser;
 use lalrpop_util::lalrpop_mod;
 use miette::IntoDiagnostic;
 
+// The lalrpop module, it does generate the parser and lexer
+// for the language.
 lalrpop_mod! {
     #[allow(warnings)]
     /// The parsing module
     pub zu
 }
 
-/// The abstract syntax tree for the language.
+/// The abstract syntax tree for the language. The abstract
+/// syntax tree is the tree that represents the program
+/// in a tree form.
 pub mod ast;
 
-/// Simplifies the tree to the quoted terms.
+/// Simplifies the tree to the quoted terms, it does
+/// erase a location information.
 pub mod erase;
 
-/// Pretty print the elaborated ast
+/// Pretty print the elaborated ast to the screen
+/// a type.
 pub mod show;
 
 /// The compiler passes.
@@ -30,13 +36,18 @@ pub mod passes {
     /// It's the second phase of the compiler.
     pub mod resolver;
 
-    // Type elaborator module, it does the type checking stuff.
+    /// Type elaborator module, it does the type checking stuff.
+    ///
+    /// It's the third phase of the compiler.
     pub mod elab;
 
-    /// Parser LALRPOP module.
+    /// Parser LALRPOP module. It does uses a parse generator to
+    /// generate a parser and lexer for the language.
     pub mod parser;
 
-    /// The closure converter module.
+    /// The closure converter module. It converts the functions to closures.
+    ///
+    /// It's the third phase of the compiler.
     pub mod closure_conv;
 }
 
@@ -57,7 +68,8 @@ fn program() -> miette::Result<()> {
         // Build the bupropion handler options, for specific
         // error presenting.
         bupropion::BupropionHandlerOpts::new()
-    }).into_diagnostic()?;
+    })
+    .into_diagnostic()?;
 
     let command = Command::parse();
 

@@ -16,8 +16,8 @@ impl State for Parsed {
     type Reference = Reference;
 
     // SECTION: Syntax sugars
-    type Import = Import;
     type Group = Box<crate::ast::Term<Self>>;
+    type Import = Import;
     type Siganture = Signature<Self>;
     type Anno = Anno<Self>;
 }
@@ -95,6 +95,26 @@ pub struct ParseError {
 #[error("can't parse the file")]
 #[diagnostic()]
 pub enum InnerError {
+    /// The statement doesn't have a type representation or
+    /// doesn't a value.
+    /// 
+    /// ```kotlin
+    /// fun A
+    /// ```
+    /// 
+    /// The function `A` doesn't declare a type representation, or
+    /// a value. A well-founded statement can be declared as the
+    /// following:
+    /// 
+    /// ```kotlin
+    /// fun A : Type
+    /// 
+    /// fun A = 1
+    /// ```
+    /// 
+    /// The first statement declares a function `A` that returns
+    /// a type `Type`. The second statement declares a function `A`
+    /// that returns a value `1`.
     #[error("expected or binding or signature statement")]
     #[diagnostic(
         code(zu::expected_statement),
@@ -106,6 +126,18 @@ pub enum InnerError {
         err_span: SourceSpan,
     },
 
+    /// Record indexing isn't supported yet. It's a feature
+    /// that will be implemented in the future.
+    /// 
+    /// ```kotlin
+    /// A.B
+    /// ```
+    /// 
+    /// It can be replaced by a simple function call:
+    /// 
+    /// ```kotlin
+    /// B A
+    /// ```
     #[error("record index isn't supported yet")]
     #[diagnostic(
         code(zu::unsupported_record_index),
@@ -117,6 +149,8 @@ pub enum InnerError {
         err_span: SourceSpan,
     },
 
+    /// Inductive data isn't supported yet. It's a feature
+    /// that will be implemented in the future.
     #[error("inductive data isn't supported yet")]
     #[diagnostic(
         code(zu::unsupported_inductive_data),
@@ -128,6 +162,8 @@ pub enum InnerError {
         err_span: SourceSpan,
     },
 
+    /// Attributes isn't supported yet. It's a feature
+    /// that will be implemented in the future.
     #[error("attributes aren't supported yet")]
     #[diagnostic(
         code(zu::unsupported_coinductive_data),
@@ -139,6 +175,9 @@ pub enum InnerError {
         err_span: SourceSpan,
     },
 
+
+    /// Coinductive data isn't supported yet. It's a feature
+    /// that will be implemented in the future.
     #[error("coinductive data isn't supported yet")]
     #[diagnostic(
         code(zu::unsupported_coinductive_data),
@@ -150,6 +189,8 @@ pub enum InnerError {
         err_span: SourceSpan,
     },
 
+    /// The parser found a token that it doesn't recognize as valid. The
+    /// typed token won't be recognized by the parser.
     #[error("invalid token")]
     #[diagnostic(code(zu::invalid_token), url(docsrs))]
     InvalidToken {
@@ -157,6 +198,9 @@ pub enum InnerError {
         err_span: SourceSpan,
     },
 
+    /// The token is not recognized by the parser. It's a
+    /// token that the parser doesn't recognize, but it's
+    /// a valid token that can be placed in the place.
     #[error("unrecognized token")]
     #[diagnostic(code(zu::unrecognized_token), url(docsrs))]
     UnrecoginzedToken {
@@ -167,6 +211,9 @@ pub enum InnerError {
         help: String,
     },
 
+    /// The parser expected a token, but it got an EOF. The EOF
+    /// is the end of file, it's a special token that represents
+    /// the end of the file.
     #[error("expected token, but got eof")]
     #[diagnostic(code(zu::expected_token), url(docsrs))]
     ExpectedToken {
@@ -177,6 +224,7 @@ pub enum InnerError {
         help: String,
     },
 
+    /// The parser found an extra token that it doesn't expect.
     #[error("extra token, {}", token)]
     #[diagnostic(code(zu::extra_token), url(docsrs))]
     ExtraToken {
