@@ -27,6 +27,7 @@ crossbeam-channel = "0.5.8"
 log = "0.4.20"
 fern = "0.6.2"
 humantime = "2.1.0"
+logos = "0.13.0"
 
 # Add a build-time dependency on the lalrpop library:
 [build-dependencies]

@@ -9,6 +9,14 @@ extern {
   type Error = crate::pass::parser::InnerError;
 }
 
+match {
+    r"\s*" => { }, // The default whitespace skipping is disabled if an `ignore pattern` is specified
+    r"//[^\n\r]*[\n\r]*" => { }, // Skip `// comments`
+    r"/\*[^*]*\*+(?:[^/*][^*]*\*+)*/" => { },  // Skip `/* comments */`
+} else {
+  _
+}
+
 /// Parses an entire file declaration into the abstract Parsed tree, so
 /// we can resolve and typecheck it.
 pub File: crate::ast::File<Parsed> = {
@@ -383,14 +391,14 @@ pub Term: crate::ast::Term<Parsed> = {
 
 /// Parses a relevent document string, this is a string that is used to document
 /// the code.
-pub DocString: crate::ast::DocString<Parsed> = <s: @L> <text:r"--.*\n"> <e: @R> => crate::ast::DocString {
+pub DocString: crate::ast::DocString<Parsed> = <s: @L> <text:r"///.*\n"> <e: @R> => crate::ast::DocString {
   text: (&text[2..]).to_string(),
   full_text: text.to_string(),
   meta: crate::ast::Location::new(s, e, filename),
 };
 
 Int: isize = <s:r"[0123456789]+"> => isize::from_str(s).unwrap();
-String: std::string::String = <text:r"'[^']*'"> => (&text[1..text.len() - 1]).to_string();
+String: std::string::String = <text:r#""(\\\\|\\"|[^"\\])*""#> => (&text[1..text.len() - 1]).to_string();
 
 // Reference token text lexer
 Text: std::string::String = {
