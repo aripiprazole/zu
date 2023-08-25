@@ -167,6 +167,149 @@ pub Apply: crate::ast::Term<Parsed> = {
   },
 }
 
+/// Factor operators, this is a list of terms separated by arithmetic operators.
+pub Factor: crate::ast::Term<Parsed> = {
+  Call,
+  <s: @L> <a:Call> "*" <b:Factor> <e: @R> => crate::ast::Term::Apply(crate::ast::Apply {
+    meta: crate::ast::Location::new(s, e, filename),
+    callee: crate::ast::Term::Reference(crate::pass::parser::Reference {
+      text: "*".to_string(),
+      meta: crate::ast::Location::new(s, e, filename),
+    }).into(),
+    arguments: vec![a, b],
+  }),
+  <s: @L> <a:Call> "/" <b:Factor> <e: @R> => crate::ast::Term::Apply(crate::ast::Apply {
+    meta: crate::ast::Location::new(s, e, filename),
+    callee: crate::ast::Term::Reference(crate::pass::parser::Reference {
+      text: "/".to_string(),
+      meta: crate::ast::Location::new(s, e, filename),
+    }).into(),
+    arguments: vec![a, b],
+  }),
+}
+
+/// Arithmetic operators, this is a list of terms separated by arithmetic operators.
+pub Arithmetic: crate::ast::Term<Parsed> = {
+  Factor,
+  <s: @L> <a:Factor> "+" <b:Arithmetic> <e: @R> => crate::ast::Term::Apply(crate::ast::Apply {
+    meta: crate::ast::Location::new(s, e, filename),
+    callee: crate::ast::Term::Reference(crate::pass::parser::Reference {
+      text: "+".to_string(),
+      meta: crate::ast::Location::new(s, e, filename),
+    }).into(),
+    arguments: vec![a, b],
+  }),
+  <s: @L> <a:Factor> "-" <b:Arithmetic> <e: @R> => crate::ast::Term::Apply(crate::ast::Apply {
+    meta: crate::ast::Location::new(s, e, filename),
+    callee: crate::ast::Term::Reference(crate::pass::parser::Reference {
+      text: "-".to_string(),
+      meta: crate::ast::Location::new(s, e, filename),
+    }).into(),
+    arguments: vec![a, b],
+  }),
+}
+
+/// Logical operators, this is a list of terms separated by logical operators.
+pub Logical: crate::ast::Term<Parsed> = {
+  Arithmetic,
+  <s: @L> <a:Arithmetic> "$" <b:Logical> <e: @R> => crate::ast::Term::Apply(crate::ast::Apply {
+    meta: crate::ast::Location::new(s, e, filename),
+    callee: crate::ast::Term::Reference(crate::pass::parser::Reference {
+      text: "$".to_string(),
+      meta: crate::ast::Location::new(s, e, filename),
+    }).into(),
+    arguments: vec![a, b],
+  }),
+  <s: @L> <a:Arithmetic> "++" <b:Logical> <e: @R> => crate::ast::Term::Apply(crate::ast::Apply {
+    meta: crate::ast::Location::new(s, e, filename),
+    callee: crate::ast::Term::Reference(crate::pass::parser::Reference {
+      text: "++".to_string(),
+      meta: crate::ast::Location::new(s, e, filename),
+    }).into(),
+    arguments: vec![a, b],
+  }),
+  <s: @L> <a:Arithmetic> "**" <b:Logical> <e: @R> => crate::ast::Term::Apply(crate::ast::Apply {
+    meta: crate::ast::Location::new(s, e, filename),
+    callee: crate::ast::Term::Reference(crate::pass::parser::Reference {
+      text: "**".to_string(),
+      meta: crate::ast::Location::new(s, e, filename),
+    }).into(),
+    arguments: vec![a, b],
+  }),
+  <s: @L> <a:Arithmetic> ":=" <b:Logical> <e: @R> => crate::ast::Term::Apply(crate::ast::Apply {
+    meta: crate::ast::Location::new(s, e, filename),
+    callee: crate::ast::Term::Reference(crate::pass::parser::Reference {
+      text: ":=".to_string(),
+      meta: crate::ast::Location::new(s, e, filename),
+    }).into(),
+    arguments: vec![a, b],
+  }),
+  <s: @L> <a:Arithmetic> "&&" <b:Logical> <e: @R> => crate::ast::Term::Apply(crate::ast::Apply {
+    meta: crate::ast::Location::new(s, e, filename),
+    callee: crate::ast::Term::Reference(crate::pass::parser::Reference {
+      text: "&&".to_string(),
+      meta: crate::ast::Location::new(s, e, filename),
+    }).into(),
+    arguments: vec![a, b],
+  }),
+  <s: @L> <a:Arithmetic> "||" <b:Logical> <e: @R> => crate::ast::Term::Apply(crate::ast::Apply {
+    meta: crate::ast::Location::new(s, e, filename),
+    callee: crate::ast::Term::Reference(crate::pass::parser::Reference {
+      text: "||".to_string(),
+      meta: crate::ast::Location::new(s, e, filename),
+    }).into(),
+    arguments: vec![a, b],
+  }),
+  <s: @L> <a:Arithmetic> ">" <b:Logical> <e: @R> => crate::ast::Term::Apply(crate::ast::Apply {
+    meta: crate::ast::Location::new(s, e, filename),
+    callee: crate::ast::Term::Reference(crate::pass::parser::Reference {
+      text: ">".to_string(),
+      meta: crate::ast::Location::new(s, e, filename),
+    }).into(),
+    arguments: vec![a, b],
+  }),
+  <s: @L> <a:Arithmetic> "<" <b:Logical> <e: @R> => crate::ast::Term::Apply(crate::ast::Apply {
+    meta: crate::ast::Location::new(s, e, filename),
+    callee: crate::ast::Term::Reference(crate::pass::parser::Reference {
+      text: "<".to_string(),
+      meta: crate::ast::Location::new(s, e, filename),
+    }).into(),
+    arguments: vec![a, b],
+  }),
+  <s: @L> <a:Arithmetic> "!=" <b:Logical> <e: @R> => crate::ast::Term::Apply(crate::ast::Apply {
+    meta: crate::ast::Location::new(s, e, filename),
+    callee: crate::ast::Term::Reference(crate::pass::parser::Reference {
+      text: "!=".to_string(),
+      meta: crate::ast::Location::new(s, e, filename),
+    }).into(),
+    arguments: vec![a, b],
+  }),
+  <s: @L> <a:Arithmetic> "==" <b:Logical> <e: @R> => crate::ast::Term::Apply(crate::ast::Apply {
+    meta: crate::ast::Location::new(s, e, filename),
+    callee: crate::ast::Term::Reference(crate::pass::parser::Reference {
+      text: "==".to_string(),
+      meta: crate::ast::Location::new(s, e, filename),
+    }).into(),
+    arguments: vec![a, b],
+  }),
+  <s: @L> <a:Arithmetic> ">=" <b:Logical> <e: @R> => crate::ast::Term::Apply(crate::ast::Apply {
+    meta: crate::ast::Location::new(s, e, filename),
+    callee: crate::ast::Term::Reference(crate::pass::parser::Reference {
+      text: ">=".to_string(),
+      meta: crate::ast::Location::new(s, e, filename),
+    }).into(),
+    arguments: vec![a, b],
+  }),
+  <s: @L> <a:Arithmetic> "<=" <b:Logical> <e: @R> => crate::ast::Term::Apply(crate::ast::Apply {
+    meta: crate::ast::Location::new(s, e, filename),
+    callee: crate::ast::Term::Reference(crate::pass::parser::Reference {
+      text: "<=".to_string(),
+      meta: crate::ast::Location::new(s, e, filename),
+    }).into(),
+    arguments: vec![a, b],
+  }),
+}
+
 /// Parses a pi expression, this is a list of arguments followed by an arrow
 /// and a value.
 pub Pi: crate::ast::Pi<Parsed> = {
@@ -180,7 +323,7 @@ pub Pi: crate::ast::Pi<Parsed> = {
 
 /// Arrow type signature, this is a domain followed by an arrow and a value.
 pub Arrow: crate::ast::Term<Parsed> = {
-  Call,
+  Logical,
   <Pi> => crate::ast::Term::Pi(<>),
 }
 

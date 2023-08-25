@@ -13,3 +13,5 @@ Zero = \_, _, zero ->
 -- | Defines the succ constructor
 Succ = \n, N, succ, zero ->
   (n N succ zero).
+
+@eval 1 + 10.
