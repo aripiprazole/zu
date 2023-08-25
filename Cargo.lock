@@ -158,9 +158,8 @@ dependencies = [
 
 [[package]]
 name = "bupropion"
-version = "0.0.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9050f4790a2ca9bc2c5aa7f56754c298a7760f43d6797b5cabb38fd3feea31a3"
+version = "0.0.8"
+source = "git+https://github.com/aripiprazole/bupropion.git#b9f9219b4d8c7e770961830e7e1268759740f56b"
 dependencies = [
  "backtrace",
  "backtrace-ext",
@@ -582,8 +581,7 @@ checksum = "2dffe52ecf27772e601905b7522cb4ef790d2cc203488bbd0e2fe85fcb74566d"
 [[package]]
 name = "miette"
 version = "5.10.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "59bb584eaeeab6bd0226ccf3509a69d7936d148cf3d036ad350abe35e8c6856e"
+source = "git+https://github.com/aripiprazole/miette.git#f4d056e1ffeb9a0bf36e2a6501365bd7e00db22d"
 dependencies = [
  "backtrace",
  "backtrace-ext",
@@ -603,8 +601,7 @@ dependencies = [
 [[package]]
 name = "miette-derive"
 version = "5.10.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "49e7bc1560b95a3c4a25d03de42fe76ca718ab92d1a22a55b9b4cf67b3ae635c"
+source = "git+https://github.com/aripiprazole/miette.git#f4d056e1ffeb9a0bf36e2a6501365bd7e00db22d"
 dependencies = [
  "proc-macro2",
  "quote",
