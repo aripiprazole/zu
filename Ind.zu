@@ -16,6 +16,8 @@ fun `+ : Nat -> Nat -> Nat = \a, b ->
     Zero   => Zero,
     Succ n => (Succ (n + b))
 
+@eval (Sigma/new 0 1 is Sigma Nat Succ).inf
+
 @eval Zero + (Succ Zero)
 
 @type Succ (Succ Zero)

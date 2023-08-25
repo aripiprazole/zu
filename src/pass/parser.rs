@@ -106,6 +106,17 @@ pub enum InnerError {
         err_span: SourceSpan,
     },
 
+    #[error("record index isn't supported yet")]
+    #[diagnostic(
+        code(zu::unsupported_record_index),
+        url(docsrs),
+        help("maybe open a PR")
+    )]
+    UnsupportedRecordIndex {
+        #[label = "here"]
+        err_span: SourceSpan,
+    },
+
     #[error("inductive data isn't supported yet")]
     #[diagnostic(
         code(zu::unsupported_inductive_data),

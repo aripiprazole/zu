@@ -21,7 +21,7 @@ match {
 /// Parses an entire file declaration into the abstract Parsed tree, so
 /// we can resolve and typecheck it.
 pub File: crate::ast::File<Parsed> = {
-  <s: @L> <name:ModuleName?> <stmts:Stmt*> <e: @R> => crate::ast::File {
+  <s: @L> <name:ModuleName?> <stmts:TopLevel*> <e: @R> => crate::ast::File {
     // Remove the .zu extension from filenames, so the modules are more
     // idiomatic.
     name: name.unwrap_or_else(|| filename.to_string().replace(".zu", "")),
@@ -146,26 +146,32 @@ Semi: std::string::String = {
   ";" => ";".to_string(),
 };
 
+/// Top-level statements, this is a statement that can be used
+/// outside of a block.
+TopLevel: crate::ast::Stmt<Parsed> = {
+  <stmt:Stmt> <semi:Semi?> => stmt,
+}
+
 /// Parses a top-level statement, this is a statement that can be used
 /// outside of a block.
 Stmt: crate::ast::Stmt<Parsed> = {
   // SECTION: Commands
   // 
   // Parses `@eval` command, which evaluates a term and prints the result.
-  <s: @L> "@eval" <value:Term> <semi:Semi?> <e: @R> => crate::ast::Stmt::Eval(crate::ast::Eval {
+  <s: @L> "@eval" <value:Term> <e: @R> => crate::ast::Stmt::Eval(crate::ast::Eval {
     value,
     meta: crate::ast::Location::new(s, e, filename),
   }),
 
   // Parses `@type` command, which types a term and prints the result.
-  <s: @L> "@type" <value:Term> <semi:Semi?> <e: @R> => crate::ast::Stmt::Type(crate::ast::Type {
+  <s: @L> "@type" <value:Term> <e: @R> => crate::ast::Stmt::Type(crate::ast::Type {
     value,
     meta: crate::ast::Location::new(s, e, filename),
   }),
 
   // Parses `@import` command, which set to the resolver to import to the
   // current file.
-  <s: @L> "import" <import:Reference> <semi:Semi?> <e: @R> => crate::ast::Stmt::Import(crate::pass::parser::Import {
+  <s: @L> "import" <import:Reference> <e: @R> => crate::ast::Stmt::Import(crate::pass::parser::Import {
     text: import.text,
     meta: crate::ast::Location::new(s, e, filename),
   }),
@@ -178,7 +184,6 @@ Stmt: crate::ast::Stmt<Parsed> = {
   <name: Reference>
   <parameters:Parameters?> "where"
   <properties:Property*>
-  <semi:Semi?> 
   <e: @R> => {
     // Report the error
     errors.push(lalrpop_util::ErrorRecovery {
@@ -206,7 +211,6 @@ Stmt: crate::ast::Stmt<Parsed> = {
   <name: Reference>
   <parameters:Parameters?> "where"
   <constructors:Constructor*>
-  <semi:Semi?> 
   <e: @R> => {
     // Report the error
     errors.push(lalrpop_util::ErrorRecovery {
@@ -235,7 +239,6 @@ Stmt: crate::ast::Stmt<Parsed> = {
   <name:Reference>
   <type_repr:TypeRepr?>
   <value:Value?>
-  <semi:Semi?>
   <e: @R> => match (type_repr, value) {
     // Unacceptable Binding
     (None, None) => {
@@ -340,6 +343,24 @@ FactorOp: std::string::String = {
 /// Factor operators, this is a list of terms separated by arithmetic operators.
 Factor: crate::ast::Term<Parsed> = {
   Call,
+  <s: @L> <value:Call> "." <name:Reference> <e: @R> => {
+    // Report the error
+    errors.push(lalrpop_util::ErrorRecovery {
+        dropped_tokens: vec![],
+        error: lalrpop_util::ParseError::User {
+            error: crate::pass::parser::InnerError::UnsupportedRecordIndex {
+                err_span: name.meta.into(),
+            }
+        },
+    });
+
+    // Return the default sentinel value for statements, which is an error.
+    crate::ast::Term::Error(crate::ast::Error {
+      message: format!("unsupported record indexing `{}`", name.text),
+      full_text: (&input[s..e]).to_string(),
+      meta: crate::ast::Location::new(s, e, filename),
+    })
+  },
   <s: @L> <a:Call> <op:FactorOp> <b:Factor> <e: @R> => crate::ast::Term::Apply(crate::ast::Apply {
     meta: crate::ast::Location::new(s, e, filename),
     callee: crate::ast::Term::Reference(crate::pass::parser::Reference {
