@@ -11,11 +11,11 @@ inductive data Eq of {a}, x, y : a where
 
   /// | Defines a proof that, `a := b` and `b := c` implies
   /// `a := c`.
-  fun Eq_trans : {a, b, c} -> (a := b) -> (b := c) -> (a := c)
+  fun Eq/trans : {a, b, c} -> (a := b) -> (b := c) -> (a := c)
 
   /// | Defines a proof that: `a = b`, implies `b = a` by
   /// induction.
-  fun Eq_symm : {a, b} -> (a := b) -> (b := a)
+  fun Eq/symm : {a, b} -> (a := b) -> (b := a)
 
 /// | Represents a type of a dependent pair.
 @[alias `$]
@@ -24,10 +24,10 @@ record Sigma of x, f : * -> * where
   val ins : f a
 
 /// | Record for lazy evaluation
-@[do_notation IO_pure, IO_apply]
+@[do_notation IO/pure, IO/apply]
 fun IO       : Type -> Type
-fun IO_pure  : {a} -> a -> IO a
-fun IO_apply : {a, b} -> IO a -> (IO a -> IO b) -> IO b
+fun IO/pure  : {a} -> a -> IO a
+fun IO/apply : {a, b} -> IO a -> (IO a -> IO b) -> IO b
 
 /// | Prints in the stdout
 ///
