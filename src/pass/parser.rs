@@ -106,6 +106,17 @@ pub enum InnerError {
         err_span: SourceSpan,
     },
 
+    #[error("inductive data isn't supported yet")]
+    #[diagnostic(
+        code(zu::unsupported_inductive_data),
+        url(docsrs),
+        help("maybe open a PR")
+    )]
+    UnsupportedInductiveData {
+        #[label = "here"]
+        err_span: SourceSpan,
+    },
+
     #[error("invalid token")]
     #[diagnostic(code(zu::invalid_token), url(docsrs))]
     InvalidToken {

@@ -41,34 +41,114 @@ pub Value: crate::ast::Term<Parsed> = {
   <s: @L> "=" <value:Term> <e: @R> => value.into(),
 }
 
+/// Parses an attribute, this is a term that can be used as a value.
+pub Attribute: crate::ast::Attribute<Parsed> = {
+}
+
+/// GADT constructor, this is a constructor that can be used to create new
+/// types.
+pub Parameters: Vec<crate::ast::Domain<Parsed>> = {
+  "of" <parameters:Sep<",", Parameter>> => parameters,
+}
+
+/// Parses a signature, this is a term that can be used as a type.
+pub Constructor: crate::ast::Constructor<Parsed> = {
+  <s: @L> "|" <name:Reference> ":" <type_repr:Term> <e: @R> => crate::ast::Constructor {
+    name,
+    type_repr: type_repr.into(),
+    meta: crate::ast::Location::new(s, e, filename),
+  },
+}
+
+/// Parses a signature, this is a term that can be used as a type.
+pub Parameter: crate::ast::Domain<Parsed> = {
+  // Parses explicit arguments, which you need to specify
+  // the type.
+  <s: @L> <names:Sep<",", Reference>> ":" <value:Call> <e: @R> => crate::ast::Domain {
+    name: names.into_iter().map(Some).collect(),
+    type_repr: value.into(),
+    icit: crate::ast::Icit::Expl,
+    meta: crate::ast::Location::new(s, e, filename),
+  },
+  
+  // Parses explicit arguments, which you don't need to specify
+  // the type.
+  <s: @L> "{" <names:Sep<",", Reference>> ":" <value:Term> "}" <e: @R> => crate::ast::Domain {
+    name: names.into_iter().map(Some).collect(),
+    type_repr: value.into(),
+    icit: crate::ast::Icit::Impl,
+    meta: crate::ast::Location::new(s, e, filename),
+  },
+}
+
+/// Last token of a statement, this is a semicolon.
+pub Semi: std::string::String = {
+  "." => ".".to_string(),
+}
+
 /// Parses a top-level statement, this is a statement that can be used
 /// outside of a block.
 pub Stmt: crate::ast::Stmt<Parsed> = {
   // SECTION: Commands
   // 
   // Parses `@eval` command, which evaluates a term and prints the result.
-  <s: @L> "@eval" <value:Term> "." <e: @R> => crate::ast::Stmt::Eval(crate::ast::Eval {
+  <s: @L> "@eval" <value:Term> <semi:Semi> <e: @R> => crate::ast::Stmt::Eval(crate::ast::Eval {
     value,
     meta: crate::ast::Location::new(s, e, filename),
   }),
 
   // Parses `@type` command, which types a term and prints the result.
-  <s: @L> "@type" <value:Term> "." <e: @R> => crate::ast::Stmt::Type(crate::ast::Type {
+  <s: @L> "@type" <value:Term> <semi:Semi> <e: @R> => crate::ast::Stmt::Type(crate::ast::Type {
     value,
     meta: crate::ast::Location::new(s, e, filename),
   }),
 
   // Parses `@import` command, which set to the resolver to import to the
   // current file.
-  <s: @L> "import" <import:Reference> "." <e: @R> => crate::ast::Stmt::Import(crate::pass::parser::Import {
+  <s: @L> "import" <import:Reference> <semi:Semi> <e: @R> => crate::ast::Stmt::Import(crate::pass::parser::Import {
     text: import.text,
     meta: crate::ast::Location::new(s, e, filename),
   }),
 
+  /// Parses an inductive data type declaration, this is a type declaration
+  /// that can be used to create new types.
+  <s: @L> 
+  <doc_strings:DocString*>
+  <attribute:Attribute*> "inductive" "data"
+  <name: Reference>
+  <parameters:Parameters?> "where"
+  <constructors:Constructor*>
+  <semi:Semi> 
+  <e: @R> => {
+    // Report the error
+    errors.push(lalrpop_util::ErrorRecovery {
+        dropped_tokens: vec![],
+        error: lalrpop_util::ParseError::User {
+            error: crate::pass::parser::InnerError::UnsupportedInductiveData {
+                err_span: name.meta.into(),
+            }
+        },
+    });
+
+    // Return the default sentinel value for statements, which is an error.
+    crate::ast::Stmt::Error(crate::ast::Error {
+      message: format!("unsupported inductive data `{}`", name.text),
+      full_text: (&input[s..e]).to_string(),
+      meta: crate::ast::Location::new(s, e, filename),
+    })
+  },
+
   // Parses a simple signature binding, which haves a type, value and a name.
   //
   // It can be compared to a function signature, or let binding in other languages.
-  <s: @L> <doc_strings:DocString*> <name:Reference> <type_repr:TypeRepr?> <value:Value?> "." <e: @R> => match (type_repr, value) {
+  <s: @L>
+  <doc_strings:DocString*>
+  <attribute:Attribute*>
+  <name:Reference>
+  <type_repr:TypeRepr?>
+  <value:Value?>
+  <semi:Semi>
+  <e: @R> => match (type_repr, value) {
     // Unacceptable Binding
     (None, None) => {
       // Report the error

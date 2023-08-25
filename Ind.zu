@@ -6,16 +6,13 @@ import Prelude.
 /// or it's successor `Succ`, which takes the previous and returns the
 /// next natural number.
 inductive data Nat where
-  Zero : Nat,
-  Succ : Nat -> Nat.
+| Zero : Nat
+| Succ : Nat -> Nat.
 
 /// Defines a simple sum aritimetic function which sums with church
 /// encoding.
-+ : Nat -> Nat -> Nat = \a, b ->
-  elim a of
-    Zero   => Zero,
-    Succ n => Succ (+ n b).
+add : Nat -> Nat -> Nat = \a, b -> todo.
 
-@eval + (Succ Zero) Zero.
+@eval (Succ Zero) + Zero.
 
 @type Succ (Succ Zero).
