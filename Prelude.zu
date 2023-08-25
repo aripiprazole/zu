@@ -5,31 +5,29 @@ module Prelude
 /// 
 /// Performs unification and by unification, it proves
 /// some value
-@[alias :=]
+@[alias `:=]
 inductive data Eq of {a}, x, y : a where
   | Refl : Eq x x
 
   /// | Defines a proof that, `a := b` and `b := c` implies
   /// `a := c`.
-  fun Eq/trans : {a, b, c} -> (a := b) -> (b := c) -> (a := c)
-  | Refl, Refl => Refl
+  fun Eq_trans : {a, b, c} -> (a := b) -> (b := c) -> (a := c)
 
   /// | Defines a proof that: `a = b`, implies `b = a` by
   /// induction.
-  fun Eq/symm : {a, b} -> (a := b) -> (b := a)
-  | Refl => Refl
+  fun Eq_symm : {a, b} -> (a := b) -> (b := a)
 
 /// | Represents a type of a dependent pair.
-@[alias $]
+@[alias `$]
 record Sigma of x, f : * -> * where
   val inf : x
   val ins : f a
 
 /// | Record for lazy evaluation
-@[do_notation IO/pure, IO/>>=]
-fun IO      : Type -> Type.
-fun IO/pure : {a} -> a -> IO a.
-fun IO/>>=  : {a, b} -> IO a -> (IO a -> IO b) -> IO b
+@[do_notation IO_pure, IO_apply]
+fun IO       : Type -> Type
+fun IO_pure  : {a} -> a -> IO a
+fun IO_apply : {a, b} -> IO a -> (IO a -> IO b) -> IO b
 
 /// | Prints in the stdout
 ///
@@ -37,7 +35,7 @@ fun IO/>>=  : {a, b} -> IO a -> (IO a -> IO b) -> IO b
 /// main : IO () := do
 ///  println "hello world"
 /// ```
-fun IO/println : message : String -> IO ()
+fun println : message : String -> IO Unit
 
 /// | Performs unsafe IO in the type level, or anywhere you are.
 ///

@@ -43,6 +43,58 @@ Value: crate::ast::Term<Parsed> = {
 
 /// Parses an attribute, this is a term that can be used as a value.
 Attribute: crate::ast::Attribute<Parsed> = {
+  <s: @L> "@" "[" "partial" "]" <e: @R> => {
+    // Report the error
+    errors.push(lalrpop_util::ErrorRecovery {
+        dropped_tokens: vec![],
+        error: lalrpop_util::ParseError::User {
+            error: crate::pass::parser::InnerError::UnsupportedAttribute {
+                err_span: crate::ast::Location::new(s, e, filename).into(),
+            },
+        },
+    });
+
+    crate::ast::Attribute::_TODO(std::marker::PhantomData)
+  },
+  <s: @L> "@" "[" "alias" <names:Sep<",", Reference>> "]" <e: @R> => {
+    // Report the error
+    errors.push(lalrpop_util::ErrorRecovery {
+        dropped_tokens: vec![],
+        error: lalrpop_util::ParseError::User {
+            error: crate::pass::parser::InnerError::UnsupportedAttribute {
+                err_span: crate::ast::Location::new(s, e, filename).into(),
+            },
+        },
+    });
+
+    crate::ast::Attribute::_TODO(std::marker::PhantomData)
+  },
+  <s: @L> "@" "[" "derive" <names:Sep<",", Reference>> "]" <e: @R> => {
+    // Report the error
+    errors.push(lalrpop_util::ErrorRecovery {
+        dropped_tokens: vec![],
+        error: lalrpop_util::ParseError::User {
+            error: crate::pass::parser::InnerError::UnsupportedAttribute {
+                err_span: crate::ast::Location::new(s, e, filename).into(),
+            },
+        },
+    });
+
+    crate::ast::Attribute::_TODO(std::marker::PhantomData)
+  },
+  <s: @L> "@" "[" "do_notation" <names:Sep<",", Reference>> "]" <e: @R> => {
+    // Report the error
+    errors.push(lalrpop_util::ErrorRecovery {
+        dropped_tokens: vec![],
+        error: lalrpop_util::ParseError::User {
+            error: crate::pass::parser::InnerError::UnsupportedAttribute {
+                err_span: crate::ast::Location::new(s, e, filename).into(),
+            },
+        },
+    });
+
+    crate::ast::Attribute::_TODO(std::marker::PhantomData)
+  },
 };
 
 /// GADT constructor, this is a constructor that can be used to create new
