@@ -6,6 +6,7 @@ use lalrpop_util::ErrorRecovery;
 grammar<'err>(errors: &'err mut Vec<ErrorRecovery<usize, Token<'input>, crate::pass::parser::InnerError>>, filename: &str);
 
 extern {
+  type Location = usize;
   type Error = crate::pass::parser::InnerError;
 }
 
@@ -120,6 +121,20 @@ pub Stmt: crate::ast::Stmt<Parsed> = {
       })
     }
   },
+
+  // Error handling for the parser, this is used to report errors when the
+  // parser fails to parse a statement.
+  <s: @L> <error:!> <e: @R> => {
+    let message = error.error.to_string();
+
+    errors.push(error);
+
+    crate::ast::Stmt::Error(crate::ast::Error {
+      message,
+      full_text: (&input[s..e]).to_string(),
+      meta: crate::ast::Location::new(s, e, filename),
+    })
+  },
 }
 
 /// Parses an optional type representation for a statement, this is a colon
@@ -145,18 +160,6 @@ pub Primary: crate::ast::Term<Parsed> = {
     value,
     meta: crate::ast::Location::new(s, e, filename),
   }),
-
-  // Error handling for the parser, this is used to report errors when the
-  // parser fails to parse a term.
-  <s: @L> <error:!> <e: @R> => {
-    errors.push(error);
-
-    crate::ast::Term::Error(crate::ast::Error {
-      message: "failed to parse term".to_string(),
-      full_text: (&input[s..e]).to_string(),
-      meta: crate::ast::Location::new(s, e, filename),
-    })
-  },
 }
 
 /// Parses a call with a single argument, this is a primary term followed by a
@@ -175,143 +178,64 @@ pub Apply: crate::ast::Term<Parsed> = {
   },
 }
 
+pub FactorOp: std::string::String = {
+  "*" => "*".to_string(),
+  "/" => "/".to_string(),
+}
+
 /// Factor operators, this is a list of terms separated by arithmetic operators.
 pub Factor: crate::ast::Term<Parsed> = {
   Call,
-  <s: @L> <a:Call> "*" <b:Factor> <e: @R> => crate::ast::Term::Apply(crate::ast::Apply {
+  <s: @L> <a:Call> <op:FactorOp> <b:Factor> <e: @R> => crate::ast::Term::Apply(crate::ast::Apply {
     meta: crate::ast::Location::new(s, e, filename),
     callee: crate::ast::Term::Reference(crate::pass::parser::Reference {
-      text: "*".to_string(),
+      text: op,
       meta: crate::ast::Location::new(s, e, filename),
     }).into(),
     arguments: vec![a, b],
   }),
-  <s: @L> <a:Call> "/" <b:Factor> <e: @R> => crate::ast::Term::Apply(crate::ast::Apply {
-    meta: crate::ast::Location::new(s, e, filename),
-    callee: crate::ast::Term::Reference(crate::pass::parser::Reference {
-      text: "/".to_string(),
-      meta: crate::ast::Location::new(s, e, filename),
-    }).into(),
-    arguments: vec![a, b],
-  }),
+}
+
+pub ArithmeticOp: std::string::String = {
+  "+" => "+".to_string(),
+  "-" => "-".to_string(),
 }
 
 /// Arithmetic operators, this is a list of terms separated by arithmetic operators.
 pub Arithmetic: crate::ast::Term<Parsed> = {
   Factor,
-  <s: @L> <a:Factor> "+" <b:Arithmetic> <e: @R> => crate::ast::Term::Apply(crate::ast::Apply {
+  <s: @L> <a:Factor> <op:ArithmeticOp> <b:Arithmetic> <e: @R> => crate::ast::Term::Apply(crate::ast::Apply {
     meta: crate::ast::Location::new(s, e, filename),
     callee: crate::ast::Term::Reference(crate::pass::parser::Reference {
-      text: "+".to_string(),
-      meta: crate::ast::Location::new(s, e, filename),
-    }).into(),
-    arguments: vec![a, b],
-  }),
-  <s: @L> <a:Factor> "-" <b:Arithmetic> <e: @R> => crate::ast::Term::Apply(crate::ast::Apply {
-    meta: crate::ast::Location::new(s, e, filename),
-    callee: crate::ast::Term::Reference(crate::pass::parser::Reference {
-      text: "-".to_string(),
+      text: op,
       meta: crate::ast::Location::new(s, e, filename),
     }).into(),
     arguments: vec![a, b],
   }),
 }
 
+pub LogicalOp: std::string::String = {
+  "&&" => "&&".to_string(),
+  "||" => "||".to_string(),
+  "==" => "==".to_string(),
+  "!=" => "!=".to_string(),
+  ":=" => ":=".to_string(),
+  "<=" => "<=".to_string(),
+  ">=" => ">=".to_string(),
+  "++" => "++".to_string(),
+  "**" => "**".to_string(),
+  "$" => "$".to_string(),
+  "<" => "<".to_string(),
+  ">" => ">".to_string(),
+}
+
 /// Logical operators, this is a list of terms separated by logical operators.
 pub Logical: crate::ast::Term<Parsed> = {
   Arithmetic,
-  <s: @L> <a:Arithmetic> "$" <b:Logical> <e: @R> => crate::ast::Term::Apply(crate::ast::Apply {
+  <s: @L> <a:Arithmetic> <op:LogicalOp> <b:Logical> <e: @R> => crate::ast::Term::Apply(crate::ast::Apply {
     meta: crate::ast::Location::new(s, e, filename),
     callee: crate::ast::Term::Reference(crate::pass::parser::Reference {
-      text: "$".to_string(),
-      meta: crate::ast::Location::new(s, e, filename),
-    }).into(),
-    arguments: vec![a, b],
-  }),
-  <s: @L> <a:Arithmetic> "++" <b:Logical> <e: @R> => crate::ast::Term::Apply(crate::ast::Apply {
-    meta: crate::ast::Location::new(s, e, filename),
-    callee: crate::ast::Term::Reference(crate::pass::parser::Reference {
-      text: "++".to_string(),
-      meta: crate::ast::Location::new(s, e, filename),
-    }).into(),
-    arguments: vec![a, b],
-  }),
-  <s: @L> <a:Arithmetic> "**" <b:Logical> <e: @R> => crate::ast::Term::Apply(crate::ast::Apply {
-    meta: crate::ast::Location::new(s, e, filename),
-    callee: crate::ast::Term::Reference(crate::pass::parser::Reference {
-      text: "**".to_string(),
-      meta: crate::ast::Location::new(s, e, filename),
-    }).into(),
-    arguments: vec![a, b],
-  }),
-  <s: @L> <a:Arithmetic> ":=" <b:Logical> <e: @R> => crate::ast::Term::Apply(crate::ast::Apply {
-    meta: crate::ast::Location::new(s, e, filename),
-    callee: crate::ast::Term::Reference(crate::pass::parser::Reference {
-      text: ":=".to_string(),
-      meta: crate::ast::Location::new(s, e, filename),
-    }).into(),
-    arguments: vec![a, b],
-  }),
-  <s: @L> <a:Arithmetic> "&&" <b:Logical> <e: @R> => crate::ast::Term::Apply(crate::ast::Apply {
-    meta: crate::ast::Location::new(s, e, filename),
-    callee: crate::ast::Term::Reference(crate::pass::parser::Reference {
-      text: "&&".to_string(),
-      meta: crate::ast::Location::new(s, e, filename),
-    }).into(),
-    arguments: vec![a, b],
-  }),
-  <s: @L> <a:Arithmetic> "||" <b:Logical> <e: @R> => crate::ast::Term::Apply(crate::ast::Apply {
-    meta: crate::ast::Location::new(s, e, filename),
-    callee: crate::ast::Term::Reference(crate::pass::parser::Reference {
-      text: "||".to_string(),
-      meta: crate::ast::Location::new(s, e, filename),
-    }).into(),
-    arguments: vec![a, b],
-  }),
-  <s: @L> <a:Arithmetic> ">" <b:Logical> <e: @R> => crate::ast::Term::Apply(crate::ast::Apply {
-    meta: crate::ast::Location::new(s, e, filename),
-    callee: crate::ast::Term::Reference(crate::pass::parser::Reference {
-      text: ">".to_string(),
-      meta: crate::ast::Location::new(s, e, filename),
-    }).into(),
-    arguments: vec![a, b],
-  }),
-  <s: @L> <a:Arithmetic> "<" <b:Logical> <e: @R> => crate::ast::Term::Apply(crate::ast::Apply {
-    meta: crate::ast::Location::new(s, e, filename),
-    callee: crate::ast::Term::Reference(crate::pass::parser::Reference {
-      text: "<".to_string(),
-      meta: crate::ast::Location::new(s, e, filename),
-    }).into(),
-    arguments: vec![a, b],
-  }),
-  <s: @L> <a:Arithmetic> "!=" <b:Logical> <e: @R> => crate::ast::Term::Apply(crate::ast::Apply {
-    meta: crate::ast::Location::new(s, e, filename),
-    callee: crate::ast::Term::Reference(crate::pass::parser::Reference {
-      text: "!=".to_string(),
-      meta: crate::ast::Location::new(s, e, filename),
-    }).into(),
-    arguments: vec![a, b],
-  }),
-  <s: @L> <a:Arithmetic> "==" <b:Logical> <e: @R> => crate::ast::Term::Apply(crate::ast::Apply {
-    meta: crate::ast::Location::new(s, e, filename),
-    callee: crate::ast::Term::Reference(crate::pass::parser::Reference {
-      text: "==".to_string(),
-      meta: crate::ast::Location::new(s, e, filename),
-    }).into(),
-    arguments: vec![a, b],
-  }),
-  <s: @L> <a:Arithmetic> ">=" <b:Logical> <e: @R> => crate::ast::Term::Apply(crate::ast::Apply {
-    meta: crate::ast::Location::new(s, e, filename),
-    callee: crate::ast::Term::Reference(crate::pass::parser::Reference {
-      text: ">=".to_string(),
-      meta: crate::ast::Location::new(s, e, filename),
-    }).into(),
-    arguments: vec![a, b],
-  }),
-  <s: @L> <a:Arithmetic> "<=" <b:Logical> <e: @R> => crate::ast::Term::Apply(crate::ast::Apply {
-    meta: crate::ast::Location::new(s, e, filename),
-    callee: crate::ast::Term::Reference(crate::pass::parser::Reference {
-      text: "<=".to_string(),
+      text: op,
       meta: crate::ast::Location::new(s, e, filename),
     }).into(),
     arguments: vec![a, b],
@@ -387,6 +311,20 @@ pub Call: crate::ast::Term<Parsed> = {
 pub Term: crate::ast::Term<Parsed> = {
   Fun,
   Arrow,
+
+  // Error handling for the parser, this is used to report errors when the
+  // parser fails to parse a statement.
+  <s: @L> <error:!> <e: @R> => {
+    let message = error.error.to_string();
+
+    errors.push(error);
+
+    crate::ast::Term::Error(crate::ast::Error {
+      message,
+      full_text: (&input[s..e]).to_string(),
+      meta: crate::ast::Location::new(s, e, filename),
+    })
+  },
 }
 
 /// Parses a relevent document string, this is a string that is used to document

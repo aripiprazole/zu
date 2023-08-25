@@ -113,20 +113,24 @@ pub enum InnerError {
         err_span: SourceSpan,
     },
 
-    #[error("unrecognized token, {}", fmt_expected(expected))]
+    #[error("unrecognized token")]
     #[diagnostic(code(zu::unrecognized_token), url(docsrs))]
     UnrecoginzedToken {
         #[label = "here"]
         err_span: SourceSpan,
-        expected: Vec<String>,
+
+        #[help]
+        help: String,
     },
 
-    #[error("expected token, but got eof, {}", fmt_expected(expected))]
+    #[error("expected token, but got eof")]
     #[diagnostic(code(zu::expected_token), url(docsrs))]
     ExpectedToken {
         #[label = "here"]
         err_span: SourceSpan,
-        expected: Vec<String>,
+
+        #[help]
+        help: String,
     },
 
     #[error("extra token, {}", token)]
@@ -189,11 +193,11 @@ pub fn parse_or_report(filename: &str, text: &str) -> Result<FileQt, ParseError>
                     },
                     UnrecognizedEof { location, expected } => InnerError::ExpectedToken {
                         err_span: SourceSpan::from(location..location),
-                        expected,
+                        help: fmt_expected(&expected),
                     },
                     UnrecognizedToken { token, expected } => InnerError::UnrecoginzedToken {
                         err_span: SourceSpan::from(token.0..token.2),
-                        expected,
+                        help: fmt_expected(&expected),
                     },
                     ExtraToken { ref token } => InnerError::ExtraToken {
                         err_span: SourceSpan::from(token.0..token.2),
