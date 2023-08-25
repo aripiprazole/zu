@@ -51,6 +51,15 @@ Parameters: Vec<crate::ast::Domain<Parsed>> = {
   "of" <parameters:Sep<",", Parameter>> => parameters,
 };
 
+/// Record coinductive property
+Property: crate::ast::Property<Parsed> = {
+  <s: @L> "val" <name:Reference> ":" <type_repr:Term> <e: @R> => crate::ast::Property {
+    name,
+    type_repr: type_repr.into(),
+    meta: crate::ast::Location::new(s, e, filename),
+  },
+};
+
 /// Parses a signature, this is a term that can be used as a type.
 Constructor: crate::ast::Constructor<Parsed> = {
   <s: @L> "|" <name:Reference> ":" <type_repr:Term> <e: @R> => crate::ast::Constructor {
@@ -64,10 +73,32 @@ Constructor: crate::ast::Constructor<Parsed> = {
 Parameter: crate::ast::Domain<Parsed> = {
   // Parses explicit arguments, which you need to specify
   // the type.
-  <s: @L> <names:Sep<",", Reference>> ":" <value:Call> <e: @R> => crate::ast::Domain {
-    name: names.into_iter().map(Some).collect(),
+  <s: @L> <name:Reference> <e: @R> => crate::ast::Domain {
+    name: vec![Some(name)],
+    type_repr: Box::new(crate::ast::Term::Universe(crate::ast::Universe {
+      meta: crate::ast::Location::new(s, e, filename),
+    })),
+    icit: crate::ast::Icit::Expl,
+    meta: crate::ast::Location::new(s, e, filename),
+  },
+
+  // Parses explicit arguments, which you need to specify
+  // the type.
+  <s: @L> <name:Reference> ":" <value:Call> <e: @R> => crate::ast::Domain {
+    name: vec![Some(name)],
     type_repr: value.into(),
     icit: crate::ast::Icit::Expl,
+    meta: crate::ast::Location::new(s, e, filename),
+  },
+  
+  // Parses explicit arguments, which you don't need to specify
+  // the type.
+  <s: @L> "{" <names:Sep<",", Reference>> "}" <e: @R> => crate::ast::Domain {
+    name: names.into_iter().map(Some).collect(),
+    type_repr: Box::new(crate::ast::Term::Universe(crate::ast::Universe {
+      meta: crate::ast::Location::new(s, e, filename),
+    })),
+    icit: crate::ast::Icit::Impl,
     meta: crate::ast::Location::new(s, e, filename),
   },
   
@@ -109,6 +140,34 @@ Stmt: crate::ast::Stmt<Parsed> = {
     text: import.text,
     meta: crate::ast::Location::new(s, e, filename),
   }),
+
+  /// Parses an coinductive data type declaration, this is a type declaration
+  /// that can be used to create new types.
+  <s: @L> 
+  <doc_strings:DocString*>
+  <attribute:Attribute*> "record"
+  <name: Reference>
+  <parameters:Parameters?> "where"
+  <properties:Property*>
+  <semi:Semi> 
+  <e: @R> => {
+    // Report the error
+    errors.push(lalrpop_util::ErrorRecovery {
+        dropped_tokens: vec![],
+        error: lalrpop_util::ParseError::User {
+            error: crate::pass::parser::InnerError::UnsupportedCoinductiveData {
+                err_span: name.meta.into(),
+            }
+        },
+    });
+
+    // Return the default sentinel value for statements, which is an error.
+    crate::ast::Stmt::Error(crate::ast::Error {
+      message: format!("unsupported coinductive data `{}`", name.text),
+      full_text: (&input[s..e]).to_string(),
+      meta: crate::ast::Location::new(s, e, filename),
+    })
+  },
 
   /// Parses an inductive data type declaration, this is a type declaration
   /// that can be used to create new types.
@@ -356,6 +415,17 @@ Domain: crate::ast::Domain<Parsed> = {
     name: names.into_iter().map(Some).collect(),
     type_repr: value.into(),
     icit: crate::ast::Icit::Expl,
+    meta: crate::ast::Location::new(s, e, filename),
+  },
+
+  // Parses explicit arguments, which you don't need to specify
+  // the type.
+  <s: @L> "{" <names:Sep<",", Reference>> "}" <e: @R> => crate::ast::Domain {
+    name: names.into_iter().map(Some).collect(),
+    type_repr: Box::new(crate::ast::Term::Universe(crate::ast::Universe {
+      meta: crate::ast::Location::new(s, e, filename),
+    })),
+    icit: crate::ast::Icit::Impl,
     meta: crate::ast::Location::new(s, e, filename),
   },
   

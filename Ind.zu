@@ -9,6 +9,10 @@ inductive data Nat where
 | Zero : Nat
 | Succ : Nat -> Nat.
 
+record Sigma of x, f : (Type -> Type) where
+  val inf : x
+  val ins : f a.
+
 /// Defines a simple sum aritimetic function which sums with church
 /// encoding.
 `+ : Nat -> Nat -> Nat = \a, b ->

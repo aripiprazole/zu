@@ -117,6 +117,17 @@ pub enum InnerError {
         err_span: SourceSpan,
     },
 
+    #[error("coinductive data isn't supported yet")]
+    #[diagnostic(
+        code(zu::unsupported_coinductive_data),
+        url(docsrs),
+        help("maybe open a PR")
+    )]
+    UnsupportedCoinductiveData {
+        #[label = "here"]
+        err_span: SourceSpan,
+    },
+
     #[error("invalid token")]
     #[diagnostic(code(zu::invalid_token), url(docsrs))]
     InvalidToken {

@@ -7,6 +7,19 @@ pub enum Attribute<S: state::State> {
     _TODO(PhantomData<S>),
 }
 
+#[derive(Debug, Clone)]
+pub struct Property<S: state::State> {
+    pub name: S::Definition,
+    pub type_repr: Term<S>,
+    pub meta: S::Meta,
+}
+
+impl<S: state::State> Element<S> for Property<S> {
+    fn meta(&self) -> &S::Meta {
+        &self.meta
+    }
+}
+
 /// A constructor for an inductive type. It has a name and a type.
 ///
 /// ## Examples
