@@ -424,6 +424,17 @@ impl Resolver {
                 meta: anno.meta,
             }),
             Term::Fun(fun) => self.fork(|local| {
+                for argument in fun.arguments.iter() {
+                    let parameter = Rc::new(Definition {
+                        text: parameter.text,
+                        meta: parameter.meta.clone(),
+                    });
+
+                    local
+                        .scope
+                        .insert(parameter.text.clone(), parameter.clone());
+                }
+
                 // Resolve the arguments of the function. It's useful to
                 // define the parameters into the scope.
                 fun.arguments
