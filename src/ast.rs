@@ -219,7 +219,7 @@ impl<S: state::State> Element<S> for Pattern<S> {
 /// A case for eliminator.
 #[derive(Debug, Clone)]
 pub struct Case<S: state::State> {
-    pub patterns: Vec<Pattern<S>>,
+    pub pattern: Pattern<S>,
     pub value: Box<Term<S>>,
     pub meta: S::Meta,
 }
@@ -235,6 +235,7 @@ impl<S: state::State> Element<S> for Case<S> {
 /// It's a simple eliminator for inductive types.
 #[derive(Debug, Clone)]
 pub struct Elim<S: state::State> {
+    pub scrutinee: Box<Term<S>>,
     pub patterns: Vec<Case<S>>,
     pub meta: S::Meta,
 }

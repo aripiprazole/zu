@@ -11,8 +11,11 @@ inductive data Nat where
 
 /// Defines a simple sum aritimetic function which sums with church
 /// encoding.
-add : Nat -> Nat -> Nat = \a, b -> todo.
+`+ : Nat -> Nat -> Nat = \a, b ->
+  elim a of
+    Zero   => Zero,
+    Succ n => (Succ (n + b)).
 
-@eval (Succ Zero) + Zero.
+@eval Zero + (Succ Zero).
 
 @type Succ (Succ Zero).

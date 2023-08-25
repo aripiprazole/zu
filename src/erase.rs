@@ -131,16 +131,13 @@ impl Term<Resolved> {
             }),
             Term::Elim(elim) => Term::Elim(Elim {
                 meta: (),
+                scrutinee: elim.scrutinee.erase().into(),
                 patterns: elim
                     .patterns
                     .into_iter()
                     .map(|pattern| Case {
                         meta: (),
-                        patterns: pattern
-                            .patterns
-                            .into_iter()
-                            .map(|pattern| pattern.erase())
-                            .collect(),
+                        pattern: pattern.pattern.erase(),
                         value: pattern.value.erase().into(),
                     })
                     .collect(),

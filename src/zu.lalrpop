@@ -32,36 +32,36 @@ pub File: crate::ast::File<Parsed> = {
 
 /// Parses the header module declaration within the file, this is used to
 /// declare the module name.
-pub ModuleName: String = {
+ModuleName: String = {
   "module" <name:Reference> "." => name.text,
 }
 
 /// Parses a value, this is a term that can be used as a value.
-pub Value: crate::ast::Term<Parsed> = {
+Value: crate::ast::Term<Parsed> = {
   <s: @L> "=" <value:Term> <e: @R> => value.into(),
-}
+};
 
 /// Parses an attribute, this is a term that can be used as a value.
-pub Attribute: crate::ast::Attribute<Parsed> = {
-}
+Attribute: crate::ast::Attribute<Parsed> = {
+};
 
 /// GADT constructor, this is a constructor that can be used to create new
 /// types.
-pub Parameters: Vec<crate::ast::Domain<Parsed>> = {
+Parameters: Vec<crate::ast::Domain<Parsed>> = {
   "of" <parameters:Sep<",", Parameter>> => parameters,
-}
+};
 
 /// Parses a signature, this is a term that can be used as a type.
-pub Constructor: crate::ast::Constructor<Parsed> = {
+Constructor: crate::ast::Constructor<Parsed> = {
   <s: @L> "|" <name:Reference> ":" <type_repr:Term> <e: @R> => crate::ast::Constructor {
     name,
     type_repr: type_repr.into(),
     meta: crate::ast::Location::new(s, e, filename),
   },
-}
+};
 
 /// Parses a signature, this is a term that can be used as a type.
-pub Parameter: crate::ast::Domain<Parsed> = {
+Parameter: crate::ast::Domain<Parsed> = {
   // Parses explicit arguments, which you need to specify
   // the type.
   <s: @L> <names:Sep<",", Reference>> ":" <value:Call> <e: @R> => crate::ast::Domain {
@@ -79,16 +79,16 @@ pub Parameter: crate::ast::Domain<Parsed> = {
     icit: crate::ast::Icit::Impl,
     meta: crate::ast::Location::new(s, e, filename),
   },
-}
+};
 
 /// Last token of a statement, this is a semicolon.
-pub Semi: std::string::String = {
+Semi: std::string::String = {
   "." => ".".to_string(),
-}
+};
 
 /// Parses a top-level statement, this is a statement that can be used
 /// outside of a block.
-pub Stmt: crate::ast::Stmt<Parsed> = {
+Stmt: crate::ast::Stmt<Parsed> = {
   // SECTION: Commands
   // 
   // Parses `@eval` command, which evaluates a term and prints the result.
@@ -215,17 +215,17 @@ pub Stmt: crate::ast::Stmt<Parsed> = {
       meta: crate::ast::Location::new(s, e, filename),
     })
   },
-}
+};
 
 /// Parses an optional type representation for a statement, this is a colon
 /// followed by a type representation.
-pub TypeRepr: crate::ast::Term<Parsed> = {
+TypeRepr: crate::ast::Term<Parsed> = {
   ":" <value:Term> => value.into(),
-}
+};
 
 /// Primary expressions, that aren't necessary expressions but can be used as
 /// the base of an expression.
-pub Primary: crate::ast::Term<Parsed> = {
+Primary: crate::ast::Term<Parsed> = {
   "(" <Term> ")" => crate::ast::Term::Group(<>.into()),
   <r:Reference> => match r.text {
     _ if r.text == "_" => crate::ast::Term::Hole(crate::ast::Hole { meta: r.meta.clone() }),
@@ -240,11 +240,11 @@ pub Primary: crate::ast::Term<Parsed> = {
     value,
     meta: crate::ast::Location::new(s, e, filename),
   }),
-}
+};
 
 /// Parses a call with a single argument, this is a primary term followed by a
 /// single argument.
-pub Apply: crate::ast::Term<Parsed> = {
+Apply: crate::ast::Term<Parsed> = {
   <s: @L> <callee:Call> <argument:Primary> <e: @R> => match callee.clone().unwrap() {
     crate::ast::Term::Apply(mut apply) => {
       apply.arguments.push(argument);
@@ -256,15 +256,15 @@ pub Apply: crate::ast::Term<Parsed> = {
       meta: crate::ast::Location::new(s, e, filename),
     }),
   },
-}
+};
 
-pub FactorOp: std::string::String = {
+FactorOp: std::string::String = {
   "*" => "*".to_string(),
   "/" => "/".to_string(),
-}
+};
 
 /// Factor operators, this is a list of terms separated by arithmetic operators.
-pub Factor: crate::ast::Term<Parsed> = {
+Factor: crate::ast::Term<Parsed> = {
   Call,
   <s: @L> <a:Call> <op:FactorOp> <b:Factor> <e: @R> => crate::ast::Term::Apply(crate::ast::Apply {
     meta: crate::ast::Location::new(s, e, filename),
@@ -274,15 +274,15 @@ pub Factor: crate::ast::Term<Parsed> = {
     }).into(),
     arguments: vec![a, b],
   }),
-}
+};
 
-pub ArithmeticOp: std::string::String = {
+ArithmeticOp: std::string::String = {
   "+" => "+".to_string(),
   "-" => "-".to_string(),
 }
 
 /// Arithmetic operators, this is a list of terms separated by arithmetic operators.
-pub Arithmetic: crate::ast::Term<Parsed> = {
+Arithmetic: crate::ast::Term<Parsed> = {
   Factor,
   <s: @L> <a:Factor> <op:ArithmeticOp> <b:Arithmetic> <e: @R> => crate::ast::Term::Apply(crate::ast::Apply {
     meta: crate::ast::Location::new(s, e, filename),
@@ -292,9 +292,9 @@ pub Arithmetic: crate::ast::Term<Parsed> = {
     }).into(),
     arguments: vec![a, b],
   }),
-}
+};
 
-pub LogicalOp: std::string::String = {
+LogicalOp: std::string::String = {
   "&&" => "&&".to_string(),
   "||" => "||".to_string(),
   "==" => "==".to_string(),
@@ -307,10 +307,10 @@ pub LogicalOp: std::string::String = {
   "$" => "$".to_string(),
   "<" => "<".to_string(),
   ">" => ">".to_string(),
-}
+};
 
 /// Logical operators, this is a list of terms separated by logical operators.
-pub Logical: crate::ast::Term<Parsed> = {
+Logical: crate::ast::Term<Parsed> = {
   Arithmetic,
   <s: @L> <a:Arithmetic> <op:LogicalOp> <b:Logical> <e: @R> => crate::ast::Term::Apply(crate::ast::Apply {
     meta: crate::ast::Location::new(s, e, filename),
@@ -320,37 +320,27 @@ pub Logical: crate::ast::Term<Parsed> = {
     }).into(),
     arguments: vec![a, b],
   }),
-}
+};
 
 /// Parses a pi expression, this is a list of arguments followed by an arrow
 /// and a value.
-pub Pi: crate::ast::Pi<Parsed> = {
+Pi: crate::ast::Pi<Parsed> = {
   <s: @L> <domain:Domain> "->" <value:Arrow> <e: @R> => crate::ast::Pi {
     meta: crate::ast::Location::new(s, e, filename),
     icit: crate::ast::Icit::Expl,
     codomain: value.into(),
     domain,
   },
-}
+};
 
 /// Arrow type signature, this is a domain followed by an arrow and a value.
-pub Arrow: crate::ast::Term<Parsed> = {
+Arrow: crate::ast::Term<Parsed> = {
   Logical,
   <Pi> => crate::ast::Term::Pi(<>),
-}
-
-/// Parses a lambda function, this is a list of arguments followed by an arrow
-/// and a value.
-pub Fun: crate::ast::Term<Parsed> = {
-  <s: @L> "\\" <arguments:Sep<",", Reference>> "->" <value:Term> <e: @R> => crate::ast::Term::Fun(crate::ast::Fun {
-    arguments,
-    value: value.into(),
-    meta: crate::ast::Location::new(s, e, filename),
-  })
-}
+};
 
 /// Represents a domain for pi expressions, this is a variable with a type.
-pub Domain: crate::ast::Domain<Parsed> = {
+Domain: crate::ast::Domain<Parsed> = {
   /// Parses unnamed explicit arguments, which you don't need to specify
   /// the type and neither the name.
   <term:Call> => crate::ast::Domain {
@@ -377,20 +367,78 @@ pub Domain: crate::ast::Domain<Parsed> = {
     icit: crate::ast::Icit::Impl,
     meta: crate::ast::Location::new(s, e, filename),
   },
-}
+};
 
 /// Parses a call, this is a primary term followed by a list of arguments. It can 
 /// parse either a call or a call with a single argument.
-pub Call: crate::ast::Term<Parsed> = {
+Call: crate::ast::Term<Parsed> = {
   Primary,
   Apply,
-}
+};
+
+SimplePattern: crate::ast::Pattern<Parsed> = {
+  <s: @L> <constructor:Reference> <arguments:Reference*> <e: @R> => crate::ast::Pattern {
+    constructor,
+    arguments,
+    meta: crate::ast::Location::new(s, e, filename),
+  },
+};
+
+/// Parses a case expression, this is a list of cases followed by a pipe and
+/// a value.
+Case: crate::ast::Case<Parsed> = {
+  <s: @L> <pattern:SimplePattern> "=>" <value:Call> <e: @R> => crate::ast::Case {
+    pattern,
+    value: value.into(),
+    meta: crate::ast::Location::new(s, e, filename),
+  },
+
+  // Error handling for the parser, this is used to report errors when the
+  // parser fails to parse a statement.
+  <s: @L> <error:!> <e: @R> => {
+    let message = error.error.to_string();
+
+    errors.push(error);
+
+    crate::ast::Case {
+      pattern: crate::ast::Pattern {
+        constructor: crate::pass::parser::Reference {
+          text: "Error".to_string(),
+          meta: crate::ast::Location::new(s, e, filename),
+        },
+        arguments: vec![],
+        meta: crate::ast::Location::new(s, e, filename),
+      },
+      value: crate::ast::Term::Error(crate::ast::Error {
+        message,
+        full_text: (&input[s..e]).to_string(),
+        meta: crate::ast::Location::new(s, e, filename),
+      }).into(),
+      meta: crate::ast::Location::new(s, e, filename),
+    }
+  },
+};
 
 /// Parser for expressions in the language, these are the terms but it doesn't
 /// parses as primary.
 pub Term: crate::ast::Term<Parsed> = {
-  Fun,
   Arrow,
+
+  /// Parses a lambda function, this is a list of arguments followed by an arrow
+  /// and a value.
+  <s: @L> "\\" <arguments:Sep<",", Reference>> "->" <value:Term> <e: @R> => crate::ast::Term::Fun(crate::ast::Fun {
+    arguments,
+    value: value.into(),
+    meta: crate::ast::Location::new(s, e, filename),
+  }),
+
+  /// Parses a elim expression, this is a list of cases followed by a pipe and
+  /// a value.
+  <s: @L> "elim" <scrutinee:Term> "of" <cases:Sep<",", Case>> <e: @R> => crate::ast::Term::Elim(crate::ast::Elim {
+    scrutinee: scrutinee.into(),
+    patterns: cases,
+    meta: crate::ast::Location::new(s, e, filename),
+  }),
 
   // Error handling for the parser, this is used to report errors when the
   // parser fails to parse a statement.
@@ -409,7 +457,7 @@ pub Term: crate::ast::Term<Parsed> = {
 
 /// Parses a relevent document string, this is a string that is used to document
 /// the code.
-pub DocString: crate::ast::DocString<Parsed> = <s: @L> <text:r"///.*\n"> <e: @R> => crate::ast::DocString {
+DocString: crate::ast::DocString<Parsed> = <s: @L> <text:r"///.*\n"> <e: @R> => crate::ast::DocString {
   text: (&text[2..]).to_string(),
   full_text: text.to_string(),
   meta: crate::ast::Location::new(s, e, filename),
@@ -420,8 +468,11 @@ String: std::string::String = <text:r#""(\\\\|\\"|[^"\\])*""#> => (&text[1..text
 
 // Reference token text lexer
 Text: std::string::String = {
+  "`" <text:LogicalOp> => text.to_string(),
+  "`" <text:ArithmeticOp> => text.to_string(),
+  "`" <text:FactorOp> => text.to_string(),
   <text:"_"> => text.to_string(),
-  <text:r"[a-zA-Z*/+-][a-zA-Z0-9_*/+-]*"> => text.to_string(),
+  <text:r"[a-zA-Z][a-zA-Z0-9_]*"> => text.to_string(),
 }
 
 // Reference token lexer
