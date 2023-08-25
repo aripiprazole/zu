@@ -386,6 +386,15 @@ LogicalOp: std::string::String = {
 /// Logical operators, this is a list of terms separated by logical operators.
 Logical: crate::ast::Term<Parsed> = {
   Arithmetic,
+
+  /// Annotation expression, this is a value followed by a colon and a type.
+  <s: @L> <value:Arithmetic> "is" <type_repr:Logical> <e: @R> => crate::ast::Term::Anno(crate::ast::Anno {
+    meta: crate::ast::Location::new(s, e, filename),
+    value: value.into(),
+    type_repr: type_repr.into(),
+  }),
+
+  /// Logical operators, this is a list of terms separated by logical operators.
   <s: @L> <a:Arithmetic> <op:LogicalOp> <b:Logical> <e: @R> => crate::ast::Term::Apply(crate::ast::Apply {
     meta: crate::ast::Location::new(s, e, filename),
     callee: crate::ast::Term::Reference(crate::pass::parser::Reference {
