@@ -52,12 +52,12 @@ pub struct Command {
     pub main: String,
 }
 
-fn main() -> miette::Result<()> {
+fn program() -> miette::Result<()> {
     bupropion::BupropionHandlerOpts::install(|| {
         // Build the bupropion handler options, for specific
         // error presenting.
         bupropion::BupropionHandlerOpts::new()
-    })?;
+    }).into_diagnostic()?;
 
     let command = Command::parse();
 
@@ -77,4 +77,14 @@ fn main() -> miette::Result<()> {
     resolver.resolve_and_import()?;
 
     Ok(())
+}
+
+// The main function wrapper around [`crate::program`].
+fn main() {
+    // Avoid printing print `Error: ` before the error message
+    // to maintain the language beauty!
+    if let Err(e) = program() {
+        eprintln!("{e:?}");
+        std::process::exit(1);
+    }
 }
