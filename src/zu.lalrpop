@@ -3,7 +3,11 @@ use crate::ast::Element;
 use std::str::FromStr;
 use lalrpop_util::ErrorRecovery;
 
-grammar<'err>(errors: &'err mut Vec<ErrorRecovery<usize, Token<'input>, &'static str>>, filename: &str);
+grammar<'err>(errors: &'err mut Vec<ErrorRecovery<usize, Token<'input>, crate::pass::parser::InnerError>>, filename: &str);
+
+extern {
+  type Error = crate::pass::parser::InnerError;
+}
 
 /// Parses an entire file declaration into the abstract Parsed tree, so
 /// we can resolve and typecheck it.
@@ -21,6 +25,11 @@ pub File: crate::ast::File<Parsed> = {
 /// declare the module name.
 pub ModuleName: String = {
   "module" <name:Reference> "." => name.text,
+}
+
+/// Parses a value, this is a term that can be used as a value.
+pub Value: crate::ast::Term<Parsed> = {
+  <s: @L> ":=" <value:Term> <e: @R> => value.into(),
 }
 
 /// Parses a top-level statement, this is a statement that can be used
@@ -50,19 +59,59 @@ pub Stmt: crate::ast::Stmt<Parsed> = {
   // Parses a simple signature binding, which haves a type, value and a name.
   //
   // It can be compared to a function signature, or let binding in other languages.
-  <s: @L> <doc_strings:DocString*> <name:Reference> <type_repr:TypeRepr?> ":=" <value:Term> "." <e: @R> => crate::ast::Stmt::Binding(crate::ast::Binding {
-    doc_strings,
-    attributes: vec![],
-    type_repr: match type_repr {
-      Some(type_repr) => type_repr.into(),
-      None => crate::ast::Term::Hole(crate::ast::Hole {
-        meta: crate::ast::Location::clone(<crate::pass::parser::Reference as crate::ast::Element<Parsed>>::meta(&name)),
-      }),
-    },
-    name,
-    value: value.into(),
-    meta: crate::ast::Location::new(s, e, filename),
-  }),
+  <s: @L> <doc_strings:DocString*> <name:Reference> <type_repr:TypeRepr?> <value:Value?> "." <e: @R> => match (type_repr, value) {
+    // Unacceptable Binding
+    (None, None) => {
+      // Report the error
+      errors.push(lalrpop_util::ErrorRecovery {
+          dropped_tokens: vec![],
+          error: lalrpop_util::ParseError::User {
+              error: crate::pass::parser::InnerError::ExpectedStatement {
+                  err_span: miette::SourceSpan::from(s..e),
+              }
+          },
+      });
+
+      // Return the default sentinel value for statements, which is an error.
+      crate::ast::Stmt::Error(crate::ast::Error {
+        message: format!("expected a type or value for binding `{}`", name.text),
+        full_text: (&input[s..e]).to_string(),
+        meta: crate::ast::Location::new(s, e, filename),
+      })
+    }
+    // Infer Binding
+    (None, Some(value)) => {
+      crate::ast::Stmt::Binding(crate::ast::Binding {
+        doc_strings,
+        attributes: vec![],
+        type_repr: crate::ast::Term::Hole(crate::ast::Hole {
+          meta: crate::ast::Location::clone(<crate::pass::parser::Reference as crate::ast::Element<Parsed>>::meta(&name)),
+        }),
+        name,
+        value: value.into(),
+        meta: crate::ast::Location::new(s, e, filename),
+      })
+    }
+    // Signature
+    (Some(type_repr), None) => {
+      crate::ast::Stmt::Signature(crate::pass::parser::Signature {
+        type_repr: type_repr.into(),
+        name,
+        meta: crate::ast::Location::new(s, e, filename),
+      })
+    }
+    // Typed Binding
+    (Some(type_repr), Some(value)) => {
+      crate::ast::Stmt::Binding(crate::ast::Binding {
+        doc_strings,
+        attributes: vec![],
+        type_repr: type_repr.into(),
+        name,
+        value: value.into(),
+        meta: crate::ast::Location::new(s, e, filename),
+      })
+    }
+  },
 }
 
 /// Parses an optional type representation for a statement, this is a colon

@@ -1,4 +1,4 @@
-use crate::ast::{Location, state::State, Element, Anno};
+use crate::ast::{state::State, Anno, Element, Location};
 
 use miette::{NamedSource, SourceSpan};
 
@@ -46,7 +46,6 @@ impl<S: State> crate::ast::Element<S> for Signature<S> {
     }
 }
 
-
 /// A name access.
 #[derive(Debug, Clone)]
 pub struct Reference {
@@ -59,7 +58,6 @@ impl<S: State<Meta = Location>> Element<S> for Reference {
         &self.meta
     }
 }
-
 
 /// Imports a name temporally until it's
 /// propertly resolved
@@ -97,15 +95,26 @@ pub struct ParseError {
 #[error("can't parse the file")]
 #[diagnostic()]
 pub enum InnerError {
+    #[error("expected or binding or signature statement")]
+    #[diagnostic(
+        code(zu::expected_statement),
+        url(docsrs),
+        help("maybe assign a type representation")
+    )]
+    ExpectedStatement {
+        #[label = "here"]
+        err_span: SourceSpan,
+    },
+
     #[error("invalid token")]
-    #[diagnostic(code(zu::invalid_token))]
+    #[diagnostic(code(zu::invalid_token), url(docsrs))]
     InvalidToken {
         #[label = "here"]
         err_span: SourceSpan,
     },
 
     #[error("unrecognized token, {}", fmt_expected(expected))]
-    #[diagnostic(code(zu::unrecognized_token))]
+    #[diagnostic(code(zu::unrecognized_token), url(docsrs))]
     UnrecoginzedToken {
         #[label = "here"]
         err_span: SourceSpan,
@@ -113,7 +122,7 @@ pub enum InnerError {
     },
 
     #[error("expected token, but got eof, {}", fmt_expected(expected))]
-    #[diagnostic(code(zu::expected_token))]
+    #[diagnostic(code(zu::expected_token), url(docsrs))]
     ExpectedToken {
         #[label = "here"]
         err_span: SourceSpan,
@@ -121,7 +130,7 @@ pub enum InnerError {
     },
 
     #[error("extra token, {}", token)]
-    #[diagnostic(code(zu::extra_token))]
+    #[diagnostic(code(zu::extra_token), url(docsrs))]
     ExtraToken {
         #[label = "here"]
         err_span: SourceSpan,
@@ -190,7 +199,7 @@ pub fn parse_or_report(filename: &str, text: &str) -> Result<FileQt, ParseError>
                         err_span: SourceSpan::from(token.0..token.2),
                         token: token.1.to_string(),
                     },
-                    User { .. } => todo!(),
+                    User { error } => error,
                 }
             })
             .collect(),
