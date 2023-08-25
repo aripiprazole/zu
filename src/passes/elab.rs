@@ -16,7 +16,7 @@ pub struct Typed;
 
 /// Represents a node that has a type.
 pub trait TypedNode<S: State>: crate::ast::Element<S> {
-    fn type_value(&self) -> &crate::pass::elab::Value;
+    fn type_value(&self) -> &crate::passes::elab::Value;
 }
 
 impl State for Typed {
@@ -25,7 +25,7 @@ impl State for Typed {
 }
 
 impl<S: State<Meta = TypedMeta>, T: crate::ast::Element<S>> TypedNode<S> for T {
-    fn type_value(&self) -> &crate::pass::elab::Value {
+    fn type_value(&self) -> &crate::passes::elab::Value {
         &self.meta().type_value
     }
 }
@@ -39,7 +39,7 @@ pub enum TypeInfo {}
 pub struct TypedMeta {
     pub type_info: TypeInfo,
     pub type_term: Option<Term<Erased>>,
-    pub type_value: crate::pass::elab::Value,
+    pub type_value: crate::passes::elab::Value,
     pub location: Location,
 }
 

@@ -1,7 +1,7 @@
 use crate::{
     ast::Term,
     erase::{Lvl, Erased},
-    pass::elab::Value,
+    passes::elab::Value,
 };
 
 /// The context we need to pretty print a type right now.

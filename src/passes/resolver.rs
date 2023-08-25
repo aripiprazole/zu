@@ -548,7 +548,7 @@ impl Resolver {
     // it will report an error.
     fn find_reference(
         &mut self,
-        reference: crate::pass::parser::Reference,
+        reference: crate::passes::parser::Reference,
     ) -> Option<Rc<Definition<Resolved>>> {
         match self.scope.get(&reference.text) {
             Some(value) => value.clone().into(),
@@ -572,7 +572,7 @@ impl Resolver {
     /// Reports a possible definition for a reference.
     fn report_possible_definition(
         &mut self,
-        reference: &crate::pass::parser::Reference,
+        reference: &crate::passes::parser::Reference,
         definition: Rc<Definition<Resolved>>,
     ) {
         self.errors.push(InnerError::LaterUnresolvedDefinition(
@@ -586,7 +586,7 @@ impl Resolver {
     }
 
     /// Reports an error for a reference.
-    fn report_unresolved(&mut self, reference: &crate::pass::parser::Reference) {
+    fn report_unresolved(&mut self, reference: &crate::passes::parser::Reference) {
         self.errors
             .push(InnerError::UnresolvedDefinition(UnresolvedDefinition {
                 module: reference.text.clone(),

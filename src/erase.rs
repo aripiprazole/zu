@@ -3,7 +3,7 @@ use crate::{
         state::State, Apply, Case, Definition, Domain, Element, Elim, Error, Fun, Hole, Int,
         Pattern, Pi, Str, Term, Universe, Anno,
     },
-    pass::resolver::Resolved,
+    passes::resolver::Resolved,
 };
 
 /// Represents the resolved state, it's the state of the syntax tree when it's resolved.

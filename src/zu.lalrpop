@@ -1,13 +1,13 @@
-use crate::pass::parser::Parsed;
+use crate::passes::parser::Parsed;
 use crate::ast::Element;
 use std::str::FromStr;
 use lalrpop_util::ErrorRecovery;
 
-grammar<'err>(errors: &'err mut Vec<ErrorRecovery<usize, Token<'input>, crate::pass::parser::InnerError>>, filename: &str);
+grammar<'err>(errors: &'err mut Vec<ErrorRecovery<usize, Token<'input>, crate::passes::parser::InnerError>>, filename: &str);
 
 extern {
   type Location = usize;
-  type Error = crate::pass::parser::InnerError;
+  type Error = crate::passes::parser::InnerError;
 }
 
 match {
@@ -48,7 +48,7 @@ Attribute: crate::ast::Attribute<Parsed> = {
     errors.push(lalrpop_util::ErrorRecovery {
         dropped_tokens: vec![],
         error: lalrpop_util::ParseError::User {
-            error: crate::pass::parser::InnerError::UnsupportedAttribute {
+            error: crate::passes::parser::InnerError::UnsupportedAttribute {
                 err_span: crate::ast::Location::new(s, e, filename).into(),
             },
         },
@@ -61,7 +61,7 @@ Attribute: crate::ast::Attribute<Parsed> = {
     errors.push(lalrpop_util::ErrorRecovery {
         dropped_tokens: vec![],
         error: lalrpop_util::ParseError::User {
-            error: crate::pass::parser::InnerError::UnsupportedAttribute {
+            error: crate::passes::parser::InnerError::UnsupportedAttribute {
                 err_span: crate::ast::Location::new(s, e, filename).into(),
             },
         },
@@ -74,7 +74,7 @@ Attribute: crate::ast::Attribute<Parsed> = {
     errors.push(lalrpop_util::ErrorRecovery {
         dropped_tokens: vec![],
         error: lalrpop_util::ParseError::User {
-            error: crate::pass::parser::InnerError::UnsupportedAttribute {
+            error: crate::passes::parser::InnerError::UnsupportedAttribute {
                 err_span: crate::ast::Location::new(s, e, filename).into(),
             },
         },
@@ -87,7 +87,7 @@ Attribute: crate::ast::Attribute<Parsed> = {
     errors.push(lalrpop_util::ErrorRecovery {
         dropped_tokens: vec![],
         error: lalrpop_util::ParseError::User {
-            error: crate::pass::parser::InnerError::UnsupportedAttribute {
+            error: crate::passes::parser::InnerError::UnsupportedAttribute {
                 err_span: crate::ast::Location::new(s, e, filename).into(),
             },
         },
@@ -223,7 +223,7 @@ Stmt: crate::ast::Stmt<Parsed> = {
 
   // Parses `@import` command, which set to the resolver to import to the
   // current file.
-  <s: @L> "import" <import:Reference> <e: @R> => crate::ast::Stmt::Import(crate::pass::parser::Import {
+  <s: @L> "import" <import:Reference> <e: @R> => crate::ast::Stmt::Import(crate::passes::parser::Import {
     text: import.text,
     meta: crate::ast::Location::new(s, e, filename),
   }),
@@ -241,7 +241,7 @@ Stmt: crate::ast::Stmt<Parsed> = {
     errors.push(lalrpop_util::ErrorRecovery {
         dropped_tokens: vec![],
         error: lalrpop_util::ParseError::User {
-            error: crate::pass::parser::InnerError::UnsupportedCoinductiveData {
+            error: crate::passes::parser::InnerError::UnsupportedCoinductiveData {
                 err_span: name.meta.into(),
             }
         },
@@ -268,7 +268,7 @@ Stmt: crate::ast::Stmt<Parsed> = {
     errors.push(lalrpop_util::ErrorRecovery {
         dropped_tokens: vec![],
         error: lalrpop_util::ParseError::User {
-            error: crate::pass::parser::InnerError::UnsupportedInductiveData {
+            error: crate::passes::parser::InnerError::UnsupportedInductiveData {
                 err_span: name.meta.into(),
             }
         },
@@ -298,7 +298,7 @@ Stmt: crate::ast::Stmt<Parsed> = {
       errors.push(lalrpop_util::ErrorRecovery {
           dropped_tokens: vec![],
           error: lalrpop_util::ParseError::User {
-              error: crate::pass::parser::InnerError::ExpectedStatement {
+              error: crate::passes::parser::InnerError::ExpectedStatement {
                   err_span: miette::SourceSpan::from(s..e),
               }
           },
@@ -317,7 +317,7 @@ Stmt: crate::ast::Stmt<Parsed> = {
         doc_strings,
         attributes: vec![],
         type_repr: crate::ast::Term::Hole(crate::ast::Hole {
-          meta: crate::ast::Location::clone(<crate::pass::parser::Reference as crate::ast::Element<Parsed>>::meta(&name)),
+          meta: crate::ast::Location::clone(<crate::passes::parser::Reference as crate::ast::Element<Parsed>>::meta(&name)),
         }),
         name,
         value: value.into(),
@@ -326,7 +326,7 @@ Stmt: crate::ast::Stmt<Parsed> = {
     }
     // Signature
     (Some(type_repr), None) => {
-      crate::ast::Stmt::Signature(crate::pass::parser::Signature {
+      crate::ast::Stmt::Signature(crate::passes::parser::Signature {
         type_repr: type_repr.into(),
         name,
         meta: crate::ast::Location::new(s, e, filename),
@@ -400,7 +400,7 @@ Factor: crate::ast::Term<Parsed> = {
     errors.push(lalrpop_util::ErrorRecovery {
         dropped_tokens: vec![],
         error: lalrpop_util::ParseError::User {
-            error: crate::pass::parser::InnerError::UnsupportedRecordIndex {
+            error: crate::passes::parser::InnerError::UnsupportedRecordIndex {
                 err_span: name.meta.into(),
             }
         },
@@ -415,7 +415,7 @@ Factor: crate::ast::Term<Parsed> = {
   },
   <s: @L> <a:Call> <op:FactorOp> <b:Factor> <e: @R> => crate::ast::Term::Apply(crate::ast::Apply {
     meta: crate::ast::Location::new(s, e, filename),
-    callee: crate::ast::Term::Reference(crate::pass::parser::Reference {
+    callee: crate::ast::Term::Reference(crate::passes::parser::Reference {
       text: op,
       meta: crate::ast::Location::new(s, e, filename),
     }).into(),
@@ -433,7 +433,7 @@ Arithmetic: crate::ast::Term<Parsed> = {
   Factor,
   <s: @L> <a:Factor> <op:ArithmeticOp> <b:Arithmetic> <e: @R> => crate::ast::Term::Apply(crate::ast::Apply {
     meta: crate::ast::Location::new(s, e, filename),
-    callee: crate::ast::Term::Reference(crate::pass::parser::Reference {
+    callee: crate::ast::Term::Reference(crate::passes::parser::Reference {
       text: op,
       meta: crate::ast::Location::new(s, e, filename),
     }).into(),
@@ -470,7 +470,7 @@ Logical: crate::ast::Term<Parsed> = {
   /// Logical operators, this is a list of terms separated by logical operators.
   <s: @L> <a:Arithmetic> <op:LogicalOp> <b:Logical> <e: @R> => crate::ast::Term::Apply(crate::ast::Apply {
     meta: crate::ast::Location::new(s, e, filename),
-    callee: crate::ast::Term::Reference(crate::pass::parser::Reference {
+    callee: crate::ast::Term::Reference(crate::passes::parser::Reference {
       text: op,
       meta: crate::ast::Location::new(s, e, filename),
     }).into(),
@@ -569,7 +569,7 @@ Case: crate::ast::Case<Parsed> = {
 
     crate::ast::Case {
       pattern: crate::ast::Pattern {
-        constructor: crate::pass::parser::Reference {
+        constructor: crate::passes::parser::Reference {
           text: "Error".to_string(),
           meta: crate::ast::Location::new(s, e, filename),
         },
@@ -643,8 +643,8 @@ Text: std::string::String = {
 }
 
 // Reference token lexer
-Reference: crate::pass::parser::Reference = {
-  <s: @L> <text:Text> <e: @R> => crate::pass::parser::Reference {
+Reference: crate::passes::parser::Reference = {
+  <s: @L> <text:Text> <e: @R> => crate::passes::parser::Reference {
     text: text.to_string(),
     meta: crate::ast::Location::new(s, e, filename),
   }

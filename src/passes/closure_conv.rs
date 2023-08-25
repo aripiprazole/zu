@@ -6,7 +6,7 @@ pub struct ClosureConv;
 
 impl State for ClosureConv {
     type Reference = ClosureReference;
-    type Meta = crate::pass::elab::TypedMeta;
+    type Meta = crate::passes::elab::TypedMeta;
     type Closure = Closure;
     type Import = !;
 }
@@ -16,10 +16,10 @@ pub enum ClosureReference {
     /// A reference to a closure.
     Closure(Closure),
     /// A reference to a global.
-    Global(crate::pass::elab::Reference),
+    Global(crate::passes::elab::Reference),
 }
 
-impl<S: State<Meta = crate::pass::elab::TypedMeta>> Element<S> for ClosureReference {
+impl<S: State<Meta = crate::passes::elab::TypedMeta>> Element<S> for ClosureReference {
     fn meta(&self) -> &S::Meta {
         match self {
             Self::Closure(c) => &c.meta,
@@ -34,10 +34,10 @@ impl<S: State<Meta = crate::pass::elab::TypedMeta>> Element<S> for ClosureRefere
 pub struct Closure {
     /// Global index for closures.
     pub index: usize,
-    pub meta: crate::pass::elab::TypedMeta,
+    pub meta: crate::passes::elab::TypedMeta,
 }
 
-impl<S: State<Meta = crate::pass::elab::TypedMeta>> Element<S> for Closure {
+impl<S: State<Meta = crate::passes::elab::TypedMeta>> Element<S> for Closure {
     fn meta(&self) -> &S::Meta {
         &self.meta
     }

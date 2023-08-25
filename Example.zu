@@ -1,4 +1,4 @@
-module Example.
+module Example
 
 fun Nat : Type -> (Type -> Type) -> Type -> Type
 
@@ -6,7 +6,7 @@ fun Nat : Type -> (Type -> Type) -> Type -> Type
 /// like functions in dependent langauges.
 fun Nat = N : Type -> (N -> N) -> N -> N
 
-/// | Defines the zero constructor
+/// Defines the zero constructor
 fun Zero = \_, _, zero -> zero
 
 /// Defines the succ constructor
@@ -20,4 +20,4 @@ fun Succ = \n, N, succ, zero -> (n N succ zero)
 // @eval
 //   elim Succ (Succ Zero) of
 //     Succ prev => prev,
-//     Zero      => Zero.
+//     Zero      => Zero

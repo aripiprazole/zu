@@ -24,7 +24,7 @@ pub mod erase;
 pub mod show;
 
 /// The compiler passes.
-pub mod pass {
+pub mod passes {
     /// Resolver module. It does handles the imports and the references.
     ///
     /// It's the second phase of the compiler.
@@ -73,7 +73,7 @@ fn program() -> miette::Result<()> {
         .apply()
         .into_diagnostic()?;
 
-    let resolver = pass::resolver::Resolver::new(command.main, command.include)?;
+    let resolver = passes::resolver::Resolver::new(command.main, command.include)?;
     resolver.resolve_and_import()?;
 
     Ok(())
