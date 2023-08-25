@@ -18,7 +18,7 @@ lalrpop-util = { version = "0.20.0", default-features = false, features = [
 clap = { version = "4.2.4", features = ["derive"] }
 miette = { version = "5.10.0", git = "https://github.com/aripiprazole/miette.git", features = ["fancy"] }
 thiserror = "1.0.46"
-bupropion = { version = "0.0.8", git = "https://github.com/aripiprazole/bupropion.git" }
+bupropion = { version = "0.0.9", git = "https://github.com/aripiprazole/bupropion.git" }
 intmap = "2.0.0"
 im-rc = "15.1.0"
 fxhash = "0.2.1"

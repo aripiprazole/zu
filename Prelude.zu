@@ -7,7 +7,7 @@ module Prelude
 /// some value
 @[alias `:=]
 inductive data Eq of {a}, x, y : a where
-  | Refl : Eq x x
+  | Refl : {a} -> {x : a} -> Eq x x
 
   /// | Defines a proof that, `a := b` and `b := c` implies
   /// `a := c`.
@@ -35,10 +35,10 @@ fun IO/apply : {a, b} -> IO a -> (IO a -> IO b) -> IO b
 /// main : IO () := do
 ///  println "hello world"
 /// ```
-fun println : message : String -> IO Unit
+fun println : String -> IO Unit
 
 /// | Performs unsafe IO in the type level, or anywhere you are.
 ///
 /// It's unsafe and should not be used.
 @[partial]
-fun unsafePerformIO : {a} -> io: IO a -> a
+fun unsafePerformIO : {a} -> IO a -> a
