@@ -57,6 +57,9 @@ pub enum Stmt<S: state::State> {
     /// Gets a type for a term.
     Type(Type<S>),
 
+    /// Defines a signature.
+    Signature(S::Siganture),
+
     /// Imports a name temporally until it's
     /// propertly resolved.
     Import(S::Import),
@@ -80,6 +83,7 @@ impl<S: state::State> Debug for Stmt<S> {
             Self::Binding(arg0) => arg0.fmt(f),
             Self::Eval(arg0) => arg0.fmt(f),
             Self::Type(arg0) => arg0.fmt(f),
+            Self::Signature(arg0) => arg0.fmt(f),
             Self::Import(arg0) => arg0.fmt(f),
         }
     }
@@ -99,6 +103,7 @@ impl<S: state::State> Element<S> for Stmt<S> {
             Stmt::Binding(binding) => &binding.meta,
             Stmt::Eval(downgrade) => &downgrade.meta,
             Stmt::Type(downgrade) => &downgrade.meta,
+            Self::Signature(downgrade) => downgrade.meta(),
             Stmt::Import(downgrade) => downgrade.meta(),
         }
     }

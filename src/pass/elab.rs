@@ -4,7 +4,7 @@ use intmap::IntMap;
 
 use crate::ast::state::State;
 use crate::ast::{
-    Apply, Definition, Domain, Element, Fun, Icit, Int, Location, Pi, Str, Term, Universe,
+    Apply, Definition, Domain, Element, Fun, Icit, Int, Location, Pi, Str, Term, Universe, Anno,
 };
 use crate::erase::{Ix, Lvl, MetaVar, Erased, BD};
 
@@ -231,6 +231,11 @@ impl Quote for Value {
                 codomain: codomain.apply(Value::rigid(nth)).quote(nth + 1).into(),
                 meta: Default::default(),
             }),
+            Value::Anno(value, type_repr) => Expr::Anno(Anno {
+                value: value.quote(nth).into(),
+                type_repr: type_repr.quote(nth).into(),
+                meta: Default::default(),
+            }),
         }
     }
 }
@@ -289,6 +294,12 @@ impl Expr {
             Reference(crate::erase::Reference::InsertedMeta(meta, bds)) => {
                 app_bd(env.clone(), value_meta(env, meta), bds)
             }
+            Anno(anno) => {
+                let value = anno.value.eval(env.clone());
+                let type_repr = anno.type_repr.eval(env);
+
+                Value::Anno(value.into(), type_repr.into())
+            }
             Pi(pi) => {
                 let name = Definition::new(pi.domain.name.text);
                 let domain = pi.domain.type_repr.eval(env.clone());
@@ -339,5 +350,6 @@ pub enum Value {
     Pi(DefinitionRs, Icit, Box<Value>, Closure),
     Meta(MetaVar),
     Int(isize),
+    Anno(Box<Value>, Box<Value>),
     Str(String),
 }

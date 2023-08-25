@@ -5,8 +5,8 @@ use miette::{Context, IntoDiagnostic, NamedSource, SourceSpan};
 
 use crate::ast::{
     state::{self, State},
-    Apply, Attribute, Binding, Definition, DocString, Domain, Element, Error, Eval, File, Fun,
-    Hole, Int, Location, Pi, Stmt, Str, Term, Type, Universe,
+    Anno, Apply, Attribute, Binding, Definition, DocString, Domain, Element, Error, Eval, File,
+    Fun, Hole, Int, Location, Pi, Stmt, Str, Term, Type, Universe,
 };
 
 use super::parser::{parse_or_report, Parsed};
@@ -19,6 +19,7 @@ impl State for Resolved {
     type Definition = Rc<crate::ast::Definition<Resolved>>;
     type Reference = Reference;
     type Meta = Location;
+    type Anno = Anno<Self>;
 }
 
 /// A name access.
@@ -40,19 +41,23 @@ type FileMap = HashMap<String, String>;
 pub enum InnerError {
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Import(#[from] UnresolvedImport),
+    UnresolvedImport(#[from] UnresolvedImport),
 
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Definition(#[from] UnresolvedDefinition),
+    UnresolvedDefinition(#[from] UnresolvedDefinition),
 
     #[error(transparent)]
     #[diagnostic(transparent)]
-    LaterDefinition(#[from] LaterUnresolvedDefinition),
+    LaterUnresolvedDefinition(#[from] LaterUnresolvedDefinition),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    AlreadyDefinedSignature(#[from] AlreadyDefinedSignature),
 }
 
 #[derive(thiserror::Error, miette::Diagnostic, Debug)]
-#[diagnostic(code(zu::resolution_failure))]
+#[diagnostic(code(zu::resolution_failure), url(docsrs))]
 #[error("can't resolve the files")]
 pub struct ResolutionFailure {
     // The source code above is used for these errors
@@ -61,7 +66,11 @@ pub struct ResolutionFailure {
 }
 
 #[derive(thiserror::Error, miette::Diagnostic, Debug)]
-#[diagnostic(code(zu::unresolved_definition), help("maybe add an import for it?"))]
+#[diagnostic(
+    code(zu::unresolved_definition),
+    url(docsrs),
+    help("maybe add an import for it?")
+)]
 #[error("unresolved definition: {module}")]
 pub struct UnresolvedDefinition {
     /// The name of the import.
@@ -79,6 +88,7 @@ pub struct UnresolvedDefinition {
 #[derive(thiserror::Error, miette::Diagnostic, Debug)]
 #[diagnostic(
     code(zu::later_unresolved_declaration),
+    url(docsrs),
     help("maybe move this declaration")
 )]
 #[error("unresolved definition: {module} in the current scope")]
@@ -98,7 +108,33 @@ pub struct LaterUnresolvedDefinition {
 }
 
 #[derive(thiserror::Error, miette::Diagnostic, Debug)]
-#[diagnostic(code(zu::unresolved_import), help("try to import the file in the cli"))]
+#[diagnostic(
+    code(zu::already_defined_signature),
+    url(docsrs),
+    help("remove this declaration")
+)]
+#[error("unresolved already defined: {module} signature in the current file")]
+pub struct AlreadyDefinedSignature {
+    /// The name of the import.
+    pub module: String,
+
+    /// The source code of the import.
+    #[source_code]
+    source_code: NamedSource,
+
+    #[label = "here is the duplicated"]
+    span: SourceSpan,
+
+    #[label("here is the already defined signature")]
+    declaration_span: SourceSpan,
+}
+
+#[derive(thiserror::Error, miette::Diagnostic, Debug)]
+#[diagnostic(
+    code(zu::unresolved_import),
+    url(docsrs),
+    help("try to import the file in the cli")
+)]
 #[error("unresolved import: {module}")]
 pub struct UnresolvedImport {
     /// The name of the import.
@@ -125,6 +161,26 @@ pub struct Resolver {
 /// Current file scope for the resolver.
 #[derive(Default)]
 pub struct Scope {
+    /// All types names for the current file, it's useful to mutually
+    /// recursive declarations:
+    ///
+    /// ```haskell
+    /// A : String.
+    /// B : String.
+    /// B = A.
+    /// A = B.
+    /// ```
+    signatures: im_rc::HashMap<String, (Term<Resolved>, Location), FxBuildHasher>,
+
+    /// Locations for all the definitions in the current file. It's
+    /// useful for presenting good-looking error messages.
+    ///
+    /// ```haskell
+    /// A : String.
+    /// A : String. // Error: `A` is already defined at line ...., column ...
+    /// ```
+    locations: im_rc::HashMap<String, Location, FxBuildHasher>,
+
     /// Possible names for the current scope. It's useful for the error messages,
     /// for example:
     ///
@@ -252,12 +308,55 @@ impl Resolver {
                 value: self.term(stmt.value),
                 meta: stmt.meta,
             }),
+            Stmt::Signature(signature) => {
+                let name = signature.name.text.clone();
+                let location = signature.name.meta.clone();
+                let value = self.term(signature.type_repr);
+                if let Some(location) = self.file_scope.locations.get(&name) {
+                    self.errors.push(InnerError::AlreadyDefinedSignature(
+                        AlreadyDefinedSignature {
+                            module: name.clone(),
+                            source_code: self.get_source_code(&signature.name.meta),
+                            span: signature.name.meta.clone().into(),
+                            declaration_span: location.clone().into(),
+                        },
+                    ));
+                }
+                self.file_scope.signatures.insert(name, (value, location));
+
+                return vec![];
+            }
             Stmt::Binding(stmt) => {
                 let name = stmt.name.text.clone();
+                let location = stmt.name.meta.clone();
                 let definition = Rc::new(Definition {
                     meta: stmt.meta.clone(),
                     text: stmt.name.text.clone(),
                 });
+
+                // Dont allow redefining a binding with a binding.
+                if let Some(location) = self.file_scope.locations.get(&name) {
+                    self.errors.push(InnerError::AlreadyDefinedSignature(
+                        AlreadyDefinedSignature {
+                            module: name.clone(),
+                            source_code: self.get_source_code(&stmt.name.meta),
+                            span: stmt.name.meta.clone().into(),
+                            declaration_span: location.clone().into(),
+                        },
+                    ));
+                }
+                self.file_scope.locations.insert(name.clone(), location);
+
+                // Clone type representation using A : B, where A is the name of the
+                // definition, and B is the type representation.
+                let type_repr = match self.file_scope.signatures.get(&name) {
+                    Some((type_repr, _)) => Term::Anno(Anno {
+                        meta: type_repr.meta().clone(),
+                        type_repr: type_repr.clone().into(),
+                        value: self.term(stmt.type_repr).into(),
+                    }),
+                    None => self.term(stmt.type_repr),
+                };
 
                 // Change the type of the definition.
                 let doc_strings = stmt
@@ -282,13 +381,13 @@ impl Resolver {
                     attributes,
                     name: definition,
                     meta: stmt.meta,
-                    type_repr: self.term(stmt.type_repr),
+                    type_repr,
                     value: self.term(stmt.value),
                 })
             }
             Stmt::Import(import) => {
                 let Some(file) = self.inputs.get(&import.text).cloned() else {
-                    let error = InnerError::Import(UnresolvedImport {
+                    let error = InnerError::UnresolvedImport(UnresolvedImport {
                         module: import.text.clone(),
                         source_code: NamedSource::new(
                             &import.meta.filename,
@@ -319,6 +418,11 @@ impl Resolver {
             Term::Str(str) => Term::Str(Str { ..str }),
             Term::Group(group) => self.term(*group),
             Term::Hole(hole) => Term::Hole(Hole { ..hole }),
+            Term::Anno(anno) => Term::Anno(Anno {
+                type_repr: self.term(*anno.type_repr).into(),
+                value: self.term(*anno.value).into(),
+                meta: anno.meta,
+            }),
             Term::Fun(fun) => self.fork(|local| {
                 // Resolve the arguments of the function. It's useful to
                 // define the parameters into the scope.
@@ -466,19 +570,20 @@ impl Resolver {
         reference: &crate::pass::parser::Reference,
         definition: Rc<Definition<Resolved>>,
     ) {
-        self.errors
-            .push(InnerError::LaterDefinition(LaterUnresolvedDefinition {
+        self.errors.push(InnerError::LaterUnresolvedDefinition(
+            LaterUnresolvedDefinition {
                 module: reference.text.clone(),
                 source_code: self.get_source_code(&reference.meta),
                 span: reference.meta.clone().into(),
                 declaration_span: definition.meta.clone().into(),
-            }))
+            },
+        ))
     }
 
     /// Reports an error for a reference.
     fn report_unresolved(&mut self, reference: &crate::pass::parser::Reference) {
         self.errors
-            .push(InnerError::Definition(UnresolvedDefinition {
+            .push(InnerError::UnresolvedDefinition(UnresolvedDefinition {
                 module: reference.text.clone(),
                 source_code: self.get_source_code(&reference.meta),
                 span: reference.meta.clone().into(),

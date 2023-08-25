@@ -1,7 +1,7 @@
 use crate::{
     ast::{
         state::State, Apply, Case, Definition, Domain, Element, Elim, Error, Fun, Hole, Int,
-        Pattern, Pi, Str, Term, Universe,
+        Pattern, Pi, Str, Term, Universe, Anno,
     },
     pass::resolver::Resolved,
 };
@@ -17,6 +17,7 @@ impl State for Erased {
     type Reference = Reference;
     type Import = !;
     type Meta = ();
+    type Anno = Anno<Self>;
 }
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
@@ -123,6 +124,11 @@ impl Term<Resolved> {
             Term::Hole(_) => Term::Hole(Hole { meta: () }),
             Term::Int(v) => Term::Int(Int { meta: (), ..v }),
             Term::Str(v) => Term::Str(Str { meta: (), ..v }),
+            Term::Anno(v) => Term::Anno(Anno {
+                meta: (),
+                value: v.value.erase().into(),
+                type_repr: v.type_repr.erase().into(),
+            }),
             Term::Elim(elim) => Term::Elim(Elim {
                 meta: (),
                 patterns: elim

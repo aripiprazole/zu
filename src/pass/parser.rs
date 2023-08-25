@@ -1,4 +1,4 @@
-use crate::ast::{Location, state::State, Element};
+use crate::ast::{Location, state::State, Element, Anno};
 
 use miette::{NamedSource, SourceSpan};
 
@@ -18,6 +18,8 @@ impl State for Parsed {
     // SECTION: Syntax sugars
     type Import = Import;
     type Group = Box<crate::ast::Term<Self>>;
+    type Siganture = Signature<Self>;
+    type Anno = Anno<Self>;
 }
 
 impl crate::ast::Term<Parsed> {
@@ -28,6 +30,19 @@ impl crate::ast::Term<Parsed> {
             Self::Group(arg0) => *arg0.clone(),
             _ => self,
         }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Signature<S: State> {
+    pub name: S::Definition,
+    pub type_repr: crate::ast::Term<S>,
+    pub meta: S::Meta,
+}
+
+impl<S: State> crate::ast::Element<S> for Signature<S> {
+    fn meta(&self) -> &<S as State>::Meta {
+        &self.meta
     }
 }
 

@@ -5,7 +5,7 @@ module Prelude.
 // 
 // Performs unification and by unification, it proves
 // some value
-inductive data Eq {a} (x, y : a) where
+inductive data Eq of {a}, x, y : a where
   Refl : Eq x x.
 
   // | Defines a proof that: `a = b`, implies `b = a` by
@@ -13,13 +13,18 @@ inductive data Eq {a} (x, y : a) where
   Eq/symm : {a, b} -> a = b -> b = a
   | Refl => Refl.
 
-// | Record for lazy evaluation
-IO : Type -> Type = opaque.
-IO/pure : {a} -> a -> IO a := external "IO/pure".
-IO/>>= : {a, b} -> IO a -> (IO a -> IO b) -> IO b := external "IO/pure".
+// | Represents a type of a dependent pair.
+@[alias $]
+record Sigma of a : Type, b : Type -> Type where
+  inf : a,
+  ins : b a.
 
-@derive IO new.
-@do_notation IO IO/pure IO/>>=.
+// | Record for lazy evaluation
+@[derive new]
+@[do_notation IO/pure IO/>>=]
+IO : Type -> Type.
+IO/pure : {a} -> a -> IO a.
+IO/>>= : {a, b} -> IO a -> (IO a -> IO b) -> IO b.
 
 // | Prints in the stdout
 //
@@ -27,11 +32,10 @@ IO/>>= : {a, b} -> IO a -> (IO a -> IO b) -> IO b := external "IO/pure".
 // main : IO () := do
 //  println "hello world"
 // ```
-IO/println : String -> IO () := external "IO/println".
+IO/println : String -> IO ().
 
 // | Performs unsafe IO in the type level, or anywhere you are.
 //
 // It's unsafe and should not be used.
-unsafePerformIO : {a} -> IO a -> a := external "unsafePerformIO".
-
-@partial unsafePerformIO.
+@[partial]
+unsafePerformIO : {a} -> IO a -> a.

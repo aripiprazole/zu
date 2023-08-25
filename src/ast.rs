@@ -37,6 +37,8 @@ pub trait State: Default + Debug + Clone {
     // SECTION: Syntax sugars
     type Import: Ast<Self> = !;
     type Group: Ast<Self> = !;
+    type Siganture: Ast<Self> = !;
+    type Anno: Ast<Self> = !;
 
     // SECTION: Meta location
     /// The meta type, it's the type of the location of the syntax tree.
@@ -263,6 +265,21 @@ impl<S: state::State> Element<S> for Apply<S> {
     }
 }
 
+/// An annotation expression term. It has a list of value and a type
+/// representation.
+#[derive(Debug, Clone)]
+pub struct Anno<S: state::State> {
+    pub value: Box<Term<S>>,
+    pub type_repr: Box<Term<S>>,
+    pub meta: S::Meta,
+}
+
+impl<S: state::State> Element<S> for Anno<S> {
+    fn meta(&self) -> &S::Meta {
+        &self.meta
+    }
+}
+
 /// A function term. It has a list of arguments, and a value.
 ///
 /// ## Examples
@@ -296,6 +313,7 @@ pub enum Term<S: state::State> {
     Apply(Apply<S>),
     Error(Error<S>),
     Universe(Universe<S>),
+    Anno(S::Anno),
     Fun(S::Closure),
     Elim(S::Elim),
     Group(S::Group),
@@ -338,6 +356,7 @@ impl<S: state::State> Clone for Term<S> {
             Self::Str(arg0) => Self::Str(arg0.clone()),
             Self::Group(arg0) => Self::Group(arg0.clone()),
             Self::Elim(arg0) => Self::Elim(arg0.clone()),
+            Self::Anno(arg0) => Self::Anno(arg0.clone()),
             Self::Fun(arg0) => Self::Fun(arg0.clone()),
             Self::Apply(arg0) => Self::Apply(arg0.clone()),
             Self::Pi(arg0) => Self::Pi(arg0.clone()),
@@ -368,6 +387,7 @@ impl<S: state::State> Debug for Term<S> {
             Self::Fun(arg0) => arg0.fmt(f),
             Self::Apply(arg0) => arg0.fmt(f),
             Self::Pi(arg0) => arg0.fmt(f),
+            Self::Anno(arg0) => arg0.fmt(f),
             Self::Reference(arg0) => arg0.fmt(f),
             Self::Hole(arg0) => arg0.fmt(f),
         }
@@ -391,6 +411,7 @@ impl<S: state::State> Element<S> for Term<S> {
             Term::Group(group) => group.meta(),
             Term::Fun(fun) => fun.meta(),
             Term::Apply(apply) => apply.meta(),
+            Term::Anno(anno) => anno.meta(),
             Term::Pi(pi) => pi.meta(),
             Term::Hole(hole) => hole.meta(),
             Term::Reference(atom) => atom.meta(),

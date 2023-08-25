@@ -19,13 +19,13 @@ pub enum Attribute<S: state::State> {
 #[derive(Debug, Clone)]
 pub struct Constructor<S: state::State> {
     pub name: S::Definition,
-    pub type_rep: Term<S>,
-    pub location: S::Meta,
+    pub type_repr: Term<S>,
+    pub meta: S::Meta,
 }
 
 impl<S: state::State> Element<S> for Constructor<S> {
     fn meta(&self) -> &S::Meta {
-        &self.location
+        &self.meta
     }
 }
 
