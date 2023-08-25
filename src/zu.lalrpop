@@ -29,7 +29,7 @@ pub ModuleName: String = {
 
 /// Parses a value, this is a term that can be used as a value.
 pub Value: crate::ast::Term<Parsed> = {
-  <s: @L> ":=" <value:Term> <e: @R> => value.into(),
+  <s: @L> "=" <value:Term> <e: @R> => value.into(),
 }
 
 /// Parses a top-level statement, this is a statement that can be used

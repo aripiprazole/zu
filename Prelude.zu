@@ -10,7 +10,7 @@ inductive data Eq of {a}, x, y : a where
 
   // | Defines a proof that: `a = b`, implies `b = a` by
   // induction.
-  Eq/symm : {a, b} -> a = b -> b = a
+  Eq/symm : {a, b} -> a := b -> b := a
   | Refl => Refl.
 
 // | Represents a type of a dependent pair.

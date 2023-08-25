@@ -1,13 +1,15 @@
 module Example.
 
+Nat : Type -> (Type -> Type) -> Type -> Type.
+
 -- | Defines natural numbers without induction feature, it's
 -- like functions in dependent langauges.
-Nat := N : Type -> (N -> N) -> N -> N.
+Nat = N : Type -> (N -> N) -> N -> N.
 
 -- | Defines the zero constructor
-Zero := \_, _, zero ->
+Zero = \_, _, zero ->
   zero.
 
 -- | Defines the succ constructor
-Succ := \n, N, succ, zero ->
+Succ = \n, N, succ, zero ->
   (n N succ zero).
