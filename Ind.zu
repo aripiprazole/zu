@@ -9,7 +9,7 @@ inductive data Nat where
 | Zero : Nat
 | Succ : Nat -> Nat.
 
-record Sigma of x, f : (Type -> Type) where
+record Sigma of x, f : * -> * where
   val inf : x
   val ins : f a.
 

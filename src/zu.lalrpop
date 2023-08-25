@@ -69,6 +69,35 @@ Constructor: crate::ast::Constructor<Parsed> = {
   },
 };
 
+KindTerm: crate::ast::Term<Parsed> = {
+  <s: @L> "*" <e: @R> => crate::ast::Term::Universe(crate::ast::Universe {
+    meta: crate::ast::Location::new(s, e, filename),
+  }),
+}
+
+/// Haskell kind syntax
+Kind: crate::ast::Term<Parsed> = {
+  KindTerm,
+  <s: @L> <domain:KindTerm> "->" <codomain:Kind> <e: @R> => crate::ast::Term::Pi(crate::ast::Pi {
+    meta: crate::ast::Location::new(s, e, filename),
+    icit: crate::ast::Icit::Expl,
+    domain: crate::ast::Domain {
+      name: vec![None],
+      type_repr: Box::new(crate::ast::Term::Universe(crate::ast::Universe {
+        meta: domain.meta().clone(),
+      })),
+      icit: crate::ast::Icit::Expl,
+      meta: domain.meta().clone(),
+    },
+    codomain: codomain.into(),
+  }),
+};
+
+KindOrTerm: crate::ast::Term<Parsed> = {
+  Kind,
+  Call,
+};
+
 /// Parses a signature, this is a term that can be used as a type.
 Parameter: crate::ast::Domain<Parsed> = {
   // Parses explicit arguments, which you need to specify
@@ -84,7 +113,7 @@ Parameter: crate::ast::Domain<Parsed> = {
 
   // Parses explicit arguments, which you need to specify
   // the type.
-  <s: @L> <name:Reference> ":" <value:Call> <e: @R> => crate::ast::Domain {
+  <s: @L> <name:Reference> ":" <value:KindOrTerm> <e: @R> => crate::ast::Domain {
     name: vec![Some(name)],
     type_repr: value.into(),
     icit: crate::ast::Icit::Expl,
