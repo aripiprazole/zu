@@ -1,23 +1,21 @@
 module Example.
 
-Nat : Type -> (Type -> Type) -> Type -> Type.
+fun Nat : Type -> (Type -> Type) -> Type -> Type
 
 /// Defines natural numbers without induction feature, it's
 /// like functions in dependent langauges.
-Nat = N : Type -> (N -> N) -> N -> N.
+fun Nat = N : Type -> (N -> N) -> N -> N
 
 /// | Defines the zero constructor
-Zero = \_, _, zero ->
-  zero.
+fun Zero = \_, _, zero -> zero
 
 /// Defines the succ constructor
-Succ = \n, N, succ, zero ->
-  (n N succ zero).
+fun Succ = \n, N, succ, zero -> (n N succ zero)
 
 @eval
   (Succ (Succ Zero))
     (\prev -> prev)
-    (\_    -> Zero).
+    (\_    -> Zero)
 
 // @eval
 //   elim Succ (Succ Zero) of

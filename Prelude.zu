@@ -1,4 +1,4 @@
-module Prelude.
+module Prelude
 
 /// | Defines inductive type for Leibniz equality and
 /// reflection.
@@ -7,29 +7,29 @@ module Prelude.
 /// some value
 @[alias :=]
 inductive data Eq of {a}, x, y : a where
-  Refl : Eq x x.
+  | Refl : Eq x x
 
   /// | Defines a proof that, `a := b` and `b := c` implies
   /// `a := c`.
-  Eq/trans : {a, b, c} -> (a := b) -> (b := c) -> (a := c)
-  | Refl, Refl => Refl.
+  fun Eq/trans : {a, b, c} -> (a := b) -> (b := c) -> (a := c)
+  | Refl, Refl => Refl
 
   /// | Defines a proof that: `a = b`, implies `b = a` by
   /// induction.
-  Eq/symm : {a, b} -> (a := b) -> (b := a)
-  | Refl => Refl.
+  fun Eq/symm : {a, b} -> (a := b) -> (b := a)
+  | Refl => Refl
 
 /// | Represents a type of a dependent pair.
 @[alias $]
-record Sigma of a : Type, b : Type -> Type where
-  inf : a,
-  ins : b a.
+record Sigma of x, f : * -> * where
+  val inf : x
+  val ins : f a
 
 /// | Record for lazy evaluation
 @[do_notation IO/pure, IO/>>=]
-IO      : Type -> Type.
-IO/pure : {a} -> a -> IO a.
-IO/>>=  : {a, b} -> IO a -> (IO a -> IO b) -> IO b.
+fun IO      : Type -> Type.
+fun IO/pure : {a} -> a -> IO a.
+fun IO/>>=  : {a, b} -> IO a -> (IO a -> IO b) -> IO b
 
 /// | Prints in the stdout
 ///
@@ -37,10 +37,10 @@ IO/>>=  : {a, b} -> IO a -> (IO a -> IO b) -> IO b.
 /// main : IO () := do
 ///  println "hello world"
 /// ```
-IO/println : message : String -> IO ().
+fun IO/println : message : String -> IO ()
 
 /// | Performs unsafe IO in the type level, or anywhere you are.
 ///
 /// It's unsafe and should not be used.
 @[partial]
-unsafePerformIO : {a} -> io: IO a -> a.
+fun unsafePerformIO : {a} -> io: IO a -> a

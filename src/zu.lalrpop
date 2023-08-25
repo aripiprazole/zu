@@ -28,12 +28,12 @@ pub File: crate::ast::File<Parsed> = {
     stmts,
     meta: crate::ast::Location::new(s, e, filename),
   },
-}
+};
 
 /// Parses the header module declaration within the file, this is used to
 /// declare the module name.
 ModuleName: String = {
-  "module" <name:Reference> "." => name.text,
+  "module" <name:Reference> <semi:Semi?> => name.text,
 }
 
 /// Parses a value, this is a term that can be used as a value.
@@ -73,7 +73,7 @@ KindTerm: crate::ast::Term<Parsed> = {
   <s: @L> "*" <e: @R> => crate::ast::Term::Universe(crate::ast::Universe {
     meta: crate::ast::Location::new(s, e, filename),
   }),
-}
+};
 
 /// Haskell kind syntax
 Kind: crate::ast::Term<Parsed> = {
@@ -143,7 +143,7 @@ Parameter: crate::ast::Domain<Parsed> = {
 
 /// Last token of a statement, this is a semicolon.
 Semi: std::string::String = {
-  "." => ".".to_string(),
+  ";" => ";".to_string(),
 };
 
 /// Parses a top-level statement, this is a statement that can be used
@@ -152,20 +152,20 @@ Stmt: crate::ast::Stmt<Parsed> = {
   // SECTION: Commands
   // 
   // Parses `@eval` command, which evaluates a term and prints the result.
-  <s: @L> "@eval" <value:Term> <semi:Semi> <e: @R> => crate::ast::Stmt::Eval(crate::ast::Eval {
+  <s: @L> "@eval" <value:Term> <semi:Semi?> <e: @R> => crate::ast::Stmt::Eval(crate::ast::Eval {
     value,
     meta: crate::ast::Location::new(s, e, filename),
   }),
 
   // Parses `@type` command, which types a term and prints the result.
-  <s: @L> "@type" <value:Term> <semi:Semi> <e: @R> => crate::ast::Stmt::Type(crate::ast::Type {
+  <s: @L> "@type" <value:Term> <semi:Semi?> <e: @R> => crate::ast::Stmt::Type(crate::ast::Type {
     value,
     meta: crate::ast::Location::new(s, e, filename),
   }),
 
   // Parses `@import` command, which set to the resolver to import to the
   // current file.
-  <s: @L> "import" <import:Reference> <semi:Semi> <e: @R> => crate::ast::Stmt::Import(crate::pass::parser::Import {
+  <s: @L> "import" <import:Reference> <semi:Semi?> <e: @R> => crate::ast::Stmt::Import(crate::pass::parser::Import {
     text: import.text,
     meta: crate::ast::Location::new(s, e, filename),
   }),
@@ -178,7 +178,7 @@ Stmt: crate::ast::Stmt<Parsed> = {
   <name: Reference>
   <parameters:Parameters?> "where"
   <properties:Property*>
-  <semi:Semi> 
+  <semi:Semi?> 
   <e: @R> => {
     // Report the error
     errors.push(lalrpop_util::ErrorRecovery {
@@ -206,7 +206,7 @@ Stmt: crate::ast::Stmt<Parsed> = {
   <name: Reference>
   <parameters:Parameters?> "where"
   <constructors:Constructor*>
-  <semi:Semi> 
+  <semi:Semi?> 
   <e: @R> => {
     // Report the error
     errors.push(lalrpop_util::ErrorRecovery {
@@ -231,11 +231,11 @@ Stmt: crate::ast::Stmt<Parsed> = {
   // It can be compared to a function signature, or let binding in other languages.
   <s: @L>
   <doc_strings:DocString*>
-  <attribute:Attribute*>
+  <attribute:Attribute*> "fun"
   <name:Reference>
   <type_repr:TypeRepr?>
   <value:Value?>
-  <semi:Semi>
+  <semi:Semi?>
   <e: @R> => match (type_repr, value) {
     // Unacceptable Binding
     (None, None) => {
@@ -288,20 +288,6 @@ Stmt: crate::ast::Stmt<Parsed> = {
         meta: crate::ast::Location::new(s, e, filename),
       })
     }
-  },
-
-  // Error handling for the parser, this is used to report errors when the
-  // parser fails to parse a statement.
-  <s: @L> <error:!> <e: @R> => {
-    let message = error.error.to_string();
-
-    errors.push(error);
-
-    crate::ast::Stmt::Error(crate::ast::Error {
-      message,
-      full_text: (&input[s..e]).to_string(),
-      meta: crate::ast::Location::new(s, e, filename),
-    })
   },
 };
 

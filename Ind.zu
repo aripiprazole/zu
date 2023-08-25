@@ -1,25 +1,21 @@
-module Ind.
+module Ind
 
-import Prelude.
+import Prelude
 
 /// Defines an natural inductive type, which can be either `Zero`,
 /// or it's successor `Succ`, which takes the previous and returns the
 /// next natural number.
 inductive data Nat where
 | Zero : Nat
-| Succ : Nat -> Nat.
-
-record Sigma of x, f : * -> * where
-  val inf : x
-  val ins : f a.
+| Succ : Nat -> Nat
 
 /// Defines a simple sum aritimetic function which sums with church
 /// encoding.
-`+ : Nat -> Nat -> Nat = \a, b ->
+fun `+ : Nat -> Nat -> Nat = \a, b ->
   elim a of
     Zero   => Zero,
-    Succ n => (Succ (n + b)).
+    Succ n => (Succ (n + b))
 
-@eval Zero + (Succ Zero).
+@eval Zero + (Succ Zero)
 
-@type Succ (Succ Zero).
+@type Succ (Succ Zero)
