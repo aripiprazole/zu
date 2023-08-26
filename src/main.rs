@@ -7,7 +7,10 @@
 use clap::Parser;
 use lalrpop_util::lalrpop_mod;
 use miette::IntoDiagnostic;
-use passes::{elab::Elab, resolver::Resolver};
+use passes::{
+    elab::{Elab, Reporter},
+    resolver::Resolver,
+};
 
 // The lalrpop module, it does generate the parser and lexer
 // for the language.
@@ -64,6 +67,31 @@ pub struct Command {
     pub main: String,
 }
 
+#[derive(Debug, Clone)]
+pub struct LoggerReporter;
+
+impl Reporter for LoggerReporter {
+    /// Evaluates a value at a specific location.
+    fn evaluate(&self, value: passes::elab::Value, location: ast::Location) -> miette::Result<()> {
+        let filename = location.filename;
+        let start = location.start;
+        let end = location.end;
+
+        log::info!("{:?} at {filename}:{start}:{end}", value.show());
+        Ok(())
+    }
+
+    /// Checks a value at a specific location.
+    fn check(&self, value: passes::elab::Value, location: ast::Location) -> miette::Result<()> {
+        let filename = location.filename;
+        let start = location.start;
+        let end = location.end;
+
+        log::info!("checked {:?} at {filename}:{start}:{end}", value.show());
+        Ok(())
+    }
+}
+
 fn program() -> miette::Result<()> {
     bupropion::BupropionHandlerOpts::install(|| {
         // Build the bupropion handler options, for specific
@@ -72,7 +100,6 @@ fn program() -> miette::Result<()> {
     })
     .into_diagnostic()?;
 
-    let mut elab = Elab::default();
     let command = Command::parse();
 
     fern::Dispatch::new()
@@ -86,6 +113,8 @@ fn program() -> miette::Result<()> {
         .chain(std::io::stdout())
         .apply()
         .into_diagnostic()?;
+
+    let mut elab = Elab::new(LoggerReporter);
 
     // Resolve the file and import the declarations
     // from the file.

@@ -1,3 +1,5 @@
+use std::fmt::Debug;
+
 use crate::{
     ast::Term,
     erase::{Lvl, Erased},
@@ -11,6 +13,12 @@ pub struct Show {
     pub level: Lvl,
     pub names: Vec<String>,
     pub term: Term<Erased>,
+}
+
+impl Debug for Show {
+    fn fmt(&self, _: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        todo!()
+    }
 }
 
 impl Value {

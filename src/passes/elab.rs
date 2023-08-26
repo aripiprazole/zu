@@ -1,3 +1,4 @@
+use std::fmt::Debug;
 use std::{cell::RefCell, rc::Rc};
 
 use intmap::IntMap;
@@ -148,18 +149,38 @@ impl MetaCtx {
     }
 }
 
+/// Logger to the context, it can be either implemented
+/// as a logger, or as a presenter for UI like a LSP.
+pub trait Reporter: Debug {
+    fn evaluate(&self, value: Value, location: Location) -> miette::Result<()>;
+    fn check(&self, value: Value, location: Location) -> miette::Result<()>;
+}
+
 /// The context of the elaborator
-#[derive(Default, Debug, Clone)]
+#[derive(Debug, Clone)]
 pub struct Elab {
     pub env: Environment,
     pub level: Lvl,
     pub types: im_rc::HashMap<String, Value>,
     pub bds: im_rc::Vector<BD>,
+    pub reporter: Rc<dyn Reporter>,
     pub metas: MetaCtx,
     pub position: crate::ast::Location,
 }
 
 impl Elab {
+    pub fn new<T: Reporter + 'static>(reporter: T) -> Self {
+        Self {
+            env: Default::default(),
+            level: Default::default(),
+            types: Default::default(),
+            bds: Default::default(),
+            reporter: Rc::new(reporter),
+            metas: Default::default(),
+            position: Default::default(),
+        }
+    }
+
     /// Elaborates a file into a new file
     /// with types.
     ///
