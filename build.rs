@@ -1,3 +1,5 @@
+use lalrpop::Configuration;
+
 fn main() {
-    lalrpop::process_root().unwrap();
+    Configuration::new().always_use_colors().process_current_dir().unwrap();
 }
