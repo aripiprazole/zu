@@ -46,7 +46,10 @@ impl<S: State> crate::ast::Element<S> for Signature<S> {
     }
 }
 
-/// A name access.
+/// A name reference or definition in the source code.
+/// 
+/// It's useful to know the location of the name in the source code
+/// and the name itself to be resolved later.
 #[derive(Debug, Clone)]
 pub struct Reference {
     pub text: String,
@@ -73,18 +76,28 @@ impl<S: State<Meta = Location>> Element<S> for Import {
     }
 }
 
-/// The parsed file type.
+/// The parsed file type. It's the state where the AST
+/// comes to the world.
 type FileQt = crate::ast::File<Parsed>;
 
+/// The error type for the parser. It's useful to debug the parser
+/// or report errors to the final end-to-end user.
+///
+/// The parser can report multiple errors at once, so it's useful
+/// to debug the parser.
 #[derive(miette::Diagnostic, thiserror::Error, Debug)]
 #[error("could not parse due the following errors")]
 #[diagnostic()]
 pub struct ParseError {
-    // Note source code by no labels
+    /// The unlabelled source code that will be pointed in the error
+    /// message.
     #[source_code]
     source_code: NamedSource,
 
-    // The source code above is used for these errors
+    /// The multiple-errors that the parser can report, it's useful
+    /// to debug the parser.
+    ///
+    /// It's related to it's resilience and error recovery.
     #[related]
     related: Vec<InnerError>,
 }
@@ -97,21 +110,21 @@ pub struct ParseError {
 pub enum InnerError {
     /// The statement doesn't have a type representation or
     /// doesn't a value.
-    /// 
+    ///
     /// ```kotlin
     /// fun A
     /// ```
-    /// 
+    ///
     /// The function `A` doesn't declare a type representation, or
     /// a value. A well-founded statement can be declared as the
     /// following:
-    /// 
+    ///
     /// ```kotlin
     /// fun A : Type
-    /// 
+    ///
     /// fun A = 1
     /// ```
-    /// 
+    ///
     /// The first statement declares a function `A` that returns
     /// a type `Type`. The second statement declares a function `A`
     /// that returns a value `1`.
@@ -122,19 +135,22 @@ pub enum InnerError {
         help("maybe assign a type representation")
     )]
     ExpectedStatement {
+        /// The span of the statement that doesn't have a type
+        /// representation or a value. It's the span of the
+        /// statement that will be pointed in the error message.
         #[label = "here"]
         err_span: SourceSpan,
     },
 
     /// Record indexing isn't supported yet. It's a feature
     /// that will be implemented in the future.
-    /// 
+    ///
     /// ```kotlin
     /// A.B
     /// ```
-    /// 
+    ///
     /// It can be replaced by a simple function call:
-    /// 
+    ///
     /// ```kotlin
     /// B A
     /// ```
@@ -145,6 +161,10 @@ pub enum InnerError {
         help("maybe open a PR")
     )]
     UnsupportedRecordIndex {
+        /// The expression that is a record index. It's the span of the
+        /// expression that will be pointed in the error message.
+        ///
+        /// It's not supported yet, but it will be implemented in the future.
         #[label = "here"]
         err_span: SourceSpan,
     },
@@ -158,6 +178,8 @@ pub enum InnerError {
         help("maybe open a PR")
     )]
     UnsupportedInductiveData {
+        /// The name of the inductive data. It's the span of the
+        /// name that will be pointed in the error message.
         #[label = "here"]
         err_span: SourceSpan,
     },
@@ -171,10 +193,11 @@ pub enum InnerError {
         help("maybe open a PR")
     )]
     UnsupportedAttribute {
+        /// The name of the attribute. It's the span of the
+        /// name that will be pointed in the error message.
         #[label = "here"]
         err_span: SourceSpan,
     },
-
 
     /// Coinductive data isn't supported yet. It's a feature
     /// that will be implemented in the future.
@@ -185,6 +208,8 @@ pub enum InnerError {
         help("maybe open a PR")
     )]
     UnsupportedCoinductiveData {
+        /// The name of the coinductive data. It's the span of the
+        /// name that will be pointed in the error message.
         #[label = "here"]
         err_span: SourceSpan,
     },
@@ -194,6 +219,9 @@ pub enum InnerError {
     #[error("invalid token")]
     #[diagnostic(code(zu::invalid_token), url(docsrs))]
     InvalidToken {
+        /// The unrecognized token. It's the span of the token
+        /// that wasn't recognized that will be pointed in the
+        /// error message.
         #[label = "here"]
         err_span: SourceSpan,
     },
@@ -204,9 +232,16 @@ pub enum InnerError {
     #[error("unrecognized token")]
     #[diagnostic(code(zu::unrecognized_token), url(docsrs))]
     UnrecoginzedToken {
+        /// The unrecognized token. It's the span of the token
+        /// that wasn't recognized that will be pointed in the
+        /// error message.
         #[label = "here"]
         err_span: SourceSpan,
 
+        /// The help messages pointing to the expected tokens.
+        ///
+        /// It's useful to know what the parser expected to
+        /// parse.
         #[help]
         help: String,
     },
@@ -234,8 +269,9 @@ pub enum InnerError {
     },
 }
 
-/// Format an expected token message, it's
-/// useful for the error message.
+/// Format an expected token message, it's useful for helpful error messages.
+///
+/// It's useful to know what the parser expected to parse.
 fn fmt_expected(expected: &[String]) -> String {
     let mut f = String::new();
     if !expected.is_empty() {
@@ -252,7 +288,11 @@ fn fmt_expected(expected: &[String]) -> String {
     f
 }
 
-/// Parses or report the error.
+/// Parses or report the error. It takes a filename to report errors and locations
+/// pointing to the file in the error message.
+///
+/// It does return a result of a parsed file or a parse error, that can contain a
+/// lot of sub-errors.
 pub fn parse_or_report(filename: &str, text: &str) -> Result<FileQt, ParseError> {
     let mut errors = vec![];
     let ast = match crate::zu::FileParser::new().parse(&mut errors, filename, text) {
