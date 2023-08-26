@@ -7,6 +7,7 @@
 use clap::Parser;
 use lalrpop_util::lalrpop_mod;
 use miette::IntoDiagnostic;
+use passes::{elab::Elab, resolver::Resolver};
 
 // The lalrpop module, it does generate the parser and lexer
 // for the language.
@@ -71,6 +72,7 @@ fn program() -> miette::Result<()> {
     })
     .into_diagnostic()?;
 
+    let mut elab = Elab::default();
     let command = Command::parse();
 
     fern::Dispatch::new()
@@ -85,8 +87,11 @@ fn program() -> miette::Result<()> {
         .apply()
         .into_diagnostic()?;
 
-    let resolver = passes::resolver::Resolver::new(command.main, command.include)?;
-    resolver.resolve_and_import()?;
+    // Resolve the file and import the declarations
+    // from the file.
+    let file = Resolver::new(command.main, command.include)?.resolve_and_import()?;
+    let file = elab.elaborate(file)?;
+    let _ = file;
 
     Ok(())
 }

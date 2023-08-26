@@ -43,7 +43,7 @@ impl<S: State<Meta = ()>> Element<S> for Reference {
 }
 
 /// Defines a debruijin index.
-#[derive(Debug, Clone, Hash, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Default, Debug, Clone, Hash, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Lvl(usize);
 
 impl Lvl {

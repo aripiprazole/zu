@@ -4,9 +4,10 @@ use intmap::IntMap;
 
 use crate::ast::state::State;
 use crate::ast::{
-    Apply, Definition, Domain, Element, Fun, Icit, Int, Location, Pi, Str, Term, Universe, Anno,
+    Anno, Apply, Definition, Domain, Element, Error, Eval, File, Fun, Icit, Int, Location, Pi,
+    Stmt, Str, Term, Universe,
 };
-use crate::erase::{Ix, Lvl, MetaVar, Erased, BD};
+use crate::erase::{Erased, Ix, Lvl, MetaVar, BD};
 
 use super::resolver::Resolved;
 
@@ -30,10 +31,19 @@ impl<S: State<Meta = TypedMeta>, T: crate::ast::Element<S>> TypedNode<S> for T {
     }
 }
 
+#[derive(thiserror::Error, Debug)]
+#[error("type error: {}", error)]
+pub struct UnknownTypeError {
+    error: String,
+}
+
 /// A type info. It contains if the type is an enum or a struct, or maybe
 /// a function type.
 #[derive(Debug, Clone)]
-pub enum TypeInfo {}
+pub enum TypeInfo {
+    Unit,
+    Hole,
+}
 
 #[derive(Debug, Clone)]
 pub struct TypedMeta {
@@ -41,6 +51,22 @@ pub struct TypedMeta {
     pub type_term: Option<Term<Erased>>,
     pub type_value: crate::passes::elab::Value,
     pub location: Location,
+}
+
+impl TypedMeta {
+    /// Creates a new type omitting the type term
+    pub fn new(
+        type_info: TypeInfo,
+        type_value: crate::passes::elab::Value,
+        location: Location,
+    ) -> Self {
+        Self {
+            type_info,
+            type_term: None,
+            type_value,
+            location,
+        }
+    }
 }
 
 /// A name access.
@@ -64,7 +90,7 @@ pub enum MetaEntry {
 
 pub type Spine = im_rc::Vector<Value>;
 
-#[derive(Debug, Clone)]
+#[derive(Default, Debug, Clone)]
 pub struct Environment {
     pub data: Vec<Value>,
     pub metas: MetaCtx,
@@ -123,7 +149,7 @@ impl MetaCtx {
 }
 
 /// The context of the elaborator
-#[derive(Debug, Clone)]
+#[derive(Default, Debug, Clone)]
 pub struct Elab {
     pub env: Environment,
     pub level: Lvl,
@@ -134,11 +160,66 @@ pub struct Elab {
 }
 
 impl Elab {
+    /// Elaborates a file into a new file
+    /// with types.
+    ///
+    /// It does elaborates the types of the file.
+    pub fn elaborate(&mut self, file: File<Resolved>) -> miette::Result<File<Typed>> {
+        Ok(File {
+            name: file.name,
+            stmts: file
+                .stmts
+                .into_iter()
+                .map(|stmt| self.elaborate_stmt(stmt))
+                .collect::<miette::Result<_>>()?,
+            meta: TypedMeta::new(TypeInfo::Unit, Value::Universe, file.meta),
+        })
+    }
+
+    /// Elaborates a new statement into a new statement
+    pub fn elaborate_stmt(&mut self, stmt: Stmt<Resolved>) -> miette::Result<Stmt<Typed>> {
+        let meta = stmt.meta().clone();
+        Ok(match stmt {
+            // Sentinel values
+            Stmt::Error(error) => {
+                let value = self.fresh_meta().eval(self.env.clone());
+
+                Stmt::Error(Error {
+                    meta: TypedMeta::new(TypeInfo::Hole, value, meta),
+                    ..error
+                })
+            }
+            Stmt::Inductive(_) => todo!(),
+            Stmt::Binding(_) => todo!(),
+            Stmt::Eval(stmt) => Stmt::Eval(Eval {
+                meta: TypedMeta::new(TypeInfo::Unit, Value::Unit, meta),
+                value: self.infer(stmt.value),
+            }),
+            Stmt::Type(_) => todo!(),
+
+            // Erased values, the types with `!`
+            Stmt::Signature(_) => unreachable!(),
+            Stmt::Import(_) => unreachable!(),
+        })
+    }
+
     /// Creates a new type elaborating it into a new
     /// value.
-    pub fn elaborate(&self, term: Expr) -> Term<Typed> {
-        let _ = term;
-        todo!()
+    pub fn infer(&self, term: Term<Resolved>) -> Term<Typed> {
+        match term {
+            Term::Pi(_) => todo!(),
+            Term::Int(_) => todo!(),
+            Term::Str(_) => todo!(),
+            Term::Hole(_) => todo!(),
+            Term::Apply(_) => todo!(),
+            Term::Error(_) => todo!(),
+            Term::Universe(_) => todo!(),
+            Term::Anno(_) => todo!(),
+            Term::Fun(_) => todo!(),
+            Term::Elim(_) => todo!(),
+            Term::Group(_) => todo!(),
+            Term::Reference(_) => todo!(),
+        }
     }
 
     /// Checks a term against a type
@@ -195,6 +276,7 @@ impl Quote for Value {
         }
 
         match self {
+            Value::Unit => Expr::Universe(Universe::default()), // TODO
             Value::Universe => Expr::Universe(Universe::default()),
             Value::Meta(meta_var) => Expr::Reference(crate::erase::Reference::MetaVar(meta_var)),
             Value::Flexible(meta, sp) => quote_sp(
@@ -343,6 +425,7 @@ type DefinitionRs = Definition<Resolved>;
 /// The type of a term is a value, but the type of a value is a type.
 #[derive(Debug, Clone)]
 pub enum Value {
+    Unit,
     Universe,
     Flexible(MetaVar, Spine),
     Rigid(Lvl, Spine),
