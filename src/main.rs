@@ -7,6 +7,7 @@
 use clap::Parser;
 use lalrpop_util::lalrpop_mod;
 use miette::IntoDiagnostic;
+use owo_colors::OwoColorize;
 use passes::{
     elab::{Elab, Reporter},
     resolver::Resolver,
@@ -92,7 +93,26 @@ impl Reporter for LoggerReporter {
     }
 }
 
+/// Logger function for the fern logger.
+///
+/// It does format the log message to a specific format.
+fn log(out: fern::FormatCallback, message: &std::fmt::Arguments, record: &log::Record) {
+    let style = match record.level() {
+        log::Level::Error => owo_colors::Style::new().red().bold(),
+        log::Level::Warn => owo_colors::Style::new().yellow().bold(),
+        log::Level::Info => owo_colors::Style::new().bright_blue().bold(),
+        log::Level::Debug => owo_colors::Style::new().bright_red().bold(),
+        log::Level::Trace => owo_colors::Style::new().bright_cyan().bold(),
+    };
+    let level = record.level().to_string().to_lowercase();
+    let level = level.style(style);
+
+    out.finish(format_args!("  {level:>7} {}", message))
+}
+
+/// The main function of the program.
 fn program() -> miette::Result<()> {
+    // Initialize the bupropion handler with miette
     bupropion::BupropionHandlerOpts::install(|| {
         // Build the bupropion handler options, for specific
         // error presenting.
@@ -100,20 +120,16 @@ fn program() -> miette::Result<()> {
     })
     .into_diagnostic()?;
 
-    let command = Command::parse();
-
-    fern::Dispatch::new()
-        // Perform allocation-free log formatting
-        .format(|out, message, record| out.finish(format_args!("{}: {}", record.level(), message)))
-        // Add blanket level filter -
-        .level(log::LevelFilter::Debug)
-        // - and per-module overrides
-        .level_for("hyper", log::LevelFilter::Info)
-        // Output to stdout, files, and other Dispatch configurations
+    // Initialize the logger
+    fern::Dispatch::new() // Perform allocation-free log formatting
+        .format(log) // Add blanket level filter -
+        .level(log::LevelFilter::Debug) // - and per-module overrides
+        .level_for("hyper", log::LevelFilter::Info) // Output to stdout, files, and other Dispatch configurations
         .chain(std::io::stdout())
         .apply()
         .into_diagnostic()?;
 
+    let command = Command::parse();
     let mut elab = Elab::new(LoggerReporter);
 
     // Resolve the file and import the declarations

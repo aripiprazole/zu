@@ -157,9 +157,9 @@ dependencies = [
 
 [[package]]
 name = "bupropion"
-version = "0.0.10"
+version = "0.0.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5b6e6845635c81dae4fcb5232f9ba6ef3721fc271a8943c57821b6f4c25288b9"
+checksum = "10c13c29feee287ba11ac37eabb1d359561dd6a3d922d928481de09577a9a064"
 dependencies = [
  "backtrace",
  "backtrace-ext",
@@ -1170,5 +1170,6 @@ dependencies = [
  "log",
  "logos",
  "miette",
+ "owo-colors",
  "thiserror",
 ]
