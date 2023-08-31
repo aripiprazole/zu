@@ -50,10 +50,10 @@ pub mod passes {
     /// generate a parser and lexer for the language.
     pub mod parser;
 
-    /// The closure converter module. It converts the functions to closures.
-    ///
-    /// It's the third phase of the compiler.
-    pub mod closure_conv;
+    ///// The closure converter module. It converts the functions to closures.
+    /////
+    ///// It's the third phase of the compiler.
+    // pub mod closure_conv;
 }
 
 /// Simple program to run `zu` language.

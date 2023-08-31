@@ -3,84 +3,35 @@ use std::{cell::RefCell, rc::Rc};
 
 use intmap::IntMap;
 
-use crate::ast::state::State;
 use crate::ast::{
-    Anno, Apply, Definition, Domain, Element, Error, Eval, File, Fun, Icit, Int, Location, Pi,
-    Stmt, Str, Term, Universe,
+    Anno, Apply, Definition, Domain, File, Fun, Icit, Int, Location, Pi, Stmt, Str, Term, Universe,
 };
 use crate::erase::{Erased, Ix, Lvl, MetaVar, BD};
 
 use super::resolver::Resolved;
 
-/// Represents the resolved state, it's the state of the syntax tree when it's resolved.
-#[derive(Default, Debug, Clone)]
-pub struct Typed;
-
-/// Represents a node that has a type.
-pub trait TypedNode<S: State>: crate::ast::Element<S> {
-    fn type_value(&self) -> &crate::passes::elab::Value;
+pub struct Mod {
+    pub name: String,
+    pub instructions: Vec<Instr>,
+    pub declarations: Vec<Declaration>,
 }
 
-impl State for Typed {
-    type Reference = Reference;
-    type Meta = TypedMeta;
+pub struct Declaration {
+    pub name: String,
+    pub type_repr: Value,
+    pub value: Value,
 }
 
-impl<S: State<Meta = TypedMeta>, T: crate::ast::Element<S>> TypedNode<S> for T {
-    fn type_value(&self) -> &crate::passes::elab::Value {
-        &self.meta().type_value
-    }
+/// Typed instructions for the type system.
+pub enum Instr {
+    Eval(Value),
+    Type(Value),
 }
 
 #[derive(thiserror::Error, Debug)]
 #[error("type error: {}", error)]
 pub struct UnknownTypeError {
     error: String,
-}
-
-/// A type info. It contains if the type is an enum or a struct, or maybe
-/// a function type.
-#[derive(Debug, Clone)]
-pub enum TypeInfo {
-    Unit,
-    Hole,
-}
-
-#[derive(Debug, Clone)]
-pub struct TypedMeta {
-    pub type_info: TypeInfo,
-    pub type_term: Option<Term<Erased>>,
-    pub type_value: crate::passes::elab::Value,
-    pub location: Location,
-}
-
-impl TypedMeta {
-    /// Creates a new type omitting the type term
-    pub fn new(
-        type_info: TypeInfo,
-        type_value: crate::passes::elab::Value,
-        location: Location,
-    ) -> Self {
-        Self {
-            type_info,
-            type_term: None,
-            type_value,
-            location,
-        }
-    }
-}
-
-/// A name access.
-#[derive(Debug, Clone)]
-pub struct Reference {
-    pub definition: Rc<Definition<Resolved>>,
-    pub meta: TypedMeta,
-}
-
-impl<S: State<Meta = TypedMeta>> Element<S> for Reference {
-    fn meta(&self) -> &TypedMeta {
-        &self.meta
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -185,48 +136,35 @@ impl Elab {
     /// with types.
     ///
     /// It does elaborates the types of the file.
-    pub fn elaborate(&mut self, file: File<Resolved>) -> miette::Result<File<Typed>> {
-        Ok(File {
-            name: file.name,
-            stmts: file
-                .stmts
-                .into_iter()
-                .map(|stmt| self.elaborate_stmt(stmt))
-                .collect::<miette::Result<_>>()?,
-            meta: TypedMeta::new(TypeInfo::Unit, Value::Universe, file.meta),
-        })
-    }
+    pub fn elaborate(&mut self, file: File<Resolved>) -> miette::Result<Mod> {
+        let instructions = vec![];
+        let declarations = vec![];
 
-    /// Elaborates a new statement into a new statement
-    pub fn elaborate_stmt(&mut self, stmt: Stmt<Resolved>) -> miette::Result<Stmt<Typed>> {
-        let meta = stmt.meta().clone();
-        Ok(match stmt {
-            // Sentinel values
-            Stmt::Error(error) => {
-                let value = self.fresh_meta().eval(self.env.clone());
+        for stmt in file.stmts {
+            match stmt {
+                // Sentinel values
+                Stmt::Error(_) => {}
+                Stmt::Inductive(_) => todo!(),
+                Stmt::Binding(_) => todo!(),
+                Stmt::Eval(_) => todo!(),
+                Stmt::Type(_) => todo!(),
 
-                Stmt::Error(Error {
-                    meta: TypedMeta::new(TypeInfo::Hole, value, meta),
-                    ..error
-                })
+                // Erased values, the types with `!`
+                Stmt::Signature(_) => unreachable!(),
+                Stmt::Import(_) => unreachable!(),
             }
-            Stmt::Inductive(_) => todo!(),
-            Stmt::Binding(_) => todo!(),
-            Stmt::Eval(stmt) => Stmt::Eval(Eval {
-                meta: TypedMeta::new(TypeInfo::Unit, Value::Unit, meta),
-                value: self.infer(stmt.value),
-            }),
-            Stmt::Type(_) => todo!(),
+        }
 
-            // Erased values, the types with `!`
-            Stmt::Signature(_) => unreachable!(),
-            Stmt::Import(_) => unreachable!(),
+        Ok(Mod {
+            name: file.name,
+            instructions,
+            declarations,
         })
     }
 
     /// Creates a new type elaborating it into a new
     /// value.
-    pub fn infer(&self, term: Term<Resolved>) -> Term<Typed> {
+    pub fn infer(&self, term: Term<Resolved>) -> Value {
         match term {
             Term::Pi(_) => todo!(),
             Term::Int(_) => todo!(),
