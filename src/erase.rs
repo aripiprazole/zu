@@ -1,9 +1,11 @@
+use std::{cell::RefCell, rc::Rc};
+
 use crate::{
     ast::{
         state::State, Apply, Case, Definition, Domain, Element, Elim, Error, Fun, Hole, Int,
         Pattern, Pi, Str, Term, Universe, Anno,
     },
-    passes::resolver::Resolved,
+    passes::{resolver::Resolved, elab::{Value, Elab}},
 };
 
 /// Represents the resolved state, it's the state of the syntax tree when it's resolved.
@@ -20,20 +22,42 @@ impl State for Erased {
     type Anno = Anno<Self>;
 }
 
-#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
-pub enum BD {
-    Bound,
-    Defined,
+#[derive(Debug, Clone)]
+pub enum MetaHole {
+    Defined(Value),
+    Nothing(usize),
 }
 
-#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
-pub struct MetaVar(pub usize);
+#[derive(Debug, Clone)]
+pub struct MetaVar(pub Rc<RefCell<MetaHole>>);
 
-#[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
+impl MetaVar {
+    pub fn new_unique(elab: &mut Elab) -> Self {
+        let unique = elab.unique;
+        elab.unique += 1;
+        Self(Rc::new(RefCell::new(MetaHole::Nothing(unique))))
+    }
+
+    pub fn new(value: Value) -> Self {
+        Self(Rc::new(RefCell::new(MetaHole::Defined(value))))
+    }
+
+    pub fn update(&self, value: Value) {
+        *self.0.borrow_mut() = MetaHole::Defined(value)
+    }
+
+    pub fn take(&self) -> Value {
+        match &*self.0.borrow() {
+            MetaHole::Defined(value) => value.clone(),
+            MetaHole::Nothing(_) => panic!("MetaVar is not defined"),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub enum Reference {
     Var(Ix),
     MetaVar(MetaVar),
-    InsertedMeta(MetaVar, im_rc::Vector<BD>),
 }
 
 impl<S: State<Meta = ()>> Element<S> for Reference {

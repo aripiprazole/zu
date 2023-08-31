@@ -1,3 +1,4 @@
+#![feature(cell_update)]
 #![feature(trait_alias)]
 #![feature(never_type)]
 #![feature(box_patterns)]
@@ -9,7 +10,7 @@ use lalrpop_util::lalrpop_mod;
 use miette::IntoDiagnostic;
 use owo_colors::OwoColorize;
 use passes::{
-    elab::{Elab, Reporter},
+    elab::{Elab, Environment, Reporter},
     resolver::Resolver,
 };
 
@@ -130,12 +131,15 @@ fn program() -> miette::Result<()> {
         .into_diagnostic()?;
 
     let command = Command::parse();
+
     let mut elab = Elab::new(LoggerReporter);
+    let resolver = Resolver::new(command.main, command.include)?;
+    let environment = Environment::default();
 
     // Resolve the file and import the declarations
     // from the file.
-    let file = Resolver::new(command.main, command.include)?.resolve_and_import()?;
-    let file = elab.elaborate(file)?;
+    let file = resolver.resolve_and_import()?;
+    let file = elab.elaborate(environment, file)?;
     let _ = file;
 
     Ok(())

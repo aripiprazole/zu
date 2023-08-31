@@ -1,4 +1,4 @@
-use std::{fmt::Debug, marker::PhantomData, rc::Rc};
+use std::{fmt::Debug, marker::PhantomData, rc::Rc, cell::Cell};
 
 /// File definition, it contains all the statements,
 /// the module name, and a base location for it as anchor
@@ -98,6 +98,7 @@ impl<S: state::State> Element<S> for Definition<S> {
 
 #[derive(Default, Hash, PartialEq, Eq, Clone)]
 pub struct Location {
+    pub id: u64,
     pub start: usize,
     pub end: usize,
     pub filename: String,
@@ -105,8 +106,9 @@ pub struct Location {
 
 impl Location {
     /// Creates a new instance of [`Location`].
-    pub fn new(start: usize, end: usize, filename: &str) -> Self {
+    pub fn new(start: usize, end: usize, filename: &str, unique: &Cell<u64>) -> Self {
         Self {
+            id: unique.update(|x| x + 1),
             start,
             end,
             filename: filename.into(),

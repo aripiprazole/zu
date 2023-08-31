@@ -1,3 +1,5 @@
+use std::cell::Cell;
+
 use crate::ast::{state::State, Anno, Element, Location};
 
 use miette::{NamedSource, SourceSpan};
@@ -47,7 +49,7 @@ impl<S: State> crate::ast::Element<S> for Signature<S> {
 }
 
 /// A name reference or definition in the source code.
-/// 
+///
 /// It's useful to know the location of the name in the source code
 /// and the name itself to be resolved later.
 #[derive(Debug, Clone)]
@@ -295,7 +297,8 @@ fn fmt_expected(expected: &[String]) -> String {
 /// lot of sub-errors.
 pub fn parse_or_report(filename: &str, text: &str) -> Result<FileQt, ParseError> {
     let mut errors = vec![];
-    let ast = match crate::zu::FileParser::new().parse(&mut errors, filename, text) {
+    let unique = std::rc::Rc::new(Cell::new(0));
+    let ast = match crate::zu::FileParser::new().parse(&mut errors, filename, &unique, text) {
         Ok(ast) => ast,
         Err(error) => {
             // Build up the list with at least one recovery error.

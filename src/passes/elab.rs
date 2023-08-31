@@ -1,18 +1,14 @@
 use std::fmt::Debug;
-use std::{cell::RefCell, rc::Rc};
+use std::rc::Rc;
 
-use intmap::IntMap;
-
-use crate::ast::{
-    Anno, Apply, Definition, Domain, File, Fun, Icit, Int, Location, Pi, Stmt, Str, Term, Universe,
-};
-use crate::erase::{Erased, Ix, Lvl, MetaVar, BD};
+use crate::ast::*;
+use crate::erase::*;
 
 use super::resolver::Resolved;
 
+/// Module representation with type table and typed values
 pub struct Mod {
     pub name: String,
-    pub instructions: Vec<Instr>,
     pub declarations: Vec<Declaration>,
 }
 
@@ -22,22 +18,10 @@ pub struct Declaration {
     pub value: Value,
 }
 
-/// Typed instructions for the type system.
-pub enum Instr {
-    Eval(Value),
-    Type(Value),
-}
-
 #[derive(thiserror::Error, Debug)]
 #[error("type error: {}", error)]
 pub struct UnknownTypeError {
     error: String,
-}
-
-#[derive(Debug, Clone)]
-pub enum MetaEntry {
-    Solved(Value),
-    Unsolved,
 }
 
 pub type Spine = im_rc::Vector<Value>;
@@ -45,7 +29,6 @@ pub type Spine = im_rc::Vector<Value>;
 #[derive(Default, Debug, Clone)]
 pub struct Environment {
     pub data: Vec<Value>,
-    pub metas: MetaCtx,
 }
 
 impl Environment {
@@ -53,10 +36,7 @@ impl Environment {
     pub fn create_new_value(&self, value: Value) -> Self {
         let mut data = self.data.clone();
         data.push(value);
-        Self {
-            data,
-            metas: self.metas.clone(),
-        }
+        Self { data }
     }
 }
 
@@ -64,40 +44,6 @@ impl Environment {
 pub struct Closure {
     pub env: Environment,
     pub term: Expr,
-}
-
-/// Partial renaming from Γ to Δ
-pub struct PartialRenaming {
-    /// Size of Γ
-    pub dom: Lvl,
-
-    /// Size of Δ
-    pub cod: Lvl,
-
-    /// Mapping from Δ vars to Γ vars
-    pub ren: IntMap<Lvl>,
-}
-
-impl PartialRenaming {
-    /// Lifting a partial renaming over an extra bound variable.
-    ///
-    /// Given (σ : PartialRenaming Γ Δ), (lift σ : PartialRenaming (Γ, x : A[σ]) (Δ, x : A))
-    pub fn lift(self) -> Self {
-        todo!()
-    }
-}
-
-#[derive(Default, Debug, Clone)]
-pub struct MetaCtx {
-    pub next_meta: Rc<RefCell<usize>>,
-    pub ctx: Rc<RefCell<IntMap<MetaEntry>>>,
-}
-
-impl MetaCtx {
-    /// Lookup a meta variable in the context
-    pub fn lookup(&self, MetaVar(m): MetaVar) -> MetaEntry {
-        self.ctx.borrow().get(m as u64).cloned().unwrap()
-    }
 }
 
 /// Logger to the context, it can be either implemented
@@ -110,25 +56,27 @@ pub trait Reporter: Debug {
 /// The context of the elaborator
 #[derive(Debug, Clone)]
 pub struct Elab {
-    pub env: Environment,
     pub level: Lvl,
     pub types: im_rc::HashMap<String, Value>,
-    pub bds: im_rc::Vector<BD>,
     pub reporter: Rc<dyn Reporter>,
-    pub metas: MetaCtx,
     pub position: crate::ast::Location,
+    pub unique: usize,
+
+    /// A map from the name of the declaration to the type of the declaration
+    ///
+    /// It's a simple type table, so we don't rewrite everything.
+    pub tt: intmap::IntMap<Value>,
 }
 
 impl Elab {
     pub fn new<T: Reporter + 'static>(reporter: T) -> Self {
         Self {
-            env: Default::default(),
             level: Default::default(),
             types: Default::default(),
-            bds: Default::default(),
             reporter: Rc::new(reporter),
-            metas: Default::default(),
             position: Default::default(),
+            tt: Default::default(),
+            unique: 0
         }
     }
 
@@ -136,8 +84,7 @@ impl Elab {
     /// with types.
     ///
     /// It does elaborates the types of the file.
-    pub fn elaborate(&mut self, file: File<Resolved>) -> miette::Result<Mod> {
-        let instructions = vec![];
+    pub fn elaborate(&mut self, _: Environment, file: File<Resolved>) -> miette::Result<Mod> {
         let declarations = vec![];
 
         for stmt in file.stmts {
@@ -157,50 +104,69 @@ impl Elab {
 
         Ok(Mod {
             name: file.name,
-            instructions,
             declarations,
         })
     }
 
     /// Creates a new type elaborating it into a new
     /// value.
-    pub fn infer(&self, term: Term<Resolved>) -> Value {
-        match term {
-            Term::Pi(_) => todo!(),
-            Term::Int(_) => todo!(),
-            Term::Str(_) => todo!(),
-            Term::Hole(_) => todo!(),
-            Term::Apply(_) => todo!(),
-            Term::Error(_) => todo!(),
-            Term::Universe(_) => todo!(),
-            Term::Anno(_) => todo!(),
-            Term::Fun(_) => todo!(),
-            Term::Elim(_) => todo!(),
-            Term::Group(_) => todo!(),
-            Term::Reference(_) => todo!(),
+    pub fn infer(&mut self, env: Environment, term: &Tm) -> Value {
+        /// Infers the type of a term in the context of the environment
+        ///
+        /// It does returns the type of the term.
+        #[inline(always)]
+        fn imp(elab: &mut Elab, env: Environment, term: &Tm) -> Value {
+            match term {
+                Term::Int(_) => Value::constructor("Int"),
+                Term::Str(_) => Value::constructor("String"),
+                Term::Hole(_) => elab.fresh_meta(),
+                Term::Apply(_) => todo!(),
+                Term::Error(_) => todo!(),
+                Term::Universe(_) => todo!(),
+                Term::Anno(_) => todo!(),
+                Term::Fun(_) => todo!(),
+                Term::Elim(_) => todo!(),
+                Term::Group(_) => todo!(),
+                Term::Reference(_) => todo!(),
+                Term::Pi(pi) => {
+                    let name = Definition::new(pi.domain.name.text.clone());
+                    let domain = elab.infer(env.clone(), &pi.domain.type_repr);
+                    let codomain = Closure {
+                        env: env.create_new_value(domain.clone()),
+                        term: pi.codomain.clone().erase(),
+                    };
+
+                    Value::Pi(name, pi.domain.icit, domain.into(), codomain)
+                }
+            }
         }
+
+        let meta = term.meta();
+
+        // Sets the position of the elaborator to the error diagnostics
+        // goes to the right place.
+        self.position = meta.clone();
+
+        // Infers the type of the term
+        let value = imp(self, env, term);
+
+        // Insert the type associating it with it's id,
+        // so we can use it later.
+        self.tt.insert(meta.id, value.clone());
+
+        value
     }
 
     /// Checks a term against a type
-    pub fn check(&mut self, term: Term<Resolved>, type_repr: Value) -> Expr {
-        let _ = (term, type_repr);
+    pub fn check(&mut self, _: Environment, term: Tm, type_repr: Value) -> Expr {
+        let _ = term;
+        let _ = type_repr;
         todo!()
     }
 
     /// Creates a new fresh meta variable
-    pub fn fresh_meta(&self) -> Expr {
-        // Add new meta variable
-        let mut next_meta = self.metas.next_meta.borrow_mut();
-        let meta = MetaVar(*next_meta);
-        *next_meta += 1;
-
-        // Add the unsolved meta to the context
-        let mut ctx = self.metas.ctx.borrow_mut();
-        ctx.insert(*next_meta as u64, MetaEntry::Unsolved);
-
-        // Create the reference
-        let bds = self.bds.clone();
-        Expr::Reference(crate::erase::Reference::InsertedMeta(meta, bds))
+    pub fn fresh_meta(&self) -> Value {
+        todo!()
     }
 }
 
@@ -235,7 +201,7 @@ impl Quote for Value {
         }
 
         match self {
-            Value::Unit => Expr::Universe(Universe::default()), // TODO
+            Value::Constructor(_) => todo!(),
             Value::Universe => Expr::Universe(Universe::default()),
             Value::Meta(meta_var) => Expr::Reference(crate::erase::Reference::MetaVar(meta_var)),
             Value::Flexible(meta, sp) => quote_sp(
@@ -306,24 +272,13 @@ impl Expr {
             }
         }
 
-        /// Apply a mask of entries to a value
-        fn app_bd(env: Environment, value: Value, bds: im_rc::Vector<BD>) -> Value {
-            let _ = (env, value, bds);
-            todo!()
-        }
-
-        /// Evaluates meta
-        fn value_meta(env: Environment, meta: MetaVar) -> Value {
-            match env.metas.lookup(meta) {
-                MetaEntry::Solved(value) => value,
-                MetaEntry::Unsolved => Value::Meta(meta),
-            }
-        }
-
         match self {
+            // Removed
             Error(_) => unreachable!(),
             Hole(_) => unreachable!(),
             Group(_) => unreachable!(),
+
+            // Values
             Universe(_) => Value::Universe,
             Int(data) => Value::Int(data.value),
             Str(data) => Value::Str(data.value),
@@ -331,10 +286,7 @@ impl Expr {
             Fun(_) => todo!("fun expr"),
             Apply(e) => app(e.callee.eval(env.clone()), e.arguments.eval(env)),
             Reference(crate::erase::Reference::Var(Ix(ix))) => env.data[ix].clone(), // TODO: HANDLE ERROR
-            Reference(crate::erase::Reference::MetaVar(meta)) => value_meta(env, meta),
-            Reference(crate::erase::Reference::InsertedMeta(meta, bds)) => {
-                app_bd(env.clone(), value_meta(env, meta), bds)
-            }
+            Reference(crate::erase::Reference::MetaVar(meta)) => meta.take(),
             Anno(anno) => {
                 let value = anno.value.eval(env.clone());
                 let type_repr = anno.type_repr.eval(env);
@@ -367,6 +319,11 @@ impl Value {
     pub fn flexible(meta: MetaVar) -> Self {
         Value::Flexible(meta, Default::default())
     }
+
+    /// Creates a constructor
+    pub fn constructor(name: &str) -> Self {
+        Value::Constructor(name.to_string())
+    }
 }
 
 impl Closure {
@@ -379,13 +336,15 @@ impl Closure {
 
 type DefinitionRs = Definition<Resolved>;
 
+type Tm = Term<Resolved>;
+
 /// Defines the type of a term, elaborated to a value
 ///
 /// The type of a term is a value, but the type of a value is a type.
 #[derive(Debug, Clone)]
 pub enum Value {
-    Unit,
     Universe,
+    Constructor(String),
     Flexible(MetaVar, Spine),
     Rigid(Lvl, Spine),
     Lam(DefinitionRs, Closure),

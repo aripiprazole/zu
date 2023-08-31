@@ -3,7 +3,11 @@ use crate::ast::Element;
 use std::str::FromStr;
 use lalrpop_util::ErrorRecovery;
 
-grammar<'err>(errors: &'err mut Vec<ErrorRecovery<usize, Token<'input>, crate::passes::parser::InnerError>>, filename: &str);
+grammar<'err, 'unique>(
+  errors: &'err mut Vec<ErrorRecovery<usize, Token<'input>, crate::passes::parser::InnerError>>,
+  filename: &str,
+  unique: &'unique std::cell::Cell<u64>,
+);
 
 extern {
   type Location = usize;
@@ -26,7 +30,7 @@ pub File: crate::ast::File<Parsed> = {
     // idiomatic.
     name: name.unwrap_or_else(|| filename.to_string().replace(".zu", "")),
     stmts,
-    meta: crate::ast::Location::new(s, e, filename),
+    meta: crate::ast::Location::new(s, e, filename, &unique),
   },
 };
 
@@ -49,7 +53,7 @@ Attribute: crate::ast::Attribute<Parsed> = {
         dropped_tokens: vec![],
         error: lalrpop_util::ParseError::User {
             error: crate::passes::parser::InnerError::UnsupportedAttribute {
-                err_span: crate::ast::Location::new(s, e, filename).into(),
+                err_span: crate::ast::Location::new(s, e, filename, &unique).into(),
             },
         },
     });
@@ -62,7 +66,7 @@ Attribute: crate::ast::Attribute<Parsed> = {
         dropped_tokens: vec![],
         error: lalrpop_util::ParseError::User {
             error: crate::passes::parser::InnerError::UnsupportedAttribute {
-                err_span: crate::ast::Location::new(s, e, filename).into(),
+                err_span: crate::ast::Location::new(s, e, filename, &unique).into(),
             },
         },
     });
@@ -75,7 +79,7 @@ Attribute: crate::ast::Attribute<Parsed> = {
         dropped_tokens: vec![],
         error: lalrpop_util::ParseError::User {
             error: crate::passes::parser::InnerError::UnsupportedAttribute {
-                err_span: crate::ast::Location::new(s, e, filename).into(),
+                err_span: crate::ast::Location::new(s, e, filename, &unique).into(),
             },
         },
     });
@@ -88,7 +92,7 @@ Attribute: crate::ast::Attribute<Parsed> = {
         dropped_tokens: vec![],
         error: lalrpop_util::ParseError::User {
             error: crate::passes::parser::InnerError::UnsupportedAttribute {
-                err_span: crate::ast::Location::new(s, e, filename).into(),
+                err_span: crate::ast::Location::new(s, e, filename, &unique).into(),
             },
         },
     });
@@ -108,7 +112,7 @@ Property: crate::ast::Property<Parsed> = {
   <s: @L> "val" <name:Reference> ":" <type_repr:Term> <e: @R> => crate::ast::Property {
     name,
     type_repr: type_repr.into(),
-    meta: crate::ast::Location::new(s, e, filename),
+    meta: crate::ast::Location::new(s, e, filename, &unique),
   },
 };
 
@@ -117,13 +121,13 @@ Constructor: crate::ast::Constructor<Parsed> = {
   <s: @L> "|" <name:Reference> ":" <type_repr:Term> <e: @R> => crate::ast::Constructor {
     name,
     type_repr: type_repr.into(),
-    meta: crate::ast::Location::new(s, e, filename),
+    meta: crate::ast::Location::new(s, e, filename, &unique),
   },
 };
 
 KindTerm: crate::ast::Term<Parsed> = {
   <s: @L> "*" <e: @R> => crate::ast::Term::Universe(crate::ast::Universe {
-    meta: crate::ast::Location::new(s, e, filename),
+    meta: crate::ast::Location::new(s, e, filename, &unique),
   }),
 };
 
@@ -131,7 +135,7 @@ KindTerm: crate::ast::Term<Parsed> = {
 Kind: crate::ast::Term<Parsed> = {
   KindTerm,
   <s: @L> <domain:KindTerm> "->" <codomain:Kind> <e: @R> => crate::ast::Term::Pi(crate::ast::Pi {
-    meta: crate::ast::Location::new(s, e, filename),
+    meta: crate::ast::Location::new(s, e, filename, &unique),
     icit: crate::ast::Icit::Expl,
     domain: crate::ast::Domain {
       name: vec![None],
@@ -157,10 +161,10 @@ Parameter: crate::ast::Domain<Parsed> = {
   <s: @L> <name:Reference> <e: @R> => crate::ast::Domain {
     name: vec![Some(name)],
     type_repr: Box::new(crate::ast::Term::Universe(crate::ast::Universe {
-      meta: crate::ast::Location::new(s, e, filename),
+      meta: crate::ast::Location::new(s, e, filename, &unique),
     })),
     icit: crate::ast::Icit::Expl,
-    meta: crate::ast::Location::new(s, e, filename),
+    meta: crate::ast::Location::new(s, e, filename, &unique),
   },
 
   // Parses explicit arguments, which you need to specify
@@ -169,7 +173,7 @@ Parameter: crate::ast::Domain<Parsed> = {
     name: vec![Some(name)],
     type_repr: value.into(),
     icit: crate::ast::Icit::Expl,
-    meta: crate::ast::Location::new(s, e, filename),
+    meta: crate::ast::Location::new(s, e, filename, &unique),
   },
   
   // Parses explicit arguments, which you don't need to specify
@@ -177,10 +181,10 @@ Parameter: crate::ast::Domain<Parsed> = {
   <s: @L> "{" <names:Sep<",", Reference>> "}" <e: @R> => crate::ast::Domain {
     name: names.into_iter().map(Some).collect(),
     type_repr: Box::new(crate::ast::Term::Universe(crate::ast::Universe {
-      meta: crate::ast::Location::new(s, e, filename),
+      meta: crate::ast::Location::new(s, e, filename, &unique),
     })),
     icit: crate::ast::Icit::Impl,
-    meta: crate::ast::Location::new(s, e, filename),
+    meta: crate::ast::Location::new(s, e, filename, &unique),
   },
   
   // Parses explicit arguments, which you don't need to specify
@@ -189,7 +193,7 @@ Parameter: crate::ast::Domain<Parsed> = {
     name: names.into_iter().map(Some).collect(),
     type_repr: value.into(),
     icit: crate::ast::Icit::Impl,
-    meta: crate::ast::Location::new(s, e, filename),
+    meta: crate::ast::Location::new(s, e, filename, &unique),
   },
 };
 
@@ -212,20 +216,20 @@ Stmt: crate::ast::Stmt<Parsed> = {
   // Parses `@eval` command, which evaluates a term and prints the result.
   <s: @L> "@eval" <value:Term> <e: @R> => crate::ast::Stmt::Eval(crate::ast::Eval {
     value,
-    meta: crate::ast::Location::new(s, e, filename),
+    meta: crate::ast::Location::new(s, e, filename, &unique),
   }),
 
   // Parses `@type` command, which types a term and prints the result.
   <s: @L> "@type" <value:Term> <e: @R> => crate::ast::Stmt::Type(crate::ast::Type {
     value,
-    meta: crate::ast::Location::new(s, e, filename),
+    meta: crate::ast::Location::new(s, e, filename, &unique),
   }),
 
   // Parses `@import` command, which set to the resolver to import to the
   // current file.
   <s: @L> "import" <import:Reference> <e: @R> => crate::ast::Stmt::Import(crate::passes::parser::Import {
     text: import.text,
-    meta: crate::ast::Location::new(s, e, filename),
+    meta: crate::ast::Location::new(s, e, filename, &unique),
   }),
 
   /// Parses an coinductive data type declaration, this is a type declaration
@@ -251,7 +255,7 @@ Stmt: crate::ast::Stmt<Parsed> = {
     crate::ast::Stmt::Error(crate::ast::Error {
       message: format!("unsupported coinductive data `{}`", name.text),
       full_text: (&input[s..e]).to_string(),
-      meta: crate::ast::Location::new(s, e, filename),
+      meta: crate::ast::Location::new(s, e, filename, &unique),
     })
   },
 
@@ -278,7 +282,7 @@ Stmt: crate::ast::Stmt<Parsed> = {
     crate::ast::Stmt::Error(crate::ast::Error {
       message: format!("unsupported inductive data `{}`", name.text),
       full_text: (&input[s..e]).to_string(),
-      meta: crate::ast::Location::new(s, e, filename),
+      meta: crate::ast::Location::new(s, e, filename, &unique),
     })
   },
 
@@ -308,7 +312,7 @@ Stmt: crate::ast::Stmt<Parsed> = {
       crate::ast::Stmt::Error(crate::ast::Error {
         message: format!("expected a type or value for binding `{}`", name.text),
         full_text: (&input[s..e]).to_string(),
-        meta: crate::ast::Location::new(s, e, filename),
+        meta: crate::ast::Location::new(s, e, filename, &unique),
       })
     }
     // Infer Binding
@@ -321,7 +325,7 @@ Stmt: crate::ast::Stmt<Parsed> = {
         }),
         name,
         value: value.into(),
-        meta: crate::ast::Location::new(s, e, filename),
+        meta: crate::ast::Location::new(s, e, filename, &unique),
       })
     }
     // Signature
@@ -329,7 +333,7 @@ Stmt: crate::ast::Stmt<Parsed> = {
       crate::ast::Stmt::Signature(crate::passes::parser::Signature {
         type_repr: type_repr.into(),
         name,
-        meta: crate::ast::Location::new(s, e, filename),
+        meta: crate::ast::Location::new(s, e, filename, &unique),
       })
     }
     // Typed Binding
@@ -340,7 +344,7 @@ Stmt: crate::ast::Stmt<Parsed> = {
         type_repr: type_repr.into(),
         name,
         value: value.into(),
-        meta: crate::ast::Location::new(s, e, filename),
+        meta: crate::ast::Location::new(s, e, filename, &unique),
       })
     }
   },
@@ -363,11 +367,11 @@ Primary: crate::ast::Term<Parsed> = {
   },
   <s: @L> <value:String> <e: @R> => crate::ast::Term::Str(crate::ast::Str {
     value,
-    meta: crate::ast::Location::new(s, e, filename),
+    meta: crate::ast::Location::new(s, e, filename, &unique),
   }),
   <s: @L> <value:Int> <e: @R> => crate::ast::Term::Int(crate::ast::Int {
     value,
-    meta: crate::ast::Location::new(s, e, filename),
+    meta: crate::ast::Location::new(s, e, filename, &unique),
   }),
 };
 
@@ -382,7 +386,7 @@ Apply: crate::ast::Term<Parsed> = {
     _ => crate::ast::Term::Apply(crate::ast::Apply {
       callee: Box::new(callee),
       arguments: vec![argument],
-      meta: crate::ast::Location::new(s, e, filename),
+      meta: crate::ast::Location::new(s, e, filename, &unique),
     }),
   },
 };
@@ -410,14 +414,14 @@ Factor: crate::ast::Term<Parsed> = {
     crate::ast::Term::Error(crate::ast::Error {
       message: format!("unsupported record indexing `{}`", name.text),
       full_text: (&input[s..e]).to_string(),
-      meta: crate::ast::Location::new(s, e, filename),
+      meta: crate::ast::Location::new(s, e, filename, &unique),
     })
   },
   <s: @L> <a:Call> <op:FactorOp> <b:Factor> <e: @R> => crate::ast::Term::Apply(crate::ast::Apply {
-    meta: crate::ast::Location::new(s, e, filename),
+    meta: crate::ast::Location::new(s, e, filename, &unique),
     callee: crate::ast::Term::Reference(crate::passes::parser::Reference {
       text: op,
-      meta: crate::ast::Location::new(s, e, filename),
+      meta: crate::ast::Location::new(s, e, filename, &unique),
     }).into(),
     arguments: vec![a, b],
   }),
@@ -432,10 +436,10 @@ ArithmeticOp: std::string::String = {
 Arithmetic: crate::ast::Term<Parsed> = {
   Factor,
   <s: @L> <a:Factor> <op:ArithmeticOp> <b:Arithmetic> <e: @R> => crate::ast::Term::Apply(crate::ast::Apply {
-    meta: crate::ast::Location::new(s, e, filename),
+    meta: crate::ast::Location::new(s, e, filename, &unique),
     callee: crate::ast::Term::Reference(crate::passes::parser::Reference {
       text: op,
-      meta: crate::ast::Location::new(s, e, filename),
+      meta: crate::ast::Location::new(s, e, filename, &unique),
     }).into(),
     arguments: vec![a, b],
   }),
@@ -462,17 +466,17 @@ Logical: crate::ast::Term<Parsed> = {
 
   /// Annotation expression, this is a value followed by a colon and a type.
   <s: @L> <value:Arithmetic> "is" <type_repr:Logical> <e: @R> => crate::ast::Term::Anno(crate::ast::Anno {
-    meta: crate::ast::Location::new(s, e, filename),
+    meta: crate::ast::Location::new(s, e, filename, &unique),
     value: value.into(),
     type_repr: type_repr.into(),
   }),
 
   /// Logical operators, this is a list of terms separated by logical operators.
   <s: @L> <a:Arithmetic> <op:LogicalOp> <b:Logical> <e: @R> => crate::ast::Term::Apply(crate::ast::Apply {
-    meta: crate::ast::Location::new(s, e, filename),
+    meta: crate::ast::Location::new(s, e, filename, &unique),
     callee: crate::ast::Term::Reference(crate::passes::parser::Reference {
       text: op,
-      meta: crate::ast::Location::new(s, e, filename),
+      meta: crate::ast::Location::new(s, e, filename, &unique),
     }).into(),
     arguments: vec![a, b],
   }),
@@ -482,7 +486,7 @@ Logical: crate::ast::Term<Parsed> = {
 /// and a value.
 Pi: crate::ast::Pi<Parsed> = {
   <s: @L> <domain:Domain> "->" <value:Arrow> <e: @R> => crate::ast::Pi {
-    meta: crate::ast::Location::new(s, e, filename),
+    meta: crate::ast::Location::new(s, e, filename, &unique),
     icit: crate::ast::Icit::Expl,
     codomain: value.into(),
     domain,
@@ -512,7 +516,7 @@ Domain: crate::ast::Domain<Parsed> = {
     name: names.into_iter().map(Some).collect(),
     type_repr: value.into(),
     icit: crate::ast::Icit::Expl,
-    meta: crate::ast::Location::new(s, e, filename),
+    meta: crate::ast::Location::new(s, e, filename, &unique),
   },
 
   // Parses explicit arguments, which you don't need to specify
@@ -520,10 +524,10 @@ Domain: crate::ast::Domain<Parsed> = {
   <s: @L> "{" <names:Sep<",", Reference>> "}" <e: @R> => crate::ast::Domain {
     name: names.into_iter().map(Some).collect(),
     type_repr: Box::new(crate::ast::Term::Universe(crate::ast::Universe {
-      meta: crate::ast::Location::new(s, e, filename),
+      meta: crate::ast::Location::new(s, e, filename, &unique),
     })),
     icit: crate::ast::Icit::Impl,
-    meta: crate::ast::Location::new(s, e, filename),
+    meta: crate::ast::Location::new(s, e, filename, &unique),
   },
   
   // Parses explicit arguments, which you don't need to specify
@@ -532,7 +536,7 @@ Domain: crate::ast::Domain<Parsed> = {
     name: names.into_iter().map(Some).collect(),
     type_repr: value.into(),
     icit: crate::ast::Icit::Impl,
-    meta: crate::ast::Location::new(s, e, filename),
+    meta: crate::ast::Location::new(s, e, filename, &unique),
   },
 };
 
@@ -547,7 +551,7 @@ SimplePattern: crate::ast::Pattern<Parsed> = {
   <s: @L> <constructor:Reference> <arguments:Reference*> <e: @R> => crate::ast::Pattern {
     constructor,
     arguments,
-    meta: crate::ast::Location::new(s, e, filename),
+    meta: crate::ast::Location::new(s, e, filename, &unique),
   },
 };
 
@@ -557,7 +561,7 @@ Case: crate::ast::Case<Parsed> = {
   <s: @L> <pattern:SimplePattern> "=>" <value:Call> <e: @R> => crate::ast::Case {
     pattern,
     value: value.into(),
-    meta: crate::ast::Location::new(s, e, filename),
+    meta: crate::ast::Location::new(s, e, filename, &unique),
   },
 
   // Error handling for the parser, this is used to report errors when the
@@ -571,17 +575,17 @@ Case: crate::ast::Case<Parsed> = {
       pattern: crate::ast::Pattern {
         constructor: crate::passes::parser::Reference {
           text: "Error".to_string(),
-          meta: crate::ast::Location::new(s, e, filename),
+          meta: crate::ast::Location::new(s, e, filename, &unique),
         },
         arguments: vec![],
-        meta: crate::ast::Location::new(s, e, filename),
+        meta: crate::ast::Location::new(s, e, filename, &unique),
       },
       value: crate::ast::Term::Error(crate::ast::Error {
         message,
         full_text: (&input[s..e]).to_string(),
-        meta: crate::ast::Location::new(s, e, filename),
+        meta: crate::ast::Location::new(s, e, filename, &unique),
       }).into(),
-      meta: crate::ast::Location::new(s, e, filename),
+      meta: crate::ast::Location::new(s, e, filename, &unique),
     }
   },
 };
@@ -596,7 +600,7 @@ pub Term: crate::ast::Term<Parsed> = {
   <s: @L> "\\" <arguments:Sep<",", Reference>> "->" <value:Term> <e: @R> => crate::ast::Term::Fun(crate::ast::Fun {
     arguments,
     value: value.into(),
-    meta: crate::ast::Location::new(s, e, filename),
+    meta: crate::ast::Location::new(s, e, filename, &unique),
   }),
 
   /// Parses a elim expression, this is a list of cases followed by a pipe and
@@ -604,7 +608,7 @@ pub Term: crate::ast::Term<Parsed> = {
   <s: @L> "elim" <scrutinee:Term> "of" <cases:Sep<",", Case>> <e: @R> => crate::ast::Term::Elim(crate::ast::Elim {
     scrutinee: scrutinee.into(),
     patterns: cases,
-    meta: crate::ast::Location::new(s, e, filename),
+    meta: crate::ast::Location::new(s, e, filename, &unique),
   }),
 
   // Error handling for the parser, this is used to report errors when the
@@ -617,7 +621,7 @@ pub Term: crate::ast::Term<Parsed> = {
     crate::ast::Term::Error(crate::ast::Error {
       message,
       full_text: (&input[s..e]).to_string(),
-      meta: crate::ast::Location::new(s, e, filename),
+      meta: crate::ast::Location::new(s, e, filename, &unique),
     })
   },
 }
@@ -627,7 +631,7 @@ pub Term: crate::ast::Term<Parsed> = {
 DocString: crate::ast::DocString<Parsed> = <s: @L> <text:r"///.*\n"> <e: @R> => crate::ast::DocString {
   text: (&text[2..]).to_string(),
   full_text: text.to_string(),
-  meta: crate::ast::Location::new(s, e, filename),
+  meta: crate::ast::Location::new(s, e, filename, &unique),
 };
 
 Int: isize = <s:r"[0123456789]+"> => isize::from_str(s).unwrap();
@@ -646,7 +650,7 @@ Text: std::string::String = {
 Reference: crate::passes::parser::Reference = {
   <s: @L> <text:Text> <e: @R> => crate::passes::parser::Reference {
     text: text.to_string(),
-    meta: crate::ast::Location::new(s, e, filename),
+    meta: crate::ast::Location::new(s, e, filename, &unique),
   }
 };
 
