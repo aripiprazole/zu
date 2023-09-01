@@ -9,10 +9,10 @@ use clap::Parser;
 use lalrpop_util::lalrpop_mod;
 use miette::IntoDiagnostic;
 use owo_colors::OwoColorize;
-use passes::{
-    elab::{Elab, Environment, Reporter},
-    resolver::Resolver,
-};
+use passes::elab::Elab;
+use passes::elab::Environment;
+use passes::elab::Reporter;
+use passes::resolver::Resolver;
 
 // The lalrpop module, it does generate the parser and lexer
 // for the language.
@@ -37,24 +37,24 @@ pub mod show;
 
 /// The compiler passes.
 pub mod passes {
-    /// Resolver module. It does handles the imports and the references.
-    ///
-    /// It's the second phase of the compiler.
-    pub mod resolver;
+  /// Resolver module. It does handles the imports and the references.
+  ///
+  /// It's the second phase of the compiler.
+  pub mod resolver;
 
-    /// Type elaborator module, it does the type checking stuff.
-    ///
-    /// It's the third phase of the compiler.
-    pub mod elab;
+  /// Type elaborator module, it does the type checking stuff.
+  ///
+  /// It's the third phase of the compiler.
+  pub mod elab;
 
-    /// Parser LALRPOP module. It does uses a parse generator to
-    /// generate a parser and lexer for the language.
-    pub mod parser;
+  /// Parser LALRPOP module. It does uses a parse generator to
+  /// generate a parser and lexer for the language.
+  pub mod parser;
 
-    ///// The closure converter module. It converts the functions to closures.
-    /////
-    ///// It's the third phase of the compiler.
-    // pub mod closure_conv;
+  ///// The closure converter module. It converts the functions to closures.
+  /////
+  ///// It's the third phase of the compiler.
+  // pub mod closure_conv;
 }
 
 /// Simple program to run `zu` language.
@@ -62,95 +62,95 @@ pub mod passes {
 #[command(author, version, about, long_about = None)]
 #[command(propagate_version = true)]
 pub struct Command {
-    #[arg(short, long)]
-    pub include: Vec<String>,
+  #[arg(short, long)]
+  pub include: Vec<String>,
 
-    /// The file we would like to run, type check, etc
-    pub main: String,
+  /// The file we would like to run, type check, etc
+  pub main: String,
 }
 
 #[derive(Debug, Clone)]
 pub struct LoggerReporter;
 
 impl Reporter for LoggerReporter {
-    /// Evaluates a value at a specific location.
-    fn evaluate(&self, value: passes::elab::Value, location: ast::Location) -> miette::Result<()> {
-        let filename = location.filename;
-        let start = location.start;
-        let end = location.end;
+  /// Evaluates a value at a specific location.
+  fn evaluate(&self, value: passes::elab::Value, location: ast::Location) -> miette::Result<()> {
+    let filename = location.filename;
+    let start = location.start;
+    let end = location.end;
 
-        log::info!("{:?} at {filename}:{start}:{end}", value.show());
-        Ok(())
-    }
+    log::info!("{:?} at {filename}:{start}:{end}", value.show());
+    Ok(())
+  }
 
-    /// Checks a value at a specific location.
-    fn check(&self, value: passes::elab::Value, location: ast::Location) -> miette::Result<()> {
-        let filename = location.filename;
-        let start = location.start;
-        let end = location.end;
+  /// Checks a value at a specific location.
+  fn check(&self, value: passes::elab::Value, location: ast::Location) -> miette::Result<()> {
+    let filename = location.filename;
+    let start = location.start;
+    let end = location.end;
 
-        log::info!("checked {:?} at {filename}:{start}:{end}", value.show());
-        Ok(())
-    }
+    log::info!("checked {:?} at {filename}:{start}:{end}", value.show());
+    Ok(())
+  }
 }
 
 /// Logger function for the fern logger.
 ///
 /// It does format the log message to a specific format.
 fn log(out: fern::FormatCallback, message: &std::fmt::Arguments, record: &log::Record) {
-    let style = match record.level() {
-        log::Level::Error => owo_colors::Style::new().red().bold(),
-        log::Level::Warn => owo_colors::Style::new().yellow().bold(),
-        log::Level::Info => owo_colors::Style::new().bright_blue().bold(),
-        log::Level::Debug => owo_colors::Style::new().bright_red().bold(),
-        log::Level::Trace => owo_colors::Style::new().bright_cyan().bold(),
-    };
-    let level = record.level().to_string().to_lowercase();
-    let level = level.style(style);
+  let style = match record.level() {
+    log::Level::Error => owo_colors::Style::new().red().bold(),
+    log::Level::Warn => owo_colors::Style::new().yellow().bold(),
+    log::Level::Info => owo_colors::Style::new().bright_blue().bold(),
+    log::Level::Debug => owo_colors::Style::new().bright_red().bold(),
+    log::Level::Trace => owo_colors::Style::new().bright_cyan().bold(),
+  };
+  let level = record.level().to_string().to_lowercase();
+  let level = level.style(style);
 
-    out.finish(format_args!("  {level:>7} {}", message))
+  out.finish(format_args!("  {level:>7} {}", message))
 }
 
 /// The main function of the program.
 fn program() -> miette::Result<()> {
-    // Initialize the bupropion handler with miette
-    bupropion::BupropionHandlerOpts::install(|| {
-        // Build the bupropion handler options, for specific
-        // error presenting.
-        bupropion::BupropionHandlerOpts::new()
-    })
+  // Initialize the bupropion handler with miette
+  bupropion::BupropionHandlerOpts::install(|| {
+    // Build the bupropion handler options, for specific
+    // error presenting.
+    bupropion::BupropionHandlerOpts::new()
+  })
+  .into_diagnostic()?;
+
+  // Initialize the logger
+  fern::Dispatch::new() // Perform allocation-free log formatting
+    .format(log) // Add blanket level filter -
+    .level(log::LevelFilter::Debug) // - and per-module overrides
+    .level_for("hyper", log::LevelFilter::Info) // Output to stdout, files, and other Dispatch configurations
+    .chain(std::io::stdout())
+    .apply()
     .into_diagnostic()?;
 
-    // Initialize the logger
-    fern::Dispatch::new() // Perform allocation-free log formatting
-        .format(log) // Add blanket level filter -
-        .level(log::LevelFilter::Debug) // - and per-module overrides
-        .level_for("hyper", log::LevelFilter::Info) // Output to stdout, files, and other Dispatch configurations
-        .chain(std::io::stdout())
-        .apply()
-        .into_diagnostic()?;
+  let command = Command::parse();
 
-    let command = Command::parse();
+  let mut elab = Elab::new(LoggerReporter);
+  let resolver = Resolver::new(command.main, command.include)?;
+  let environment = Environment::default();
 
-    let mut elab = Elab::new(LoggerReporter);
-    let resolver = Resolver::new(command.main, command.include)?;
-    let environment = Environment::default();
+  // Resolve the file and import the declarations
+  // from the file.
+  let file = resolver.resolve_and_import()?;
+  let file = elab.elaborate(environment, file)?;
+  let _ = file;
 
-    // Resolve the file and import the declarations
-    // from the file.
-    let file = resolver.resolve_and_import()?;
-    let file = elab.elaborate(environment, file)?;
-    let _ = file;
-
-    Ok(())
+  Ok(())
 }
 
 // The main function wrapper around [`crate::program`].
 fn main() {
-    // Avoid printing print `Error: ` before the error message
-    // to maintain the language beauty!
-    if let Err(e) = program() {
-        eprintln!("{e:?}");
-        std::process::exit(1);
-    }
+  // Avoid printing print `Error: ` before the error message
+  // to maintain the language beauty!
+  if let Err(e) = program() {
+    eprintln!("{e:?}");
+    std::process::exit(1);
+  }
 }

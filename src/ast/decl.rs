@@ -4,20 +4,20 @@ use super::*;
 /// defined primarily for the compiler.
 #[derive(Debug, Clone)]
 pub enum Attribute<S: state::State> {
-    _TODO(PhantomData<S>),
+  _TODO(PhantomData<S>),
 }
 
 #[derive(Debug, Clone)]
 pub struct Property<S: state::State> {
-    pub name: S::Definition,
-    pub type_repr: Term<S>,
-    pub meta: S::Meta,
+  pub name: S::Definition,
+  pub type_repr: Term<S>,
+  pub meta: S::Meta,
 }
 
 impl<S: state::State> Element<S> for Property<S> {
-    fn meta(&self) -> &S::Meta {
-        &self.meta
-    }
+  fn meta(&self) -> &S::Meta {
+    &self.meta
+  }
 }
 
 /// A constructor for an inductive type. It has a name and a type.
@@ -31,15 +31,15 @@ impl<S: state::State> Element<S> for Property<S> {
 /// Are constructors for the inductive type `nat`.
 #[derive(Debug, Clone)]
 pub struct Constructor<S: state::State> {
-    pub name: S::Definition,
-    pub type_repr: Term<S>,
-    pub meta: S::Meta,
+  pub name: S::Definition,
+  pub type_repr: Term<S>,
+  pub meta: S::Meta,
 }
 
 impl<S: state::State> Element<S> for Constructor<S> {
-    fn meta(&self) -> &S::Meta {
-        &self.meta
-    }
+  fn meta(&self) -> &S::Meta {
+    &self.meta
+  }
 }
 
 /// A documentation string. It has a list of strings.
@@ -47,29 +47,29 @@ impl<S: state::State> Element<S> for Constructor<S> {
 /// It's used to document declarations.
 #[derive(Debug, Clone)]
 pub struct DocString<S: state::State> {
-    pub full_text: String,
-    pub text: String,
-    pub meta: S::Meta,
+  pub full_text: String,
+  pub text: String,
+  pub meta: S::Meta,
 }
 
 impl<S: state::State> Element<S> for DocString<S> {
-    fn meta(&self) -> &S::Meta {
-        &self.meta
-    }
+  fn meta(&self) -> &S::Meta {
+    &self.meta
+  }
 }
 
 /// A declaration. It can be an inductive type, or a downgrade.
 ///
 /// It's an wrapper for different types of declarations.
 pub trait Declaration<S: state::State> {
-    /// The documentation of the declaration.
-    fn doc_strings(&self) -> &[DocString<S>];
+  /// The documentation of the declaration.
+  fn doc_strings(&self) -> &[DocString<S>];
 
-    /// The attributes of the declaration.
-    fn attributes(&self) -> &[Attribute<S>];
+  /// The attributes of the declaration.
+  fn attributes(&self) -> &[Attribute<S>];
 
-    /// The name of the declaration.
-    fn name(&self) -> &<S as state::State>::Definition;
+  /// The name of the declaration.
+  fn name(&self) -> &<S as state::State>::Definition;
 }
 
 /// An inductive type. It has a name, a list of parameters, and a list of
@@ -89,32 +89,32 @@ pub trait Declaration<S: state::State> {
 /// ```
 #[derive(Debug, Clone)]
 pub struct Inductive<S: state::State> {
-    pub doc_strings: Vec<DocString<S>>,
-    pub attributes: Vec<Attribute<S>>,
-    pub name: S::Definition,
-    pub parameters: Vec<Domain<S>>,
-    pub constructors: Vec<Constructor<S>>,
-    pub meta: S::Meta,
+  pub doc_strings: Vec<DocString<S>>,
+  pub attributes: Vec<Attribute<S>>,
+  pub name: S::Definition,
+  pub parameters: Vec<Domain<S>>,
+  pub constructors: Vec<Constructor<S>>,
+  pub meta: S::Meta,
 }
 
 impl<S: state::State> Element<S> for Inductive<S> {
-    fn meta(&self) -> &S::Meta {
-        &self.meta
-    }
+  fn meta(&self) -> &S::Meta {
+    &self.meta
+  }
 }
 
 impl<S: state::State> Declaration<S> for Inductive<S> {
-    fn doc_strings(&self) -> &[DocString<S>] {
-        &self.doc_strings
-    }
+  fn doc_strings(&self) -> &[DocString<S>] {
+    &self.doc_strings
+  }
 
-    fn attributes(&self) -> &[Attribute<S>] {
-        &self.attributes
-    }
+  fn attributes(&self) -> &[Attribute<S>] {
+    &self.attributes
+  }
 
-    fn name(&self) -> &<S as state::State>::Definition {
-        &self.name
-    }
+  fn name(&self) -> &<S as state::State>::Definition {
+    &self.name
+  }
 }
 
 /// Defines a binding. It has a name, a list of doc strings, and a value.
@@ -136,30 +136,30 @@ impl<S: state::State> Declaration<S> for Inductive<S> {
 /// ```
 #[derive(Debug, Clone)]
 pub struct Binding<S: state::State> {
-    pub doc_strings: Vec<DocString<S>>,
-    pub attributes: Vec<Attribute<S>>,
-    pub name: S::Definition,
-    pub type_repr: Term<S>,
-    pub value: Term<S>,
-    pub meta: S::Meta,
+  pub doc_strings: Vec<DocString<S>>,
+  pub attributes: Vec<Attribute<S>>,
+  pub name: S::Definition,
+  pub type_repr: Term<S>,
+  pub value: Term<S>,
+  pub meta: S::Meta,
 }
 
 impl<S: state::State> Element<S> for Binding<S> {
-    fn meta(&self) -> &S::Meta {
-        &self.meta
-    }
+  fn meta(&self) -> &S::Meta {
+    &self.meta
+  }
 }
 
 impl<S: state::State> Declaration<S> for Binding<S> {
-    fn doc_strings(&self) -> &[DocString<S>] {
-        &self.doc_strings
-    }
+  fn doc_strings(&self) -> &[DocString<S>] {
+    &self.doc_strings
+  }
 
-    fn attributes(&self) -> &[Attribute<S>] {
-        &self.attributes
-    }
+  fn attributes(&self) -> &[Attribute<S>] {
+    &self.attributes
+  }
 
-    fn name(&self) -> &<S as state::State>::Definition {
-        &self.name
-    }
+  fn name(&self) -> &<S as state::State>::Definition {
+    &self.name
+  }
 }
