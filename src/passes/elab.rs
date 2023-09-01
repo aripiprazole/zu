@@ -20,6 +20,22 @@ pub struct Declaration {
     pub value: Value,
 }
 
+#[derive(miette::Diagnostic, thiserror::Error, Debug, Clone, PartialEq, Eq, Hash)]
+#[diagnostic()]
+pub enum UnifyError {
+    /// Int value mismatch between two values,
+    #[error("expected int value {0} and got {1}")]
+    #[label("expected int value {0} and got {1}")]
+    #[diagnostic(url(docsrs), code(unify::int_mismatch))]
+    MismatchBetweenInts(usize, usize),
+
+    /// String value mismatch between two values,
+    #[error("expected string value {0} and got {1}")]
+    #[label("expected string value {0} and got {1}")]
+    #[diagnostic(url(docsrs), code(unify::str_mismatch))]
+    MismatchBetweenStrs(String, String),
+}
+
 #[derive(thiserror::Error, Debug)]
 #[error("type error: {}", error)]
 pub struct UnknownTypeError {
@@ -217,11 +233,59 @@ impl Elab {
         todo!()
     }
 
-    pub fn unify_catch(&self, _: Value, _: Value) -> Value {
-        todo!()
+    /// Performs unification between two values, its a
+    /// equality relation between two values.
+    ///
+    /// It does closes some holes.
+    ///
+    /// NOTE: I disabled the formatter so I can align values
+    /// and it looks cutier.
+    #[rustfmt::skip]
+    pub fn unify_catch(&self, lhs: Value, rhs: Value) -> miette::Result<()> {
+        use Value::*;
+
+        match (lhs.force(), rhs.force()) {
+            // Type universe unification is always true, because
+            // we don't have universe polymorphism.
+            (Universe            , Universe) => {}
+
+            // Unification of literal values, it does checks if the values are equal
+            // directly. If they are not, it does returns an error.
+            (Int(v_a)            , Int(v_b)) if v_a == v_b => {} // 1 = 1, 2 = 2, etc...
+            (Str(v_a)            , Str(v_b)) if v_a == v_b => {} // "a" = "a", "b" = "b", etc...
+            (Int(_)              , Int(_))                 => todo!("specialies error, int != int"),
+            (Str(_)              , Str(_))                 => todo!("specialies error, str != str"),
+
+            // Unification of application spines or meta variables
+            (Flexible(m_a, sp_a) , Flexible(m_b, sp_b)) => {
+                let _ = (m_a, m_b, sp_a, sp_b);
+            }
+            (Rigid(m_a, sp_a)    , Rigid(m_b, sp_b))    => {
+                let _ = (m_a, m_b, sp_a, sp_b);
+            }
+
+            // Flexible unification with spine
+            (Flexible(m_a, sp_a) , _)    => {
+                let _ = (m_a, sp_a);
+            }
+            (_                   , Flexible(m_a, sp_a))    => {
+                let _ = (m_a, sp_a);
+            }
+            _ => panic!("type error"),
+        }
+        Ok(())
     }
 
-    pub fn unify(&self, _: Value, _: Value) {
+    /// Performs unification between two values, its a
+    /// equality relation between two values.
+    ///
+    /// It does closes some holes.
+    ///
+    /// NOTE: I disabled the formatter so I can align values
+    /// and it looks cutier.
+    #[rustfmt::skip]
+    #[inline(always)]
+    pub fn unify(&self, lhs: Value, rhs: Value) {
         todo!()
     }
 
@@ -317,6 +381,7 @@ impl Quote for Value {
                 type_repr: type_repr.quote(nth).into(),
                 meta: Default::default(),
             }),
+            Value::SrcPos(_, box value) => value.quote(nth),
         }
     }
 }
@@ -441,4 +506,5 @@ pub enum Value {
     Int(isize),
     Anno(Box<Value>, Box<Value>),
     Str(String),
+    SrcPos(crate::ast::Location, Box<Value>),
 }
