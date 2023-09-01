@@ -2,10 +2,13 @@ use std::{cell::RefCell, rc::Rc};
 
 use crate::{
     ast::{
-        state::State, Apply, Case, Definition, Domain, Element, Elim, Error, Fun, Hole, Int,
-        Pattern, Pi, Str, Term, Universe, Anno,
+        state::State, Anno, Apply, Case, Definition, Domain, Element, Elim, Error, Fun, Hole, Int,
+        Pattern, Pi, Str, Term, Universe,
     },
-    passes::{resolver::Resolved, elab::{Value, Elab}},
+    passes::{
+        elab::{Elab, Value},
+        resolver::Resolved,
+    },
 };
 
 /// Represents the resolved state, it's the state of the syntax tree when it's resolved.
@@ -32,9 +35,9 @@ pub enum MetaHole {
 pub struct MetaVar(pub Rc<RefCell<MetaHole>>);
 
 impl MetaVar {
-    pub fn new_unique(elab: &mut Elab) -> Self {
-        let unique = elab.unique;
-        elab.unique += 1;
+    pub fn new_unique(elab: &Elab) -> Self {
+        let unique = elab.unique.get();
+        elab.unique.update(|x| x + 1);
         Self(Rc::new(RefCell::new(MetaHole::Nothing(unique))))
     }
 
@@ -140,46 +143,50 @@ impl Pattern<Resolved> {
 
 impl Term<Resolved> {
     /// Erase a term to a term in the untyped lambda calculus.
-    pub fn erase(self) -> crate::ast::Term<Erased> {
+    pub fn erase(self, elab: &Elab) -> crate::ast::Term<Erased> {
         match self {
             Term::Group(_) => unreachable!(),
-            Term::Error(error) => Term::Error(Error { meta: (), ..error }),
             Term::Universe(_) => Term::Universe(Universe { meta: () }),
             Term::Hole(_) => Term::Hole(Hole { meta: () }),
             Term::Int(v) => Term::Int(Int { meta: (), ..v }),
             Term::Str(v) => Term::Str(Str { meta: (), ..v }),
+            Term::Error(v) => Term::Error(Error {
+                meta: (),
+                full_text: v.full_text,
+                message: v.message,
+            }),
             Term::Anno(v) => Term::Anno(Anno {
                 meta: (),
-                value: v.value.erase().into(),
-                type_repr: v.type_repr.erase().into(),
+                value: v.value.erase(elab).into(),
+                type_repr: v.type_repr.erase(elab).into(),
             }),
             Term::Elim(elim) => Term::Elim(Elim {
                 meta: (),
-                scrutinee: elim.scrutinee.erase().into(),
+                scrutinee: elim.scrutinee.erase(elab).into(),
                 patterns: elim
                     .patterns
                     .into_iter()
                     .map(|pattern| Case {
                         meta: (),
                         pattern: pattern.pattern.erase(),
-                        value: pattern.value.erase().into(),
+                        value: pattern.value.erase(elab).into(),
                     })
                     .collect(),
             }),
             Term::Fun(fun) => Term::Fun(Fun {
                 meta: (),
                 arguments: Definition::new(fun.arguments.text.clone()),
-                value: fun.value.erase().into(),
+                value: fun.value.erase(elab).into(),
             }),
             Term::Apply(apply) => {
                 apply
                     .arguments
                     .into_iter()
-                    .fold(apply.callee.erase(), |acc, argument| {
+                    .fold(apply.callee.erase(elab), |acc, argument| {
                         Term::Apply(Apply {
                             meta: (),
                             callee: acc.into(),
-                            arguments: argument.erase().into(),
+                            arguments: argument.erase(elab).into(),
                         })
                     })
             }
@@ -189,12 +196,23 @@ impl Term<Resolved> {
                 domain: Domain {
                     icit: pi.domain.icit,
                     meta: (),
-                    type_repr: pi.domain.type_repr.erase().into(),
+                    type_repr: pi.domain.type_repr.erase(elab).into(),
                     name: Definition::new(pi.domain.name.text.clone()),
                 },
-                codomain: pi.codomain.erase().into(),
+                codomain: pi.codomain.erase(elab).into(),
             }),
-            Term::Reference(_) => todo!(),
+            Term::Reference(reference) => {
+                let mut ix = 0;
+                let mut types = elab.types.clone();
+                while let Some((name, _)) = types.pop_front() {
+                    if name == reference.definition.text {
+                        return Term::Reference(Reference::Var(Ix(ix)));
+                    }
+                    ix += 1;
+                }
+
+                todo!("reference not found error handling")
+            }
         }
     }
 }

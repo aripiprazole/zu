@@ -1,3 +1,5 @@
+use std::cell::Cell;
+use std::cell::RefCell;
 use std::fmt::Debug;
 use std::rc::Rc;
 
@@ -28,14 +30,14 @@ pub type Spine = im_rc::Vector<Value>;
 
 #[derive(Default, Debug, Clone)]
 pub struct Environment {
-    pub data: Vec<Value>,
+    pub data: im_rc::Vector<Value>,
 }
 
 impl Environment {
     /// Creates a new entry in the environment
     pub fn create_new_value(&self, value: Value) -> Self {
         let mut data = self.data.clone();
-        data.push(value);
+        data.push_front(value);
         Self { data }
     }
 }
@@ -57,26 +59,28 @@ pub trait Reporter: Debug {
 #[derive(Debug, Clone)]
 pub struct Elab {
     pub level: Lvl,
-    pub types: im_rc::HashMap<String, Value>,
+    pub env: Environment,
+    pub types: im_rc::Vector<(String, Value)>,
     pub reporter: Rc<dyn Reporter>,
-    pub position: crate::ast::Location,
-    pub unique: usize,
+    pub position: RefCell<crate::ast::Location>,
+    pub unique: Cell<usize>,
 
     /// A map from the name of the declaration to the type of the declaration
     ///
     /// It's a simple type table, so we don't rewrite everything.
-    pub tt: intmap::IntMap<Value>,
+    pub tt: RefCell<intmap::IntMap<Value>>,
 }
 
 impl Elab {
     pub fn new<T: Reporter + 'static>(reporter: T) -> Self {
         Self {
+            env: Default::default(),
             level: Default::default(),
             types: Default::default(),
             reporter: Rc::new(reporter),
             position: Default::default(),
             tt: Default::default(),
-            unique: 0
+            unique: Default::default(),
         }
     }
 
@@ -110,30 +114,79 @@ impl Elab {
 
     /// Creates a new type elaborating it into a new
     /// value.
-    pub fn infer(&mut self, env: Environment, term: &Tm) -> Value {
+    pub fn infer(&self, term: &Tm) -> Value {
         /// Infers the type of a term in the context of the environment
         ///
         /// It does returns the type of the term.
         #[inline(always)]
-        fn imp(elab: &mut Elab, env: Environment, term: &Tm) -> Value {
+        fn imp(ctx: &Elab, term: &Tm) -> Value {
             match term {
+                // Removed
+                Term::Group(_) => unreachable!(),
+
+                // Values
                 Term::Int(_) => Value::constructor("Int"),
                 Term::Str(_) => Value::constructor("String"),
-                Term::Hole(_) => elab.fresh_meta(),
-                Term::Apply(_) => todo!(),
-                Term::Error(_) => todo!(),
-                Term::Universe(_) => todo!(),
-                Term::Anno(_) => todo!(),
+                Term::Hole(_) | Term::Error(_) => ctx.fresh_meta().eval(&ctx.env),
+                Term::Universe(_) => Value::Universe,
                 Term::Fun(_) => todo!(),
                 Term::Elim(_) => todo!(),
-                Term::Group(_) => todo!(),
-                Term::Reference(_) => todo!(),
+                Term::Apply(apply) => {
+                    let callee = ctx.infer(&apply.callee);
+
+                    apply
+                        .arguments
+                        .iter()
+                        .cloned()
+                        // Creates a spine of applications to the callee
+                        // and then applies the spine to the callee.
+                        .fold(callee, |callee, argument| {
+                            let (domain, codomain) = match callee.force() {
+                                Value::Pi(_, _, box tt, closure) => (tt, closure),
+                                value => {
+                                    let tt = ctx.fresh_meta().eval(&ctx.env);
+                                    let closure = Closure {
+                                        env: ctx.env.clone(),
+                                        term: ctx.create_new_value("x", tt.clone()).fresh_meta(),
+                                    };
+
+                                    ctx.unify(Value::pi("x", tt.clone(), closure.clone()), value);
+
+                                    (tt, closure)
+                                }
+                            };
+
+                            let u = ctx.check(&argument, domain);
+
+                            codomain.apply(u.eval(&ctx.env))
+                        })
+                }
+                Term::Reference(_) => {
+                    let Term::Reference(Reference::Var(Ix(ix))) = term.clone().erase(ctx) else {
+                        // We already check at the beginning of the function with the
+                        // pattern matching that the term is a reference.
+                        //
+                        // So this is unreachable.
+                        unreachable!()
+                    };
+
+                    // Gets the value from the environment and clones it to avoid
+                    // borrowing the environment.
+                    ctx.env.data[ix].clone()
+                }
+                Term::Anno(anno) => ctx
+                    .check(
+                        &anno.value,
+                        // Creates a new type representation for the annotation
+                        anno.type_repr.clone().erase(ctx).eval(&ctx.env),
+                    )
+                    .eval(&ctx.env),
                 Term::Pi(pi) => {
                     let name = Definition::new(pi.domain.name.text.clone());
-                    let domain = elab.infer(env.clone(), &pi.domain.type_repr);
+                    let domain = ctx.infer(&pi.domain.type_repr);
                     let codomain = Closure {
-                        env: env.create_new_value(domain.clone()),
-                        term: pi.codomain.clone().erase(),
+                        env: ctx.env.create_new_value(domain.clone()),
+                        term: pi.codomain.clone().erase(ctx),
                     };
 
                     Value::Pi(name, pi.domain.icit, domain.into(), codomain)
@@ -145,28 +198,49 @@ impl Elab {
 
         // Sets the position of the elaborator to the error diagnostics
         // goes to the right place.
-        self.position = meta.clone();
+        self.position.replace(meta.clone());
 
         // Infers the type of the term
-        let value = imp(self, env, term);
+        let value = imp(self, term);
 
         // Insert the type associating it with it's id,
         // so we can use it later.
-        self.tt.insert(meta.id, value.clone());
+        self.tt.borrow_mut().insert(meta.id, value.clone());
 
         value
     }
 
     /// Checks a term against a type
-    pub fn check(&mut self, _: Environment, term: Tm, type_repr: Value) -> Expr {
+    pub fn check(&self, term: &Tm, type_repr: Value) -> Expr {
         let _ = term;
         let _ = type_repr;
         todo!()
     }
 
-    /// Creates a new fresh meta variable
-    pub fn fresh_meta(&self) -> Value {
+    pub fn unify_catch(&self, _: Value, _: Value) -> Value {
         todo!()
+    }
+
+    pub fn unify(&self, _: Value, _: Value) {
+        todo!()
+    }
+
+    /// Creates a new fresh meta variable
+    pub fn fresh_meta(&self) -> Expr {
+        todo!()
+    }
+
+    pub fn create_new_value(&self, name: &str, value: Value) -> Self {
+        let mut data = self.clone();
+        data.env = data.env.create_new_value(Value::rigid(data.level));
+        data.types = data
+            .types
+            .clone()
+            .into_iter()
+            .chain(std::iter::once((name.into(), value)))
+            .collect();
+        data.level += 1;
+        data
     }
 }
 
@@ -251,7 +325,7 @@ impl Expr {
     /// Evaluates a value to a value in the WHNF.
     ///
     /// It does performs reductions.
-    pub fn eval(self, env: Environment) -> Value {
+    pub fn eval(self, env: &Environment) -> Value {
         use crate::ast::Term::*;
 
         /// Evaluates an application
@@ -284,20 +358,20 @@ impl Expr {
             Str(data) => Value::Str(data.value),
             Elim(_) => todo!("elim expr"),
             Fun(_) => todo!("fun expr"),
-            Apply(e) => app(e.callee.eval(env.clone()), e.arguments.eval(env)),
+            Apply(e) => app(e.callee.eval(env), e.arguments.eval(env)),
             Reference(crate::erase::Reference::Var(Ix(ix))) => env.data[ix].clone(), // TODO: HANDLE ERROR
             Reference(crate::erase::Reference::MetaVar(meta)) => meta.take(),
             Anno(anno) => {
-                let value = anno.value.eval(env.clone());
+                let value = anno.value.eval(env);
                 let type_repr = anno.type_repr.eval(env);
 
                 Value::Anno(value.into(), type_repr.into())
             }
             Pi(pi) => {
                 let name = Definition::new(pi.domain.name.text);
-                let domain = pi.domain.type_repr.eval(env.clone());
+                let domain = pi.domain.type_repr.eval(env);
                 let codomain = Closure {
-                    env,
+                    env: env.clone(),
                     term: *pi.codomain,
                 };
 
@@ -324,13 +398,27 @@ impl Value {
     pub fn constructor(name: &str) -> Self {
         Value::Constructor(name.to_string())
     }
+
+    /// Forcing is important because it does removes the holes created
+    /// by the elaborator.
+    ///
+    /// It does returns a value without holes.
+    pub fn force(self) -> Self {
+        todo!()
+    }
+
+    /// Creates a new pi type
+    pub fn pi(name: &str, domain: Value, codomain: Closure) -> Self {
+        let name = Definition::new(name.to_string());
+        Value::Pi(name, Icit::Expl, domain.into(), codomain)
+    }
 }
 
 impl Closure {
     /// Binds a closure with a new environment with the
     /// given value.
     pub fn apply(self, argument: Value) -> Value {
-        self.term.eval(self.env.create_new_value(argument))
+        self.term.eval(&self.env.create_new_value(argument))
     }
 }
 
