@@ -27,13 +27,18 @@ pub enum UnifyError {
     #[error("expected int value {0} and got {1}")]
     #[label("expected int value {0} and got {1}")]
     #[diagnostic(url(docsrs), code(unify::int_mismatch))]
-    MismatchBetweenInts(usize, usize),
+    MismatchBetweenInts(isize, isize),
 
     /// String value mismatch between two values,
     #[error("expected string value {0} and got {1}")]
     #[label("expected string value {0} and got {1}")]
     #[diagnostic(url(docsrs), code(unify::str_mismatch))]
     MismatchBetweenStrs(String, String),
+
+    /// Unification error between two types
+    #[error("expected type, got another")]
+    #[diagnostic(url(docsrs), code(unify::str_mismatch))]
+    CantUnify,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -242,38 +247,51 @@ impl Elab {
     /// and it looks cutier.
     #[rustfmt::skip]
     pub fn unify_catch(&self, lhs: Value, rhs: Value) -> miette::Result<()> {
+        /// Imports every stuff so we can't have a lot of
+        /// `::` in the code blowing or mind.
         use Value::*;
+        use UnifyError::*;
 
         match (lhs.force(), rhs.force()) {
             // Type universe unification is always true, because
             // we don't have universe polymorphism.
-            (Universe            , Universe) => {}
+            (Universe            , Universe) => Ok(()),
 
             // Unification of literal values, it does checks if the values are equal
             // directly. If they are not, it does returns an error.
-            (Int(v_a)            , Int(v_b)) if v_a == v_b => {} // 1 = 1, 2 = 2, etc...
-            (Str(v_a)            , Str(v_b)) if v_a == v_b => {} // "a" = "a", "b" = "b", etc...
-            (Int(_)              , Int(_))                 => todo!("specialies error, int != int"),
-            (Str(_)              , Str(_))                 => todo!("specialies error, str != str"),
+            (Int(v_a)            , Int(v_b)) if v_a == v_b => Ok(()), // 1 = 1, 2 = 2, etc...
+            (Str(v_a)            , Str(v_b)) if v_a == v_b => Ok(()), // "a" = "a", "b" = "b", etc...
+            (Int(v_a)            , Int(v_b))               => Err(MismatchBetweenInts(v_a, v_b))?,
+            (Str(v_a)            , Str(v_b))               => Err(MismatchBetweenStrs(v_a, v_b))?,
 
-            // Unification of application spines or meta variables
+            // Unification of application spines or meta variables, it does unifies
+            // flexibles, rigids and meta variable's spines.
+            //
+            // It does unifies the spines of the applications.
             (Flexible(m_a, sp_a) , Flexible(m_b, sp_b)) => {
                 let _ = (m_a, m_b, sp_a, sp_b);
+                Ok(())
             }
-            (Rigid(m_a, sp_a)    , Rigid(m_b, sp_b))    => {
+            (Rigid(m_a, sp_a)    ,    Rigid(m_b, sp_b)) => {
                 let _ = (m_a, m_b, sp_a, sp_b);
+                Ok(())
+            }
+            (Flexible(m_a, sp_a) ,                   _) => {
+                let _ = (m_a, sp_a);
+                Ok(())
+            }
+            (_                   , Flexible(m_a, sp_a)) => {
+                let _ = (m_a, sp_a);
+                Ok(())
             }
 
-            // Flexible unification with spine
-            (Flexible(m_a, sp_a) , _)    => {
-                let _ = (m_a, sp_a);
-            }
-            (_                   , Flexible(m_a, sp_a))    => {
-                let _ = (m_a, sp_a);
-            }
-            _ => panic!("type error"),
+            // Fallback case which will cause an error if we can't unify
+            // the values.
+            //
+            // It's the fallback of the fallbacks cases, the last error message
+            // and the least meaningful.
+            (_ , _) => Err(CantUnify)?,
         }
-        Ok(())
     }
 
     /// Performs unification between two values, its a
