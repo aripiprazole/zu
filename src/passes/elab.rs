@@ -255,14 +255,14 @@ impl Elab {
           let expr = value.show(self);
 
           self.reporter.evaluate(expr, location)?;
-        },
+        }
         Stmt::Type(s) => {
           let location = s.value.meta().clone();
           let value = self.infer(&s.value);
           let expr = value.show(self);
 
           self.reporter.check(expr, location)?;
-        },
+        }
 
         // Erased values, the types with `!`
         Stmt::Signature(_) => unreachable!(),
@@ -536,10 +536,16 @@ impl Expr {
       Int(data) => Value::Int(data.value),
       Str(data) => Value::Str(data.value),
       Elim(_) => todo!("elim expr"),
-      Fun(_) => todo!("fun expr"),
+      Fun(e) => Value::Lam(Definition::new(e.arguments.text), Closure {
+        env: env.clone(),
+        term: *e.value,
+      }),
       Apply(e) => app(e.callee.eval(env), e.arguments.eval(env)),
       Reference(crate::erase::Reference::Var(Ix(ix))) => env.data[ix].clone(), /* TODO: HANDLE ERROR */
-      Reference(crate::erase::Reference::MetaVar(meta)) => meta.take(),
+      Reference(crate::erase::Reference::MetaVar(meta)) => match meta.take() {
+        Some(value) => value,
+        None => Value::Meta(meta),
+      },
       Anno(anno) => {
         let value = anno.value.eval(env);
         let type_repr = anno.type_repr.eval(env);

@@ -15,9 +15,9 @@ use crate::ast::Hole;
 use crate::ast::Int;
 use crate::ast::Pattern;
 use crate::ast::Pi;
+use crate::ast::Prim;
 use crate::ast::Str;
 use crate::ast::Term;
-use crate::ast::Prim;
 use crate::passes::elab::Elab;
 use crate::passes::elab::Value;
 use crate::passes::resolver::Resolved;
@@ -60,10 +60,10 @@ impl MetaVar {
     *self.0.borrow_mut() = MetaHole::Defined(value)
   }
 
-  pub fn take(&self) -> Value {
+  pub fn take(&self) -> Option<Value> {
     match &*self.0.borrow() {
-      MetaHole::Defined(value) => value.clone(),
-      MetaHole::Nothing(_) => panic!("MetaVar is not defined"),
+      MetaHole::Defined(value) => value.clone().into(),
+      MetaHole::Nothing(_) => None,
     }
   }
 }
@@ -187,7 +187,10 @@ impl Term<Resolved> {
       Term::Fun(fun) => Term::Fun(Fun {
         meta: (),
         arguments: Definition::new(fun.arguments.text.clone()),
-        value: fun.value.erase(elab).into(),
+        value: fun
+          .value
+          .erase(&elab.create_new_value(&fun.arguments.text, elab.fresh_meta().eval(&elab.env)))
+          .into(),
       }),
       Term::Apply(apply) => apply
         .arguments

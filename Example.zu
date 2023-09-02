@@ -1,6 +1,6 @@
 module Example
 
-@eval 10
+@eval ((\x -> x) 10)
 
 fun Nat : Type -> (Type -> Type) -> Type -> Type
 
