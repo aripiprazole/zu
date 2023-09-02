@@ -74,7 +74,7 @@ pub struct Command {
   pub main: String,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct LoggerReporter;
 
 impl Reporter for LoggerReporter {

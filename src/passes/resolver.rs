@@ -12,7 +12,7 @@ use super::parser::Parsed;
 use crate::ast::*;
 
 /// Represents the resolved state, it's the state of the syntax tree when it's resolved.
-#[derive(Default, Debug, Clone)]
+#[derive(Default, Debug, Clone, PartialEq)]
 pub struct Resolved;
 
 impl State for Resolved {
@@ -23,7 +23,7 @@ impl State for Resolved {
 }
 
 /// A name access.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Reference {
   pub definition: Rc<Definition<Resolved>>,
   pub meta: Location,

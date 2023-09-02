@@ -21,15 +21,15 @@ pub mod state {
   pub use super::State;
 }
 
-pub trait Ast<S: State> = Element<S> + Debug + Clone;
+pub trait Ast<S: State> = Element<S> + Debug + Clone + PartialEq;
 
 /// Represents the syntax state, if it's resolved, or just parsed, it's useful for not
 /// having to redeclare the same types.
-pub trait State: Default + Debug + Clone {
+pub trait State: Default + Debug + Clone + PartialEq {
   // SECTION: Auxiliary
-  type Parameters: Debug + Clone = Self::Definition;
-  type Arguments: Debug + Clone = Vec<Term<Self>>;
-  type NameSet: Debug + Clone = Self::Definition;
+  type Parameters: Debug + Clone + PartialEq = Self::Definition;
+  type Arguments: Debug + Clone + PartialEq = Vec<Term<Self>>;
+  type NameSet: Debug + Clone + PartialEq = Self::Definition;
 
   // SECTION: Elements
   type Definition: Ast<Self> = Rc<Definition<Self>>;
@@ -45,7 +45,7 @@ pub trait State: Default + Debug + Clone {
 
   // SECTION: Meta location
   /// The meta type, it's the type of the location of the syntax tree.
-  type Meta: Debug + Clone = Location;
+  type Meta: Debug + Clone + PartialEq = Location;
 }
 
 impl<S: state::State> Element<S> for ! {
@@ -74,7 +74,7 @@ pub enum DefinitionKind {
 }
 
 /// A definition. It has a text, and a location.
-#[derive(Default, Debug, Clone, Hash)]
+#[derive(Default, Debug, Clone, Hash, PartialEq)]
 pub struct Definition<S: state::State> {
   pub text: String,
   pub meta: S::Meta,
@@ -137,7 +137,7 @@ pub trait Element<S: state::State> {
 }
 
 /// Error node, it does contains an error.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Error<S: state::State> {
   /// The error message.
   pub message: String,
@@ -162,7 +162,7 @@ impl<S: state::State> Element<S> for Error<S> {
   }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Identifier<S: state::State> {
   pub text: String,
   pub meta: S::Meta,
@@ -175,7 +175,7 @@ impl<S: state::State> Element<S> for Identifier<S> {
 }
 
 /// Int is a integer value like `0`, `1`, `2`, etc.
-#[derive(Default, Debug, Clone)]
+#[derive(Default, Debug, Clone, PartialEq)]
 pub struct Str<S: state::State> {
   pub value: String,
 
@@ -190,7 +190,7 @@ impl<S: state::State> Element<S> for Str<S> {
 }
 
 /// Int is a integer value like `0`, `1`, `2`, etc.
-#[derive(Default, Debug, Clone)]
+#[derive(Default, Debug, Clone, PartialEq)]
 pub struct Int<S: state::State> {
   /// The value of the integer.
   pub value: isize,
@@ -208,7 +208,7 @@ impl<S: state::State> Element<S> for Int<S> {
 /// A pattern. It has a definition, a list of arguments, and a location.
 ///
 /// It's a simple pattern for eliminator.
-#[derive(Default, Debug, Clone)]
+#[derive(Default, Debug, Clone, PartialEq)]
 pub struct Pattern<S: state::State> {
   pub constructor: S::Reference,
   pub arguments: Vec<S::Definition>,
@@ -222,7 +222,7 @@ impl<S: state::State> Element<S> for Pattern<S> {
 }
 
 /// A case for eliminator.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Case<S: state::State> {
   pub pattern: Pattern<S>,
   pub value: Box<Term<S>>,
@@ -238,7 +238,7 @@ impl<S: state::State> Element<S> for Case<S> {
 /// An eliminator. It has a list of patterns, and a location.
 ///
 /// It's a simple eliminator for inductive types.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Elim<S: state::State> {
   pub scrutinee: Box<Term<S>>,
   pub patterns: Vec<Case<S>>,
@@ -258,7 +258,7 @@ impl<S: state::State> Element<S> for Elim<S> {
 /// ```haskell
 /// (a b c)
 /// ```
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Apply<S: state::State> {
   pub callee: Box<Term<S>>,
   pub arguments: S::Arguments,
@@ -273,7 +273,7 @@ impl<S: state::State> Element<S> for Apply<S> {
 
 /// An annotation expression term. It has a list of value and a type
 /// representation.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Anno<S: state::State> {
   pub value: Box<Term<S>>,
   pub type_repr: Box<Term<S>>,
@@ -295,7 +295,7 @@ impl<S: state::State> Element<S> for Anno<S> {
 /// Succ = \fun n, N, succ, _
 ///   (n N succ zero).
 /// ```
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Fun<S: state::State> {
   pub arguments: S::Parameters,
   pub value: Box<Term<S>>,
@@ -353,21 +353,45 @@ pub enum Term<S: state::State> {
 /// ```
 ///
 /// The compiler would try this, but on the GATs.
-impl<S: state::State> Clone for Term<S> {
-  fn clone(&self) -> Self {
-    match self {
-      Self::Error(arg0) => Self::Error(arg0.clone()),
-      Self::Prim(arg0) => Self::Prim(arg0.clone()),
-      Self::Int(arg0) => Self::Int(arg0.clone()),
-      Self::Str(arg0) => Self::Str(arg0.clone()),
-      Self::Group(arg0) => Self::Group(arg0.clone()),
-      Self::Elim(arg0) => Self::Elim(arg0.clone()),
-      Self::Anno(arg0) => Self::Anno(arg0.clone()),
-      Self::Fun(arg0) => Self::Fun(arg0.clone()),
-      Self::Apply(arg0) => Self::Apply(arg0.clone()),
-      Self::Pi(arg0) => Self::Pi(arg0.clone()),
-      Self::Reference(arg0) => Self::Reference(arg0.clone()),
-      Self::Hole(arg0) => Self::Hole(arg0.clone()),
+mod impls {
+  use super::*;
+
+  impl<S: state::State> PartialEq for Term<S> {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Pi(l0), Self::Pi(r0)) => l0 == r0,
+            (Self::Int(l0), Self::Int(r0)) => l0 == r0,
+            (Self::Str(l0), Self::Str(r0)) => l0 == r0,
+            (Self::Hole(l0), Self::Hole(r0)) => l0 == r0,
+            (Self::Apply(l0), Self::Apply(r0)) => l0 == r0,
+            (Self::Error(l0), Self::Error(r0)) => l0 == r0,
+            (Self::Prim(l0), Self::Prim(r0)) => l0 == r0,
+            (Self::Anno(l0), Self::Anno(r0)) => l0 == r0,
+            (Self::Fun(l0), Self::Fun(r0)) => l0 == r0,
+            (Self::Elim(l0), Self::Elim(r0)) => l0 == r0,
+            (Self::Group(l0), Self::Group(r0)) => l0 == r0,
+            (Self::Reference(l0), Self::Reference(r0)) => l0 == r0,
+            _ => false,
+        }
+    }
+}
+
+  impl<S: state::State> Clone for Term<S> {
+    fn clone(&self) -> Self {
+      match self {
+        Self::Error(arg0) => Self::Error(arg0.clone()),
+        Self::Prim(arg0) => Self::Prim(arg0.clone()),
+        Self::Int(arg0) => Self::Int(arg0.clone()),
+        Self::Str(arg0) => Self::Str(arg0.clone()),
+        Self::Group(arg0) => Self::Group(arg0.clone()),
+        Self::Elim(arg0) => Self::Elim(arg0.clone()),
+        Self::Anno(arg0) => Self::Anno(arg0.clone()),
+        Self::Fun(arg0) => Self::Fun(arg0.clone()),
+        Self::Apply(arg0) => Self::Apply(arg0.clone()),
+        Self::Pi(arg0) => Self::Pi(arg0.clone()),
+        Self::Reference(arg0) => Self::Reference(arg0.clone()),
+        Self::Hole(arg0) => Self::Hole(arg0.clone()),
+      }
     }
   }
 }

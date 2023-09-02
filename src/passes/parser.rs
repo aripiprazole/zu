@@ -10,7 +10,7 @@ use crate::ast::Location;
 pub use crate::zu::*;
 
 /// Represents the parsed state, it's the state of the syntax tree when it's just parsed.
-#[derive(Default, Debug, Clone)]
+#[derive(Default, Debug, Clone, PartialEq)]
 pub struct Parsed;
 
 impl State for Parsed {
@@ -37,7 +37,7 @@ impl crate::ast::Term<Parsed> {
   }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Signature<S: State> {
   pub name: S::Definition,
   pub type_repr: crate::ast::Term<S>,
@@ -54,7 +54,7 @@ impl<S: State> crate::ast::Element<S> for Signature<S> {
 ///
 /// It's useful to know the location of the name in the source code
 /// and the name itself to be resolved later.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Reference {
   pub text: String,
   pub meta: Location,
@@ -68,7 +68,7 @@ impl<S: State<Meta = Location>> Element<S> for Reference {
 
 /// Imports a name temporally until it's
 /// propertly resolved
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Import {
   pub text: String,
   pub meta: Location,

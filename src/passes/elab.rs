@@ -51,7 +51,7 @@ pub struct UnknownTypeError {
 
 pub type Spine = im_rc::Vector<Value>;
 
-#[derive(Default, Debug, Clone)]
+#[derive(Default, Debug, Clone, PartialEq)]
 pub struct Environment {
   pub data: im_rc::Vector<Value>,
 }
@@ -65,7 +65,7 @@ impl Environment {
   }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Closure {
   pub env: Environment,
   pub term: Expr,
@@ -105,7 +105,7 @@ pub struct Elab {
 /// Defines the type of a term, elaborated to a value
 ///
 /// The type of a term is a value, but the type of a value is a type.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Value {
   Prim(PrimKind),
   Flexible(MetaVar, Spine),
@@ -203,19 +203,17 @@ impl Value {
       // flexibles, rigids and meta variable's spines.
       //
       // It does unifies the spines of the applications.
-      (Flexible(m_a, sp_a) , Flexible(m_b, sp_b)) => {
+      (Flexible(m_a, sp_a) , Flexible(m_b, sp_b)) if m_a == m_b => {
         let _ = (m_a, m_b, sp_a, sp_b);
         Ok(())
       }
-      (Rigid(m_a, sp_a)    ,    Rigid(m_b, sp_b)) => {
+      (Rigid(m_a, sp_a)    ,    Rigid(m_b, sp_b)) if m_a == m_b => {
         let _ = (m_a, m_b, sp_a, sp_b);
         Ok(())
       }
-      (Flexible(m_a, sp_a) ,                   _) => {
-        let _ = (m_a, sp_a);
-        Ok(())
-      }
-      (_                   , Flexible(m_a, sp_a)) => {
+      (Flexible(m_a, sp_a) ,                  _t) |
+      (_t                  , Flexible(m_a, sp_a))               => {
+        // TODO: Solve
         let _ = (m_a, sp_a);
         Ok(())
       }

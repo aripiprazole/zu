@@ -11,7 +11,7 @@ pub enum PrimKind {
 }
 
 /// Type of a type. It has a location.
-#[derive(Default, Debug, Clone)]
+#[derive(Default, Debug, Clone, PartialEq)]
 pub struct Prim<S: state::State> {
   pub kind: PrimKind,
   pub meta: S::Meta,
@@ -52,7 +52,7 @@ impl<S: state::State> Element<S> for Prim<S> {
 }
 
 /// A hole. It has a location.
-#[derive(Default, Debug, Clone)]
+#[derive(Default, Debug, Clone, PartialEq)]
 pub struct Hole<S: state::State> {
   /// The location of the integer in the source code.
   pub meta: S::Meta,
@@ -65,7 +65,7 @@ impl<S: state::State> Element<S> for Hole<S> {
 }
 
 /// A variable. It has a name and a location.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Domain<S: state::State> {
   /// The name of the variable. The idea of the [`Option`] type, is when
   /// we have a binder like `_`, which is a placeholder for a variable for
@@ -111,7 +111,7 @@ pub enum Icit {
 ///
 /// Pi types can be implicit too, like `{x : A} -> B`, where `x` is the name,
 /// `A` is the domain, and `B` is the codomain.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Pi<S: state::State> {
   pub icit: Icit,
   pub domain: Domain<S>,

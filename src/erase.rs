@@ -23,7 +23,7 @@ use crate::passes::elab::Value;
 use crate::passes::resolver::Resolved;
 
 /// Represents the resolved state, it's the state of the syntax tree when it's resolved.
-#[derive(Default, Debug, Clone)]
+#[derive(Default, Debug, Clone, PartialEq)]
 pub struct Erased;
 
 impl State for Erased {
@@ -36,7 +36,7 @@ impl State for Erased {
   type Reference = Reference;
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum MetaHole {
   Defined(Value),
   Nothing(usize),
@@ -44,6 +44,12 @@ pub enum MetaHole {
 
 #[derive(Debug, Clone)]
 pub struct MetaVar(pub Rc<RefCell<MetaHole>>);
+
+impl PartialEq for MetaVar {
+  fn eq(&self, other: &Self) -> bool {
+    self.take() == other.take()
+  }
+}
 
 impl MetaVar {
   pub fn new_unique(elab: &Elab) -> Self {
@@ -68,7 +74,7 @@ impl MetaVar {
   }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Reference {
   Var(Ix),
   MetaVar(MetaVar),

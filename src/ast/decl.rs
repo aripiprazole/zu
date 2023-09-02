@@ -2,12 +2,12 @@ use super::*;
 
 /// Simple attribute to the AST. It can hold a lot of things, and it's
 /// defined primarily for the compiler.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Attribute<S: state::State> {
   _TODO(PhantomData<S>),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Property<S: state::State> {
   pub name: S::Definition,
   pub type_repr: Term<S>,
@@ -45,7 +45,7 @@ impl<S: state::State> Element<S> for Constructor<S> {
 /// A documentation string. It has a list of strings.
 ///
 /// It's used to document declarations.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct DocString<S: state::State> {
   pub full_text: String,
   pub text: String,
@@ -134,7 +134,7 @@ impl<S: state::State> Declaration<S> for Inductive<S> {
 /// Succ : _ := \n, N, succ, _ ->
 ///   (n N succ zero).
 /// ```
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Binding<S: state::State> {
   pub doc_strings: Vec<DocString<S>>,
   pub attributes: Vec<Attribute<S>>,
