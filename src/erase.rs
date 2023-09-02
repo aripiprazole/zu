@@ -39,7 +39,7 @@ impl State for Erased {
 #[derive(Debug, Clone, PartialEq)]
 pub enum MetaHole {
   Defined(Value),
-  Nothing(usize),
+  Nothing(Lvl),
 }
 
 #[derive(Debug, Clone)]
@@ -53,9 +53,7 @@ impl PartialEq for MetaVar {
 
 impl MetaVar {
   pub fn new_unique(elab: &Elab) -> Self {
-    let unique = elab.unique.get();
-    elab.unique.update(|x| x + 1);
-    Self(Rc::new(RefCell::new(MetaHole::Nothing(unique))))
+    Self(Rc::new(RefCell::new(MetaHole::Nothing(elab.lvl))))
   }
 
   pub fn new(value: Value) -> Self {
@@ -64,6 +62,10 @@ impl MetaVar {
 
   pub fn update(&self, value: Value) {
     *self.0.borrow_mut() = MetaHole::Defined(value)
+  }
+
+  pub fn get(&self) -> MetaHole {
+    self.0.borrow().clone()
   }
 
   pub fn take(&self) -> Option<Value> {

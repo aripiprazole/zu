@@ -24,7 +24,7 @@ pub struct Declaration {
   pub value: Value,
 }
 
-#[derive(miette::Diagnostic, thiserror::Error, Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(miette::Diagnostic, thiserror::Error, Debug, Clone, PartialEq)]
 #[diagnostic()]
 pub enum UnifyError {
   /// Int value mismatch between two values,
@@ -38,9 +38,9 @@ pub enum UnifyError {
   MismatchBetweenStrs(String, String),
 
   /// Unification error between two types
-  #[error("expected type, got another")]
+  #[error("expected type {0}, got another {0}")]
   #[diagnostic(url(docsrs), code(unify::str_mismatch))]
-  CantUnify,
+  CantUnify(Nfe, Nfe),
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -50,6 +50,13 @@ pub struct UnknownTypeError {
 }
 
 pub type Spine = im_rc::Vector<Value>;
+
+/// Create a new spine normal form
+/// 
+/// It does creates a new spine normal form from a value.
+pub fn unspine(value: Value, spine: Spine) -> Value {
+  spine.into_iter().fold(value, |value, argument| value.apply(argument))
+}
 
 #[derive(Default, Debug, Clone, PartialEq)]
 pub struct Environment {
@@ -112,7 +119,6 @@ pub enum Value {
   Rigid(Lvl, Spine),
   Lam(DefinitionRs, Closure),
   Pi(DefinitionRs, Icit, Box<Value>, Closure),
-  Meta(MetaVar),
   Int(isize),
   Anno(Box<Value>, Box<Value>),
   Str(String),
@@ -155,8 +161,8 @@ impl Value {
   /// It does returns a value without holes.
   pub fn force(self) -> Self {
     match self {
-      Value::Meta(ref m) => match m.take() {
-        Some(value) => value,
+      Value::Flexible(ref m, ref spine) => match m.take() {
+        Some(value) => unspine(value, spine.clone()),
         None => self.clone(),
       },
       Value::SrcPos(_, box value) => value,
@@ -282,7 +288,7 @@ impl Value {
       //
       // It's the fallback of the fallbacks cases, the last error message
       // and the least meaningful.
-      (_ , _) => Err(CantUnify)?,
+      (lhs , rhs) => Err(CantUnify(lhs.show(ctx), rhs.show(ctx)))?,
     }
   }
 }
@@ -556,7 +562,6 @@ impl Quote for Value {
     }
 
     match self {
-      Value::Meta(meta_var) => Expr::Reference(crate::erase::Reference::MetaVar(meta_var)),
       Value::Flexible(meta, sp) => quote_sp(sp, Expr::Reference(crate::erase::Reference::MetaVar(meta)), nth),
       Value::Rigid(lvl, sp) => quote_sp(sp, Expr::Reference(crate::erase::Reference::Var(nth.into_ix(lvl))), nth),
       Value::Prim(kind) => Expr::Prim(Prim {
@@ -641,7 +646,7 @@ impl Expr {
       Reference(crate::erase::Reference::Var(Ix(ix))) => env.data[ix].clone(), /* TODO: HANDLE ERROR */
       Reference(crate::erase::Reference::MetaVar(meta)) => match meta.take() {
         Some(value) => value,
-        None => Value::Meta(meta),
+        None => Value::flexible(meta),
       },
       Anno(anno) => {
         let value = anno.value.eval(env);
