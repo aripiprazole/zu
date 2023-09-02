@@ -6,6 +6,7 @@ use std::rc::Rc;
 use super::resolver::Resolved;
 use crate::ast::*;
 use crate::erase::*;
+use crate::nfe::Nfe;
 
 type DefinitionRs = Definition<Resolved>;
 
@@ -81,8 +82,8 @@ impl Closure {
 /// Logger to the context, it can be either implemented
 /// as a logger, or as a presenter for UI like a LSP.
 pub trait Reporter: Debug {
-  fn evaluate(&self, value: Expr, location: Location) -> miette::Result<()>;
-  fn check(&self, value: Expr, location: Location) -> miette::Result<()>;
+  fn evaluate(&self, value: Nfe, location: Location) -> miette::Result<()>;
+  fn check(&self, value: Nfe, location: Location) -> miette::Result<()>;
 }
 
 /// The context of the elaborator
@@ -251,14 +252,14 @@ impl Elab {
         Stmt::Eval(s) => {
           let location = s.value.meta().clone();
           let value = s.value.erase(self).eval(&self.env);
-          let expr = value.quote(self.lvl);
+          let expr = value.show(self);
 
           self.reporter.evaluate(expr, location)?;
         },
         Stmt::Type(s) => {
           let location = s.value.meta().clone();
           let value = self.infer(&s.value);
-          let expr = value.quote(self.lvl);
+          let expr = value.show(self);
 
           self.reporter.check(expr, location)?;
         },

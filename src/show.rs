@@ -3,6 +3,8 @@ use std::fmt::Debug;
 use crate::ast::Term;
 use crate::erase::Erased;
 use crate::erase::Lvl;
+use crate::nfe::Nfe;
+use crate::passes::elab::Elab;
 use crate::passes::elab::Value;
 
 /// The context we need to pretty print a type right now.
@@ -23,7 +25,7 @@ impl Debug for Show {
 impl Value {
   /// Show a value as a string. As the debruijin level 0 is the last bound variable, we need to
   /// pass the size of the environment.
-  pub fn show(&self) -> Show {
+  pub fn show(&self, _: &Elab) -> Nfe {
     todo!()
   }
 }

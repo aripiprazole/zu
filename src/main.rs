@@ -8,6 +8,7 @@
 use clap::Parser;
 use lalrpop_util::lalrpop_mod;
 use miette::IntoDiagnostic;
+use nfe::Nfe;
 use owo_colors::OwoColorize;
 use passes::elab::Elab;
 use passes::elab::Environment;
@@ -34,6 +35,10 @@ pub mod erase;
 /// Pretty print the elaborated ast to the screen
 /// a type.
 pub mod show;
+
+/// Pretty print abstract syntax tree that represents
+/// the normalised terms. 
+pub mod nfe;
 
 /// The compiler passes.
 pub mod passes {
@@ -74,22 +79,22 @@ pub struct LoggerReporter;
 
 impl Reporter for LoggerReporter {
   /// Evaluates a value at a specific location.
-  fn evaluate(&self, value: passes::elab::Expr, location: ast::Location) -> miette::Result<()> {
+  fn evaluate(&self, value: Nfe, location: ast::Location) -> miette::Result<()> {
     let filename = location.filename;
     let start = location.start;
     let end = location.end;
 
-    log::info!("{:?} at {filename}:{start}:{end}", value);
+    log::info!("evaluated {} at {filename}:{start}:{end}", value);
     Ok(())
   }
 
   /// Checks a value at a specific location.
-  fn check(&self, value: passes::elab::Expr, location: ast::Location) -> miette::Result<()> {
+  fn check(&self, value: Nfe, location: ast::Location) -> miette::Result<()> {
     let filename = location.filename;
     let start = location.start;
     let end = location.end;
 
-    log::info!("checked {:?} at {filename}:{start}:{end}", value);
+    log::info!("checked {} at {filename}:{start}:{end}", value);
     Ok(())
   }
 }
