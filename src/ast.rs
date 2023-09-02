@@ -318,7 +318,7 @@ pub enum Term<S: state::State> {
   Hole(Hole<S>),
   Apply(Apply<S>),
   Error(Error<S>),
-  Cons(Cons<S>),
+  Prim(Prim<S>),
   Anno(S::Anno),
   Fun(S::Closure),
   Elim(S::Elim),
@@ -357,7 +357,7 @@ impl<S: state::State> Clone for Term<S> {
   fn clone(&self) -> Self {
     match self {
       Self::Error(arg0) => Self::Error(arg0.clone()),
-      Self::Cons(arg0) => Self::Cons(arg0.clone()),
+      Self::Prim(arg0) => Self::Prim(arg0.clone()),
       Self::Int(arg0) => Self::Int(arg0.clone()),
       Self::Str(arg0) => Self::Str(arg0.clone()),
       Self::Group(arg0) => Self::Group(arg0.clone()),
@@ -385,7 +385,7 @@ impl<S: state::State> Debug for Term<S> {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     match self {
       Self::Error(arg0) => arg0.fmt(f),
-      Self::Cons(arg0) => arg0.fmt(f),
+      Self::Prim(arg0) => arg0.fmt(f),
       Self::Int(arg0) => arg0.fmt(f),
       Self::Str(arg0) => arg0.fmt(f),
       Self::Group(arg0) => arg0.fmt(f),
@@ -410,7 +410,7 @@ impl<S: state::State> Element<S> for Term<S> {
   fn meta(&self) -> &S::Meta {
     match self {
       Term::Error(error) => error.meta(),
-      Term::Cons(universe) => universe.meta(),
+      Term::Prim(universe) => universe.meta(),
       Term::Int(int) => int.meta(),
       Term::Str(str) => str.meta(),
       Term::Elim(elim) => elim.meta(),

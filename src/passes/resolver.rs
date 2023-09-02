@@ -387,7 +387,7 @@ impl Resolver {
     match term {
       Term::Elim(_) => todo!(),
       Term::Error(error) => Term::Error(Error { ..error }),
-      Term::Cons(universe) => Term::Cons(Cons { ..universe }),
+      Term::Prim(universe) => Term::Prim(Prim { ..universe }),
       Term::Int(int) => Term::Int(Int { ..int }),
       Term::Str(str) => Term::Str(Str { ..str }),
       Term::Group(group) => self.term(*group),

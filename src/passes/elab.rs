@@ -106,7 +106,7 @@ pub struct Elab {
 /// The type of a term is a value, but the type of a value is a type.
 #[derive(Debug, Clone)]
 pub enum Value {
-  Constructor(ConstKind),
+  Prim(PrimKind),
   Flexible(MetaVar, Spine),
   Rigid(Lvl, Spine),
   Lam(DefinitionRs, Closure),
@@ -182,7 +182,7 @@ impl Value {
     match (self.force(), rhs.force()) {
       // Type universe unification is always true, because
       // we don't have universe polymorphism.
-      (Constructor(k_a)   , Constructor(k_b)) if k_a == k_b => Ok(()),
+      (Prim(k_a)   , Prim(k_b)) if k_a == k_b => Ok(()),
 
       // Unification of literal values, it does checks if the values are equal
       // directly. If they are not, it does returns an error.
@@ -276,9 +276,9 @@ impl Elab {
         Term::Group(_) => unreachable!(),
 
         // Values
-        Term::Int(_) => Value::Constructor(ConstKind::Int),
-        Term::Str(_) => Value::Constructor(ConstKind::String),
-        Term::Cons(_) => Value::Constructor(ConstKind::Universe),
+        Term::Int(_) => Value::Prim(PrimKind::Int),
+        Term::Str(_) => Value::Prim(PrimKind::String),
+        Term::Prim(_) => Value::Prim(PrimKind::Universe),
         Term::Hole(_) | Term::Error(_) => ctx.fresh_meta().eval(&ctx.env),
         Term::Fun(_) => todo!(),
         Term::Elim(_) => todo!(),
@@ -443,7 +443,7 @@ impl Quote for Value {
     }
 
     match self {
-      Value::Constructor(k) => Expr::Cons(Cons {
+      Value::Prim(k) => Expr::Prim(Prim {
         kind: k,
         meta: Default::default(),
       }),
@@ -516,7 +516,7 @@ impl Expr {
       Group(_) => unreachable!(),
 
       // Values
-      Cons(_) => Value::Constructor(ConstKind::Universe),
+      Prim(_) => Value::Prim(PrimKind::Universe),
       Int(data) => Value::Int(data.value),
       Str(data) => Value::Str(data.value),
       Elim(_) => todo!("elim expr"),

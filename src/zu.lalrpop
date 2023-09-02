@@ -126,7 +126,7 @@ Constructor: crate::ast::Constructor<Parsed> = {
 };
 
 KindTerm: crate::ast::Term<Parsed> = {
-  <s: @L> "*" <e: @R> => crate::ast::Term::Cons(crate::ast::universe(crate::ast::Location::new(s, e, filename, &unique))),
+  <s: @L> "*" <e: @R> => crate::ast::Term::Prim(crate::ast::make_universe(crate::ast::Location::new(s, e, filename, &unique))),
 };
 
 /// Haskell kind syntax
@@ -137,7 +137,7 @@ Kind: crate::ast::Term<Parsed> = {
     icit: crate::ast::Icit::Expl,
     domain: crate::ast::Domain {
       name: vec![None],
-      type_repr: Box::new(crate::ast::Term::Cons(crate::ast::universe(domain.meta().clone()))),
+      type_repr: Box::new(crate::ast::Term::Prim(crate::ast::make_universe(domain.meta().clone()))),
       icit: crate::ast::Icit::Expl,
       meta: domain.meta().clone(),
     },
@@ -156,7 +156,7 @@ Parameter: crate::ast::Domain<Parsed> = {
   // the type.
   <s: @L> <name:Reference> <e: @R> => crate::ast::Domain {
     name: vec![Some(name)],
-    type_repr: Box::new(crate::ast::Term::Cons(crate::ast::universe(crate::ast::Location::new(s, e, filename, &unique)))),
+    type_repr: Box::new(crate::ast::Term::Prim(crate::ast::make_universe(crate::ast::Location::new(s, e, filename, &unique)))),
     icit: crate::ast::Icit::Expl,
     meta: crate::ast::Location::new(s, e, filename, &unique),
   },
@@ -174,7 +174,7 @@ Parameter: crate::ast::Domain<Parsed> = {
   // the type.
   <s: @L> "{" <names:Sep<",", Reference>> "}" <e: @R> => crate::ast::Domain {
     name: names.into_iter().map(Some).collect(),
-    type_repr: Box::new(crate::ast::Term::Cons(crate::ast::universe(crate::ast::Location::new(s, e, filename, &unique)))),
+    type_repr: Box::new(crate::ast::Term::Prim(crate::ast::make_universe(crate::ast::Location::new(s, e, filename, &unique)))),
     icit: crate::ast::Icit::Impl,
     meta: crate::ast::Location::new(s, e, filename, &unique),
   },
@@ -235,12 +235,12 @@ Stmt: crate::ast::Stmt<Parsed> = {
   <e: @R> => {
     // Report the error
     errors.push(lalrpop_util::ErrorRecovery {
-        dropped_tokens: vec![],
-        error: lalrpop_util::ParseError::User {
-            error: crate::passes::parser::InnerError::UnsupportedCoinductiveData {
-                err_span: name.meta.into(),
-            }
+      dropped_tokens: vec![],
+      error: lalrpop_util::ParseError::User {
+        error: crate::passes::parser::InnerError::UnsupportedCoinductiveData {
+          err_span: name.meta.into(),
         },
+      },
     });
 
     // Return the default sentinel value for statements, which is an error.
@@ -262,12 +262,12 @@ Stmt: crate::ast::Stmt<Parsed> = {
   <e: @R> => {
     // Report the error
     errors.push(lalrpop_util::ErrorRecovery {
-        dropped_tokens: vec![],
-        error: lalrpop_util::ParseError::User {
-            error: crate::passes::parser::InnerError::UnsupportedInductiveData {
-                err_span: name.meta.into(),
-            }
+      dropped_tokens: vec![],
+      error: lalrpop_util::ParseError::User {
+        error: crate::passes::parser::InnerError::UnsupportedInductiveData {
+          err_span: name.meta.into(),
         },
+      },
     });
 
     // Return the default sentinel value for statements, which is an error.
@@ -292,12 +292,12 @@ Stmt: crate::ast::Stmt<Parsed> = {
     (None, None) => {
       // Report the error
       errors.push(lalrpop_util::ErrorRecovery {
-          dropped_tokens: vec![],
-          error: lalrpop_util::ParseError::User {
-              error: crate::passes::parser::InnerError::ExpectedStatement {
-                  err_span: miette::SourceSpan::from(s..e),
-              }
+        dropped_tokens: vec![],
+        error: lalrpop_util::ParseError::User {
+          error: crate::passes::parser::InnerError::ExpectedStatement {
+            err_span: miette::SourceSpan::from(s..e),
           },
+        },
       });
 
       // Return the default sentinel value for statements, which is an error.
@@ -354,9 +354,9 @@ Primary: crate::ast::Term<Parsed> = {
   "(" <Term> ")" => crate::ast::Term::Group(<>.into()),
   <r:Reference> => match r.text {
     _ if r.text == "_" => crate::ast::Term::Hole(crate::ast::Hole { meta: r.meta.clone() }),
-    _ if r.text == "Type" => crate::ast::Term::Cons(crate::ast::universe(r.meta.clone())),
-    _ if r.text == "Int" => crate::ast::Term::Cons(crate::ast::int(r.meta.clone())),
-    _ if r.text == "String" => crate::ast::Term::Cons(crate::ast::string(r.meta.clone())),
+    _ if r.text == "Type" => crate::ast::Term::Prim(crate::ast::make_universe(r.meta.clone())),
+    _ if r.text == "Int" => crate::ast::Term::Prim(crate::ast::make_int(r.meta.clone())),
+    _ if r.text == "String" => crate::ast::Term::Prim(crate::ast::make_string(r.meta.clone())),
     _ => crate::ast::Term::Reference(r),
   },
   <s: @L> <value:String> <e: @R> => crate::ast::Term::Str(crate::ast::Str {
@@ -517,7 +517,7 @@ Domain: crate::ast::Domain<Parsed> = {
   // the type.
   <s: @L> "{" <names:Sep<",", Reference>> "}" <e: @R> => crate::ast::Domain {
     name: names.into_iter().map(Some).collect(),
-    type_repr: Box::new(crate::ast::Term::Cons(crate::ast::universe(crate::ast::Location::new(s, e, filename, &unique)))),
+    type_repr: Box::new(crate::ast::Term::Prim(crate::ast::make_universe(crate::ast::Location::new(s, e, filename, &unique)))),
     icit: crate::ast::Icit::Impl,
     meta: crate::ast::Location::new(s, e, filename, &unique),
   },

@@ -1,10 +1,9 @@
-use crate::passes::parser::Parsed;
-
 use super::*;
+use crate::passes::parser::Parsed;
 
 /// The type of constructor primitive.
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum ConstKind {
+pub enum PrimKind {
   String,
   Int,
   #[default]
@@ -13,24 +12,40 @@ pub enum ConstKind {
 
 /// Type of a type. It has a location.
 #[derive(Default, Debug, Clone)]
-pub struct Cons<S: state::State> {
-  pub kind: ConstKind,
+pub struct Prim<S: state::State> {
+  pub kind: PrimKind,
   pub meta: S::Meta,
 }
 
-pub fn universe(meta: Location) -> Cons<Parsed> {
-  Cons { kind: ConstKind::Universe, meta }
+pub use mk_prim::*;
+
+/// Its a grouping module that contains functions to create a primitive.
+mod mk_prim {
+  use super::*;
+
+  pub fn make_universe(meta: Location) -> Prim<Parsed> {
+    Prim {
+      kind: PrimKind::Universe,
+      meta,
+    }
+  }
+
+  pub fn make_int(meta: Location) -> Prim<Parsed> {
+    Prim {
+      kind: PrimKind::Int,
+      meta,
+    }
+  }
+
+  pub fn make_string(meta: Location) -> Prim<Parsed> {
+    Prim {
+      kind: PrimKind::String,
+      meta,
+    }
+  }
 }
 
-pub fn int(meta: Location) -> Cons<Parsed> {
-  Cons { kind: ConstKind::Int, meta }
-}
-
-pub fn string(meta: Location) -> Cons<Parsed> {
-  Cons { kind: ConstKind::String, meta }
-}
-
-impl<S: state::State> Element<S> for Cons<S> {
+impl<S: state::State> Element<S> for Prim<S> {
   fn meta(&self) -> &S::Meta {
     &self.meta
   }
