@@ -1,5 +1,6 @@
 {
   "[rust]": {
-    "editor.tabSize": 2
+    "editor.tabSize": 2,
+    "editor.rulers": [120]
   }
 }

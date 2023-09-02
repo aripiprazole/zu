@@ -7,10 +7,32 @@ use super::resolver::Resolved;
 use crate::ast::*;
 use crate::erase::*;
 
+type DefinitionRs = Definition<Resolved>;
+
+type Tm = Term<Resolved>;
+
 /// Module representation with type table and typed values
 pub struct Mod {
   pub name: String,
   pub declarations: Vec<Declaration>,
+}
+
+/// Defines the type of a term, elaborated to a value
+///
+/// The type of a term is a value, but the type of a value is a type.
+#[derive(Debug, Clone)]
+pub enum Value {
+  Universe,
+  Constructor(String),
+  Flexible(MetaVar, Spine),
+  Rigid(Lvl, Spine),
+  Lam(DefinitionRs, Closure),
+  Pi(DefinitionRs, Icit, Box<Value>, Closure),
+  Meta(MetaVar),
+  Int(isize),
+  Anno(Box<Value>, Box<Value>),
+  Str(String),
+  SrcPos(crate::ast::Location, Box<Value>),
 }
 
 pub struct Declaration {
@@ -76,7 +98,7 @@ pub trait Reporter: Debug {
 /// The context of the elaborator
 #[derive(Debug, Clone)]
 pub struct Elab {
-  pub level: Lvl,
+  pub lvl: Lvl,
   pub env: Environment,
   pub types: im_rc::Vector<(String, Value)>,
   pub reporter: Rc<dyn Reporter>,
@@ -93,7 +115,7 @@ impl Elab {
   pub fn new<T: Reporter + 'static>(reporter: T) -> Self {
     Self {
       env: Default::default(),
-      level: Default::default(),
+      lvl: Default::default(),
       types: Default::default(),
       reporter: Rc::new(reporter),
       position: Default::default(),
@@ -193,11 +215,7 @@ impl Elab {
           ctx.env.data[ix].clone()
         }
         Term::Anno(anno) => ctx
-          .check(
-            &anno.value,
-            // Creates a new type representation for the annotation
-            anno.type_repr.clone().erase(ctx).eval(&ctx.env),
-          )
+          .check(&anno.value, anno.type_repr.clone().erase(ctx).eval(&ctx.env))
           .eval(&ctx.env),
         Term::Pi(pi) => {
           let name = Definition::new(pi.domain.name.text.clone());
@@ -242,71 +260,9 @@ impl Elab {
   ///
   /// NOTE: I disabled the formatter so I can align values
   /// and it looks cutier.
-  #[rustfmt::skip]
-  pub fn unify_catch(&self, lhs: Value, rhs: Value) -> miette::Result<()> {
-    /// Imports every stuff so we can't have a lot of
-    /// `::` in the code blowing or mind.
-    use Value::*;
-    use UnifyError::*;
-
-    // Forcing here is important because it does removes the holes created
-    // by the elaborator, and it does returns a value without holes.
-    //
-    // It's important to do this because we don't want to unify holes
-    // with values, because it will cause a lot of problems, and it will
-    // increase the pattern matching complexity.
-    match (lhs.force(), rhs.force()) {
-      // Type universe unification is always true, because
-      // we don't have universe polymorphism.
-      (Universe            , Universe) => Ok(()),
-
-      // Unification of literal values, it does checks if the values are equal
-      // directly. If they are not, it does returns an error.
-      (Int(v_a)            , Int(v_b)) if v_a == v_b => Ok(()), // 1 = 1, 2 = 2, etc...
-      (Str(v_a)            , Str(v_b)) if v_a == v_b => Ok(()), // "a" = "a", "b" = "b", etc...
-      (Int(v_a)            , Int(v_b))               => Err(MismatchBetweenInts(v_a, v_b))?,
-      (Str(v_a)            , Str(v_b))               => Err(MismatchBetweenStrs(v_a, v_b))?,
-
-      // Unification of application spines or meta variables, it does unifies
-      // flexibles, rigids and meta variable's spines.
-      //
-      // It does unifies the spines of the applications.
-      (Flexible(m_a, sp_a) , Flexible(m_b, sp_b)) => {
-        let _ = (m_a, m_b, sp_a, sp_b);
-        Ok(())
-      }
-      (Rigid(m_a, sp_a)    ,    Rigid(m_b, sp_b)) => {
-        let _ = (m_a, m_b, sp_a, sp_b);
-        Ok(())
-      }
-      (Flexible(m_a, sp_a) ,                   _) => {
-        let _ = (m_a, sp_a);
-        Ok(())
-      }
-      (_                   , Flexible(m_a, sp_a)) => {
-        let _ = (m_a, sp_a);
-        Ok(())
-      }
-
-      // Fallback case which will cause an error if we can't unify
-      // the values.
-      //
-      // It's the fallback of the fallbacks cases, the last error message
-      // and the least meaningful.
-      (_ , _) => Err(CantUnify)?,
-    }
-  }
-
-  /// Performs unification between two values, its a
-  /// equality relation between two values.
-  ///
-  /// It does closes some holes.
-  ///
-  /// NOTE: I disabled the formatter so I can align values
-  /// and it looks cutier.
   #[inline(always)]
   pub fn unify(&self, lhs: Value, rhs: Value) {
-    if let Err(err) = self.unify_catch(lhs, rhs) {
+    if let Err(err) = lhs.unify(rhs, self) {
       // TODO: add to error lists
       panic!("{err}");
     }
@@ -319,14 +275,14 @@ impl Elab {
 
   pub fn create_new_value(&self, name: &str, value: Value) -> Self {
     let mut data = self.clone();
-    data.env = data.env.create_new_value(Value::rigid(data.level));
+    data.env = data.env.create_new_value(Value::rigid(data.lvl));
     data.types = data
       .types
       .clone()
       .into_iter()
       .chain(std::iter::once((name.into(), value)))
       .collect();
-    data.level += 1;
+    data.lvl += 1;
     data
   }
 }
@@ -492,6 +448,82 @@ impl Value {
     let name = Definition::new(name.to_string());
     Value::Pi(name, Icit::Expl, domain.into(), codomain)
   }
+
+  /// Performs unification between two values, its a
+  /// equality relation between two values.
+  ///
+  /// It does closes some holes.
+  ///
+  /// # Parameters
+  ///
+  /// - `self` - The left hand side of the unification
+  /// - `rhs`  - The right hand side of the unification
+  /// - `ctx`  - The context where the unification is happening
+  ///            right now
+  ///
+  /// # Returns
+  ///
+  /// It does returns an error if the unification fails. And a
+  /// unit if the unification succeeds.
+  ///
+  /// # Another stuff
+  ///
+  /// NOTE: I disabled the formatter so I can align values
+  /// and it looks cutier.
+  #[rustfmt::skip]
+  pub fn unify(self, rhs: Value, _: &Elab) -> miette::Result<()> {
+    /// Imports every stuff so we can't have a lot of
+    /// `::` in the code blowing or mind.
+    use Value::*;
+    use UnifyError::*;
+
+    // Forcing here is important because it does removes the holes created
+    // by the elaborator, and it does returns a value without holes.
+    //
+    // It's important to do this because we don't want to unify holes
+    // with values, because it will cause a lot of problems, and it will
+    // increase the pattern matching complexity.
+    match (self.force(), rhs.force()) {
+      // Type universe unification is always true, because
+      // we don't have universe polymorphism.
+      (Universe            , Universe) => Ok(()),
+
+      // Unification of literal values, it does checks if the values are equal
+      // directly. If they are not, it does returns an error.
+      (Int(v_a)            , Int(v_b)) if v_a == v_b => Ok(()), // 1 = 1, 2 = 2, etc...
+      (Str(v_a)            , Str(v_b)) if v_a == v_b => Ok(()), // "a" = "a", "b" = "b", etc...
+      (Int(v_a)            , Int(v_b))               => Err(MismatchBetweenInts(v_a, v_b))?,
+      (Str(v_a)            , Str(v_b))               => Err(MismatchBetweenStrs(v_a, v_b))?,
+
+      // Unification of application spines or meta variables, it does unifies
+      // flexibles, rigids and meta variable's spines.
+      //
+      // It does unifies the spines of the applications.
+      (Flexible(m_a, sp_a) , Flexible(m_b, sp_b)) => {
+        let _ = (m_a, m_b, sp_a, sp_b);
+        Ok(())
+      }
+      (Rigid(m_a, sp_a)    ,    Rigid(m_b, sp_b)) => {
+        let _ = (m_a, m_b, sp_a, sp_b);
+        Ok(())
+      }
+      (Flexible(m_a, sp_a) ,                   _) => {
+        let _ = (m_a, sp_a);
+        Ok(())
+      }
+      (_                   , Flexible(m_a, sp_a)) => {
+        let _ = (m_a, sp_a);
+        Ok(())
+      }
+
+      // Fallback case which will cause an error if we can't unify
+      // the values.
+      //
+      // It's the fallback of the fallbacks cases, the last error message
+      // and the least meaningful.
+      (_ , _) => Err(CantUnify)?,
+    }
+  }
 }
 
 impl Closure {
@@ -500,26 +532,4 @@ impl Closure {
   pub fn apply(self, argument: Value) -> Value {
     self.term.eval(&self.env.create_new_value(argument))
   }
-}
-
-type DefinitionRs = Definition<Resolved>;
-
-type Tm = Term<Resolved>;
-
-/// Defines the type of a term, elaborated to a value
-///
-/// The type of a term is a value, but the type of a value is a type.
-#[derive(Debug, Clone)]
-pub enum Value {
-  Universe,
-  Constructor(String),
-  Flexible(MetaVar, Spine),
-  Rigid(Lvl, Spine),
-  Lam(DefinitionRs, Closure),
-  Pi(DefinitionRs, Icit, Box<Value>, Closure),
-  Meta(MetaVar),
-  Int(isize),
-  Anno(Box<Value>, Box<Value>),
-  Str(String),
-  SrcPos(crate::ast::Location, Box<Value>),
 }
