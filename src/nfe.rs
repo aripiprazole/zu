@@ -22,9 +22,12 @@ pub enum Delim {
 /// Ou nota fiscal se você estiver no brasil.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Nfe {
-  Value(String),
+  /// Simple string value that wraps a text.
+  S(String),
+
+  /// Wraps a list of terms. It can contain a separator and a
+  /// delimiter.
   Apply {
-    callee: Box<Nfe>,
     args: Vec<Nfe>,
     sep: Sep,
     delim: Delim,
@@ -34,7 +37,7 @@ pub enum Nfe {
 impl Display for Nfe {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     match self {
-      Nfe::Value(v) => write!(f, "{v}"),
+      Nfe::S(v) => write!(f, "{v}"),
       Nfe::Apply { .. } => todo!()
     }
   }

@@ -1,5 +1,7 @@
 module Example
 
+@eval 10
+
 fun Nat : Type -> (Type -> Type) -> Type -> Type
 
 /// Defines natural numbers without induction feature, it's
