@@ -205,26 +205,40 @@ impl<S: state::State> Element<S> for Int<S> {
   }
 }
 
-/// A pattern. It has a definition, a list of arguments, and a location.
-///
-/// It's a simple pattern for eliminator.
-#[derive(Default, Debug, Clone, PartialEq)]
-pub struct Pattern<S: state::State> {
-  pub constructor: S::Reference,
-  pub arguments: Vec<S::Definition>,
-  pub meta: S::Meta,
+#[derive(Debug, Clone, PartialEq)]
+pub enum Pattern<S: state::State> {
+  /// A variable pattern.
+  Var(Identifier<S>, S::Meta),
+
+  /// A constructor pattern.
+  Constructor(Identifier<S>, Vec<Pattern<S>>, S::Meta),
+
+  /// A wildcard pattern.
+  Wildcard(S::Meta),
+
+  /// A literal pattern.
+  Literal(Term<S>, S::Meta),
 }
 
 impl<S: state::State> Element<S> for Pattern<S> {
   fn meta(&self) -> &S::Meta {
-    &self.meta
+    match self {
+      Pattern::Var(_, meta) => meta,
+      Pattern::Constructor(_, _, meta) => meta,
+      Pattern::Wildcard(meta) => meta,
+      Pattern::Literal(_, meta) => meta,
+    }
   }
 }
 
 /// A case for eliminator.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Case<S: state::State> {
-  pub pattern: Pattern<S>,
+  /// The pattern has a list of patterns, so we can pattern match a bunch of
+  /// patterns at the same time.
+  /// 
+  /// It's just like: `Cons x xs`, `Cons x' xs'`. But never this place is empty.
+  pub pattern: NonEmpty<Pattern<S>>,
   pub value: Box<Term<S>>,
   pub meta: S::Meta,
 }
@@ -240,7 +254,12 @@ impl<S: state::State> Element<S> for Case<S> {
 /// It's a simple eliminator for inductive types.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Elim<S: state::State> {
-  pub scrutinee: Box<Term<S>>,
+  /// The scrutinee can be a list, it's useful for pattern matching with
+  /// tuples, but when we don't have dependent pattern matching implemented,
+  /// this is our way to pattern match tuples.
+  /// 
+  /// It's just like: `Cons x xs`, `Cons x' xs'`. But never this place is empty.
+  pub scrutinee: NonEmpty<Term<S>>,
   pub patterns: Vec<Case<S>>,
   pub meta: S::Meta,
 }
@@ -358,23 +377,23 @@ mod impls {
 
   impl<S: state::State> PartialEq for Term<S> {
     fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (Self::Pi(l0), Self::Pi(r0)) => l0 == r0,
-            (Self::Int(l0), Self::Int(r0)) => l0 == r0,
-            (Self::Str(l0), Self::Str(r0)) => l0 == r0,
-            (Self::Hole(l0), Self::Hole(r0)) => l0 == r0,
-            (Self::Apply(l0), Self::Apply(r0)) => l0 == r0,
-            (Self::Error(l0), Self::Error(r0)) => l0 == r0,
-            (Self::Prim(l0), Self::Prim(r0)) => l0 == r0,
-            (Self::Anno(l0), Self::Anno(r0)) => l0 == r0,
-            (Self::Fun(l0), Self::Fun(r0)) => l0 == r0,
-            (Self::Elim(l0), Self::Elim(r0)) => l0 == r0,
-            (Self::Group(l0), Self::Group(r0)) => l0 == r0,
-            (Self::Reference(l0), Self::Reference(r0)) => l0 == r0,
-            _ => false,
-        }
+      match (self, other) {
+        (Self::Pi(l0), Self::Pi(r0)) => l0 == r0,
+        (Self::Int(l0), Self::Int(r0)) => l0 == r0,
+        (Self::Str(l0), Self::Str(r0)) => l0 == r0,
+        (Self::Hole(l0), Self::Hole(r0)) => l0 == r0,
+        (Self::Apply(l0), Self::Apply(r0)) => l0 == r0,
+        (Self::Error(l0), Self::Error(r0)) => l0 == r0,
+        (Self::Prim(l0), Self::Prim(r0)) => l0 == r0,
+        (Self::Anno(l0), Self::Anno(r0)) => l0 == r0,
+        (Self::Fun(l0), Self::Fun(r0)) => l0 == r0,
+        (Self::Elim(l0), Self::Elim(r0)) => l0 == r0,
+        (Self::Group(l0), Self::Group(r0)) => l0 == r0,
+        (Self::Reference(l0), Self::Reference(r0)) => l0 == r0,
+        _ => false,
+      }
     }
-}
+  }
 
   impl<S: state::State> Clone for Term<S> {
     fn clone(&self) -> Self {
@@ -453,6 +472,7 @@ impl<S: state::State> Element<S> for Term<S> {
 pub use decl::*;
 pub mod decl;
 
+use nonempty::NonEmpty;
 pub use stmt::*;
 mod stmt;
 

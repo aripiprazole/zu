@@ -39,6 +39,7 @@ fern = "0.6.2"
 humantime = "2.1.0"
 logos = "0.13.0"
 owo-colors = "3.5.0"
+nonempty = "0.8.1"
 
 # Add a build-time dependency on the lalrpop library:
 [build-dependencies]
