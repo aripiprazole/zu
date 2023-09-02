@@ -99,6 +99,15 @@ impl Reporter for LoggerReporter {
   }
 }
 
+/// Capitalizes the first character in s.
+fn capitalize(s: &str) -> String {
+    let mut c = s.chars();
+    match c.next() {
+        None => String::new(),
+        Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
+    }
+}
+
 /// Logger function for the fern logger.
 ///
 /// It does format the log message to a specific format.
@@ -110,7 +119,7 @@ fn log(out: fern::FormatCallback, message: &std::fmt::Arguments, record: &log::R
     log::Level::Debug => owo_colors::Style::new().bright_red().bold(),
     log::Level::Trace => owo_colors::Style::new().bright_cyan().bold(),
   };
-  let level = record.level().to_string().to_lowercase();
+  let level = capitalize(&record.level().to_string().to_lowercase());
   let level = level.style(style);
 
   out.finish(format_args!("  {level:>7} {}", message))
