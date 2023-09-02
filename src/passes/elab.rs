@@ -198,6 +198,21 @@ impl Value {
     use Value::*;
     use UnifyError::*;
 
+    /// Unifies a spine of applications, it does unifies two list of applications
+    /// that are spines.
+    /// 
+    /// It requires that the spines have the same length, and it does unifies
+    /// the spines.
+    fn unify_sp(sp_a: Spine, sp_b: Spine, ctx: &Elab) -> miette::Result<()> {
+      assert!(sp_a.len() == sp_b.len(), "spines must have the same length");
+
+      for (u_a, u_b) in sp_a.into_iter().zip(sp_b) {
+        u_a.unify(u_b, ctx)?;
+      }
+
+      Ok(())
+    }
+
     // Forcing here is important because it does removes the holes created
     // by the elaborator, and it does returns a value without holes.
     //
@@ -235,17 +250,17 @@ impl Value {
       // flexibles, rigids and meta variable's spines.
       //
       // It does unifies the spines of the applications.
-      (Flexible(m_a, sp_a) , Flexible(m_b, sp_b)) if m_a == m_b => {
-        let _ = (m_a, m_b, sp_a, sp_b);
-        Ok(())
-      }
-      (Rigid(m_a, sp_a)    ,    Rigid(m_b, sp_b)) if m_a == m_b => {
-        let _ = (m_a, m_b, sp_a, sp_b);
-        Ok(())
-      }
+      (Flexible(m_a, sp_a) , Flexible(m_b, sp_b)) if m_a == m_b => unify_sp(sp_a, sp_b, ctx),
+      (Rigid(m_a, sp_a)    ,    Rigid(m_b, sp_b)) if m_a == m_b => unify_sp(sp_a, sp_b, ctx),
+
+      // Unification of meta variables, it does unifies meta variables that
+      // are present in the context.
+      //
+      // It does require a solver function.
+      //
+      // TODO: Solve
       (Flexible(m_a, sp_a) ,                  _t) |
       (_t                  , Flexible(m_a, sp_a))               => {
-        // TODO: Solve
         let _ = (m_a, sp_a);
         Ok(())
       }
