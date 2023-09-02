@@ -1,13 +1,36 @@
+use crate::passes::parser::Parsed;
+
 use super::*;
+
+/// The type of constructor primitive.
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ConstKind {
+  String,
+  Int,
+  #[default]
+  Universe,
+}
 
 /// Type of a type. It has a location.
 #[derive(Default, Debug, Clone)]
-pub struct Universe<S: state::State> {
-  /// The location of the integer in the source code.
+pub struct Cons<S: state::State> {
+  pub kind: ConstKind,
   pub meta: S::Meta,
 }
 
-impl<S: state::State> Element<S> for Universe<S> {
+pub fn universe(meta: Location) -> Cons<Parsed> {
+  Cons { kind: ConstKind::Universe, meta }
+}
+
+pub fn int(meta: Location) -> Cons<Parsed> {
+  Cons { kind: ConstKind::Int, meta }
+}
+
+pub fn string(meta: Location) -> Cons<Parsed> {
+  Cons { kind: ConstKind::String, meta }
+}
+
+impl<S: state::State> Element<S> for Cons<S> {
   fn meta(&self) -> &S::Meta {
     &self.meta
   }

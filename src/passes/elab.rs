@@ -106,8 +106,7 @@ pub struct Elab {
 /// The type of a term is a value, but the type of a value is a type.
 #[derive(Debug, Clone)]
 pub enum Value {
-  Universe,
-  Constructor(String),
+  Constructor(ConstKind),
   Flexible(MetaVar, Spine),
   Rigid(Lvl, Spine),
   Lam(DefinitionRs, Closure),
@@ -130,11 +129,6 @@ impl Value {
   /// spine to it
   pub fn flexible(meta: MetaVar) -> Self {
     Value::Flexible(meta, Default::default())
-  }
-
-  /// Creates a constructor
-  pub fn constructor(name: &str) -> Self {
-    Value::Constructor(name.to_string())
   }
 
   /// Forcing is important because it does removes the holes created
@@ -188,7 +182,7 @@ impl Value {
     match (self.force(), rhs.force()) {
       // Type universe unification is always true, because
       // we don't have universe polymorphism.
-      (Universe            , Universe) => Ok(()),
+      (Constructor(k_a)   , Constructor(k_b)) if k_a == k_b => Ok(()),
 
       // Unification of literal values, it does checks if the values are equal
       // directly. If they are not, it does returns an error.
@@ -282,10 +276,10 @@ impl Elab {
         Term::Group(_) => unreachable!(),
 
         // Values
-        Term::Int(_) => Value::constructor("Int"),
-        Term::Str(_) => Value::constructor("String"),
+        Term::Int(_) => Value::Constructor(ConstKind::Int),
+        Term::Str(_) => Value::Constructor(ConstKind::String),
+        Term::Cons(_) => Value::Constructor(ConstKind::Universe),
         Term::Hole(_) | Term::Error(_) => ctx.fresh_meta().eval(&ctx.env),
-        Term::Universe(_) => Value::Universe,
         Term::Fun(_) => todo!(),
         Term::Elim(_) => todo!(),
 
@@ -449,8 +443,10 @@ impl Quote for Value {
     }
 
     match self {
-      Value::Constructor(_) => todo!(),
-      Value::Universe => Expr::Universe(Universe::default()),
+      Value::Constructor(k) => Expr::Cons(Cons {
+        kind: k,
+        meta: Default::default(),
+      }),
       Value::Meta(meta_var) => Expr::Reference(crate::erase::Reference::MetaVar(meta_var)),
       Value::Flexible(meta, sp) => quote_sp(sp, Expr::Reference(crate::erase::Reference::MetaVar(meta)), nth),
       Value::Rigid(lvl, sp) => quote_sp(sp, Expr::Reference(crate::erase::Reference::Var(lvl.into_ix(nth))), nth),
@@ -520,7 +516,7 @@ impl Expr {
       Group(_) => unreachable!(),
 
       // Values
-      Universe(_) => Value::Universe,
+      Cons(_) => Value::Constructor(ConstKind::Universe),
       Int(data) => Value::Int(data.value),
       Str(data) => Value::Str(data.value),
       Elim(_) => todo!("elim expr"),

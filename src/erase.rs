@@ -17,7 +17,7 @@ use crate::ast::Pattern;
 use crate::ast::Pi;
 use crate::ast::Str;
 use crate::ast::Term;
-use crate::ast::Universe;
+use crate::ast::Cons;
 use crate::passes::elab::Elab;
 use crate::passes::elab::Value;
 use crate::passes::resolver::Resolved;
@@ -157,7 +157,7 @@ impl Term<Resolved> {
   pub fn erase(self, elab: &Elab) -> crate::ast::Term<Erased> {
     match self {
       Term::Group(_) => unreachable!(),
-      Term::Universe(_) => Term::Universe(Universe { meta: () }),
+      Term::Cons(u) => Term::Cons(Cons { kind: u.kind, meta: () }),
       Term::Hole(_) => Term::Hole(Hole { meta: () }),
       Term::Int(v) => Term::Int(Int { meta: (), ..v }),
       Term::Str(v) => Term::Str(Str { meta: (), ..v }),
