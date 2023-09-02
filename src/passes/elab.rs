@@ -132,18 +132,35 @@ impl Value {
     Value::Flexible(meta, Default::default())
   }
 
+  /// Function apply, it does applies a value to a value
+  /// creating a new value.
+  pub fn apply(self, argument: Value) -> Self {
+    match self {
+      Value::Lam(_, closure) => closure.apply(argument),
+      Value::Flexible(meta, mut spine) => {
+        spine.push_back(argument);
+        Value::Flexible(meta, spine)
+      }
+      Value::Rigid(lvl, mut spine) => {
+        spine.push_back(argument);
+        Value::Rigid(lvl, spine)
+      }
+      _ => panic!("expected a function, got another value"),
+    }
+  }
+
   /// Forcing is important because it does removes the holes created
   /// by the elaborator.
   ///
   /// It does returns a value without holes.
   pub fn force(self) -> Self {
     match self {
-        Value::Meta(ref m) => match m.take() {
-            Some(value) => value,
-            None => self.clone(),
-        },
-        Value::SrcPos(_, box value) => value,
-        _ => self,
+      Value::Meta(ref m) => match m.take() {
+        Some(value) => value,
+        None => self.clone(),
+      },
+      Value::SrcPos(_, box value) => value,
+      _ => self,
     }
   }
 
@@ -175,7 +192,7 @@ impl Value {
   /// NOTE: I disabled the formatter so I can align values
   /// and it looks cutier.
   #[rustfmt::skip]
-  pub fn unify(self, rhs: Value, _: &Elab) -> miette::Result<()> {
+  pub fn unify(self, rhs: Value, ctx: &Elab) -> miette::Result<()> {
     /// Imports every stuff so we can't have a lot of
     /// `::` in the code blowing or mind.
     use Value::*;
@@ -198,6 +215,21 @@ impl Value {
       (Str(v_a)            , Str(v_b)) if v_a == v_b => Ok(()), // "a" = "a", "b" = "b", etc...
       (Int(v_a)            , Int(v_b))               => Err(MismatchBetweenInts(v_a, v_b))?,
       (Str(v_a)            , Str(v_b))               => Err(MismatchBetweenStrs(v_a, v_b))?,
+
+      // Lambda unification, that applies closures and pi types
+      // using the spine of applications.
+      (Lam(_, v_a)         , Lam(_, v_b)) => {
+        v_a.apply(Value::rigid(ctx.lvl))
+           .unify(v_b.apply(Value::rigid(ctx.lvl)), &ctx.increase_level())
+      }
+      (t                   ,   Lam(_, v)) => {
+        t.apply(Value::rigid(ctx.lvl))
+         .unify(v.apply(Value::rigid(ctx.lvl)), &ctx.increase_level())
+      }
+      (Lam(_, v)           ,           t) => {
+        v.apply(Value::rigid(ctx.lvl))
+         .unify(t.apply(Value::rigid(ctx.lvl)), &ctx.increase_level())
+      }
 
       // Unification of application spines or meta variables, it does unifies
       // flexibles, rigids and meta variable's spines.
@@ -239,6 +271,13 @@ impl Elab {
       tt: Default::default(),
       unique: Default::default(),
     }
+  }
+
+  /// Increases the debruijin level of the context
+  pub fn increase_level(&self) -> Elab {
+    let mut new_ctx = self.clone();
+    new_ctx.lvl += 1;
+    new_ctx
   }
 
   /// Elaborates a file into a new file
