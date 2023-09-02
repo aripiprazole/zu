@@ -277,10 +277,10 @@ impl Value {
       // It does require a solver function.
       //
       // TODO: Solve
-      (Flexible(m_a, sp_a) ,                  _t) |
-      (_t                  , Flexible(m_a, sp_a)) => {
+      (Flexible(m_a, sp_a) , _t) | (_t , Flexible(m_a, sp_a)) => {
         let _ = (m_a, sp_a);
-        todo!()
+
+        todo!("unification of meta variables")
       }
 
       // Fallback case which will cause an error if we can't unify
