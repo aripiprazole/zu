@@ -1,7 +1,5 @@
 module Ind
 
-import Prelude
-
 /// Defines an natural inductive type, which can be either `Zero`,
 /// or it's successor `Succ`, which takes the previous and returns the
 /// next natural number.
@@ -16,8 +14,5 @@ fun `+ : Nat -> Nat -> Nat = \a, b ->
     Zero   => Zero,
     Succ n => (Succ (n + b))
 
-@eval (Sigma/new 0 1 is Sigma Nat Succ).inf
-
 @eval Zero + (Succ Zero)
-
 @type Succ (Succ Zero)

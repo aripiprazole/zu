@@ -74,22 +74,22 @@ pub struct LoggerReporter;
 
 impl Reporter for LoggerReporter {
   /// Evaluates a value at a specific location.
-  fn evaluate(&self, value: passes::elab::Value, location: ast::Location) -> miette::Result<()> {
+  fn evaluate(&self, value: passes::elab::Expr, location: ast::Location) -> miette::Result<()> {
     let filename = location.filename;
     let start = location.start;
     let end = location.end;
 
-    log::info!("{:?} at {filename}:{start}:{end}", value.show());
+    log::info!("{:?} at {filename}:{start}:{end}", value);
     Ok(())
   }
 
   /// Checks a value at a specific location.
-  fn check(&self, value: passes::elab::Value, location: ast::Location) -> miette::Result<()> {
+  fn check(&self, value: passes::elab::Expr, location: ast::Location) -> miette::Result<()> {
     let filename = location.filename;
     let start = location.start;
     let end = location.end;
 
-    log::info!("checked {:?} at {filename}:{start}:{end}", value.show());
+    log::info!("checked {:?} at {filename}:{start}:{end}", value);
     Ok(())
   }
 }

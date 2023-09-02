@@ -50,12 +50,12 @@ Attribute: crate::ast::Attribute<Parsed> = {
   <s: @L> "@" "[" "partial" "]" <e: @R> => {
     // Report the error
     errors.push(lalrpop_util::ErrorRecovery {
-        dropped_tokens: vec![],
-        error: lalrpop_util::ParseError::User {
-            error: crate::passes::parser::InnerError::UnsupportedAttribute {
-                err_span: crate::ast::Location::new(s, e, filename, &unique).into(),
-            },
+      dropped_tokens: vec![],
+      error: lalrpop_util::ParseError::User {
+        error: crate::passes::parser::InnerError::UnsupportedAttribute {
+          err_span: crate::ast::Location::new(s, e, filename, &unique).into(),
         },
+      },
     });
 
     crate::ast::Attribute::_TODO(std::marker::PhantomData)
@@ -63,12 +63,12 @@ Attribute: crate::ast::Attribute<Parsed> = {
   <s: @L> "@" "[" "alias" <names:Sep<",", Reference>> "]" <e: @R> => {
     // Report the error
     errors.push(lalrpop_util::ErrorRecovery {
-        dropped_tokens: vec![],
-        error: lalrpop_util::ParseError::User {
-            error: crate::passes::parser::InnerError::UnsupportedAttribute {
-                err_span: crate::ast::Location::new(s, e, filename, &unique).into(),
-            },
+      dropped_tokens: vec![],
+      error: lalrpop_util::ParseError::User {
+        error: crate::passes::parser::InnerError::UnsupportedAttribute {
+          err_span: crate::ast::Location::new(s, e, filename, &unique).into(),
         },
+      },
     });
 
     crate::ast::Attribute::_TODO(std::marker::PhantomData)
@@ -76,12 +76,12 @@ Attribute: crate::ast::Attribute<Parsed> = {
   <s: @L> "@" "[" "derive" <names:Sep<",", Reference>> "]" <e: @R> => {
     // Report the error
     errors.push(lalrpop_util::ErrorRecovery {
-        dropped_tokens: vec![],
-        error: lalrpop_util::ParseError::User {
-            error: crate::passes::parser::InnerError::UnsupportedAttribute {
-                err_span: crate::ast::Location::new(s, e, filename, &unique).into(),
-            },
+      dropped_tokens: vec![],
+      error: lalrpop_util::ParseError::User {
+        error: crate::passes::parser::InnerError::UnsupportedAttribute {
+          err_span: crate::ast::Location::new(s, e, filename, &unique).into(),
         },
+      },
     });
 
     crate::ast::Attribute::_TODO(std::marker::PhantomData)
@@ -89,12 +89,12 @@ Attribute: crate::ast::Attribute<Parsed> = {
   <s: @L> "@" "[" "do_notation" <names:Sep<",", Reference>> "]" <e: @R> => {
     // Report the error
     errors.push(lalrpop_util::ErrorRecovery {
-        dropped_tokens: vec![],
-        error: lalrpop_util::ParseError::User {
-            error: crate::passes::parser::InnerError::UnsupportedAttribute {
-                err_span: crate::ast::Location::new(s, e, filename, &unique).into(),
-            },
+      dropped_tokens: vec![],
+      error: lalrpop_util::ParseError::User {
+        error: crate::passes::parser::InnerError::UnsupportedAttribute {
+          err_span: crate::ast::Location::new(s, e, filename, &unique).into(),
         },
+      },
     });
 
     crate::ast::Attribute::_TODO(std::marker::PhantomData)

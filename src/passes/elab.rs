@@ -81,8 +81,8 @@ impl Closure {
 /// Logger to the context, it can be either implemented
 /// as a logger, or as a presenter for UI like a LSP.
 pub trait Reporter: Debug {
-  fn evaluate(&self, value: Value, location: Location) -> miette::Result<()>;
-  fn check(&self, value: Value, location: Location) -> miette::Result<()>;
+  fn evaluate(&self, value: Expr, location: Location) -> miette::Result<()>;
+  fn check(&self, value: Expr, location: Location) -> miette::Result<()>;
 }
 
 /// The context of the elaborator
@@ -248,8 +248,20 @@ impl Elab {
         Stmt::Error(_) => {}
         Stmt::Inductive(_) => todo!(),
         Stmt::Binding(_) => todo!(),
-        Stmt::Eval(_) => todo!(),
-        Stmt::Type(_) => todo!(),
+        Stmt::Eval(s) => {
+          let location = s.value.meta().clone();
+          let value = s.value.erase(self).eval(&self.env);
+          let expr = value.quote(self.lvl);
+
+          self.reporter.evaluate(expr, location)?;
+        },
+        Stmt::Type(s) => {
+          let location = s.value.meta().clone();
+          let value = self.infer(&s.value);
+          let expr = value.quote(self.lvl);
+
+          self.reporter.check(expr, location)?;
+        },
 
         // Erased values, the types with `!`
         Stmt::Signature(_) => unreachable!(),
@@ -278,7 +290,7 @@ impl Elab {
         // Values
         Term::Int(_) => Value::Prim(PrimKind::Int),
         Term::Str(_) => Value::Prim(PrimKind::String),
-        Term::Prim(_) => Value::Prim(PrimKind::Universe),
+        Term::Prim(_) => Value::Prim(PrimKind::Universe), // Type of type
         Term::Hole(_) | Term::Error(_) => ctx.fresh_meta().eval(&ctx.env),
         Term::Fun(_) => todo!(),
         Term::Elim(_) => todo!(),
@@ -393,11 +405,14 @@ impl Elab {
     }
   }
 
-  /// Creates a new fresh meta variable
+  /// Creates a new fresh meta variable that hasn't been evaluated yet.
+  ///
+  /// It does creates a new meta variable with a unique id.
   pub fn fresh_meta(&self) -> Expr {
-    todo!()
+    Expr::Reference(Reference::MetaVar(MetaVar::new_unique(self)))
   }
 
+  /// Binds a new value in the context.
   pub fn create_new_value(&self, name: &str, value: Value) -> Self {
     let mut data = self.clone();
     data.env = data.env.create_new_value(Value::rigid(data.lvl));
@@ -443,13 +458,13 @@ impl Quote for Value {
     }
 
     match self {
-      Value::Prim(k) => Expr::Prim(Prim {
-        kind: k,
-        meta: Default::default(),
-      }),
       Value::Meta(meta_var) => Expr::Reference(crate::erase::Reference::MetaVar(meta_var)),
       Value::Flexible(meta, sp) => quote_sp(sp, Expr::Reference(crate::erase::Reference::MetaVar(meta)), nth),
       Value::Rigid(lvl, sp) => quote_sp(sp, Expr::Reference(crate::erase::Reference::Var(lvl.into_ix(nth))), nth),
+      Value::Prim(kind) => Expr::Prim(Prim {
+        kind,
+        meta: Default::default(),
+      }),
       Value::Int(value) => Expr::Int(Int {
         value,
         meta: Default::default(),
