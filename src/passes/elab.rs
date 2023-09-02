@@ -17,24 +17,6 @@ pub struct Mod {
   pub declarations: Vec<Declaration>,
 }
 
-/// Defines the type of a term, elaborated to a value
-///
-/// The type of a term is a value, but the type of a value is a type.
-#[derive(Debug, Clone)]
-pub enum Value {
-  Universe,
-  Constructor(String),
-  Flexible(MetaVar, Spine),
-  Rigid(Lvl, Spine),
-  Lam(DefinitionRs, Closure),
-  Pi(DefinitionRs, Icit, Box<Value>, Closure),
-  Meta(MetaVar),
-  Int(isize),
-  Anno(Box<Value>, Box<Value>),
-  Str(String),
-  SrcPos(crate::ast::Location, Box<Value>),
-}
-
 pub struct Declaration {
   pub name: String,
   pub type_repr: Value,
@@ -88,6 +70,14 @@ pub struct Closure {
   pub term: Expr,
 }
 
+impl Closure {
+  /// Binds a closure with a new environment with the
+  /// given value.
+  pub fn apply(self, argument: Value) -> Value {
+    self.term.eval(&self.env.create_new_value(argument))
+  }
+}
+
 /// Logger to the context, it can be either implemented
 /// as a logger, or as a presenter for UI like a LSP.
 pub trait Reporter: Debug {
@@ -109,6 +99,133 @@ pub struct Elab {
   ///
   /// It's a simple type table, so we don't rewrite everything.
   pub tt: RefCell<intmap::IntMap<Value>>,
+}
+
+/// Defines the type of a term, elaborated to a value
+///
+/// The type of a term is a value, but the type of a value is a type.
+#[derive(Debug, Clone)]
+pub enum Value {
+  Universe,
+  Constructor(String),
+  Flexible(MetaVar, Spine),
+  Rigid(Lvl, Spine),
+  Lam(DefinitionRs, Closure),
+  Pi(DefinitionRs, Icit, Box<Value>, Closure),
+  Meta(MetaVar),
+  Int(isize),
+  Anno(Box<Value>, Box<Value>),
+  Str(String),
+  SrcPos(crate::ast::Location, Box<Value>),
+}
+
+impl Value {
+  /// Creates a rigid variable without applications and a
+  /// spine to it
+  pub fn rigid(lvl: Lvl) -> Self {
+    Value::Rigid(lvl, Default::default())
+  }
+
+  /// Creates a flexible variable without applications and a
+  /// spine to it
+  pub fn flexible(meta: MetaVar) -> Self {
+    Value::Flexible(meta, Default::default())
+  }
+
+  /// Creates a constructor
+  pub fn constructor(name: &str) -> Self {
+    Value::Constructor(name.to_string())
+  }
+
+  /// Forcing is important because it does removes the holes created
+  /// by the elaborator.
+  ///
+  /// It does returns a value without holes.
+  pub fn force(self) -> Self {
+    todo!()
+  }
+
+  /// Creates a new pi type
+  pub fn pi(name: &str, domain: Value, codomain: Closure) -> Self {
+    let name = Definition::new(name.to_string());
+    Value::Pi(name, Icit::Expl, domain.into(), codomain)
+  }
+
+  /// Performs unification between two values, its a
+  /// equality relation between two values.
+  ///
+  /// It does closes some holes.
+  ///
+  /// # Parameters
+  ///
+  /// - `self` - The left hand side of the unification
+  /// - `rhs`  - The right hand side of the unification
+  /// - `ctx`  - The context where the unification is happening
+  ///            right now
+  ///
+  /// # Returns
+  ///
+  /// It does returns an error if the unification fails. And a
+  /// unit if the unification succeeds.
+  ///
+  /// # Another stuff
+  ///
+  /// NOTE: I disabled the formatter so I can align values
+  /// and it looks cutier.
+  #[rustfmt::skip]
+  pub fn unify(self, rhs: Value, _: &Elab) -> miette::Result<()> {
+    /// Imports every stuff so we can't have a lot of
+    /// `::` in the code blowing or mind.
+    use Value::*;
+    use UnifyError::*;
+
+    // Forcing here is important because it does removes the holes created
+    // by the elaborator, and it does returns a value without holes.
+    //
+    // It's important to do this because we don't want to unify holes
+    // with values, because it will cause a lot of problems, and it will
+    // increase the pattern matching complexity.
+    match (self.force(), rhs.force()) {
+      // Type universe unification is always true, because
+      // we don't have universe polymorphism.
+      (Universe            , Universe) => Ok(()),
+
+      // Unification of literal values, it does checks if the values are equal
+      // directly. If they are not, it does returns an error.
+      (Int(v_a)            , Int(v_b)) if v_a == v_b => Ok(()), // 1 = 1, 2 = 2, etc...
+      (Str(v_a)            , Str(v_b)) if v_a == v_b => Ok(()), // "a" = "a", "b" = "b", etc...
+      (Int(v_a)            , Int(v_b))               => Err(MismatchBetweenInts(v_a, v_b))?,
+      (Str(v_a)            , Str(v_b))               => Err(MismatchBetweenStrs(v_a, v_b))?,
+
+      // Unification of application spines or meta variables, it does unifies
+      // flexibles, rigids and meta variable's spines.
+      //
+      // It does unifies the spines of the applications.
+      (Flexible(m_a, sp_a) , Flexible(m_b, sp_b)) => {
+        let _ = (m_a, m_b, sp_a, sp_b);
+        Ok(())
+      }
+      (Rigid(m_a, sp_a)    ,    Rigid(m_b, sp_b)) => {
+        let _ = (m_a, m_b, sp_a, sp_b);
+        Ok(())
+      }
+      (Flexible(m_a, sp_a) ,                   _) => {
+        let _ = (m_a, sp_a);
+        Ok(())
+      }
+      (_                   , Flexible(m_a, sp_a)) => {
+        let _ = (m_a, sp_a);
+        Ok(())
+      }
+
+      // Fallback case which will cause an error if we can't unify
+      // the values.
+      //
+      // It's the fallback of the fallbacks cases, the last error message
+      // and the least meaningful.
+      (_ , _) => Err(CantUnify)?,
+    }
+  }
 }
 
 impl Elab {
@@ -171,6 +288,9 @@ impl Elab {
         Term::Universe(_) => Value::Universe,
         Term::Fun(_) => todo!(),
         Term::Elim(_) => todo!(),
+
+        // Infers the type of a function application, it can apply
+        // either a pi type, or a closure that is a lambda.
         Term::Apply(apply) => {
           let callee = ctx.infer(&apply.callee);
 
@@ -197,10 +317,13 @@ impl Elab {
               };
 
               let u = ctx.check(&argument, domain);
-
               codomain.apply(u.eval(&ctx.env))
             })
         }
+
+        // Resolves and infers the type of a reference to a variable
+        // in the environment. It does uses debruijin, and `erase` function
+        // works very well with it.
         Term::Reference(_) => {
           let Term::Reference(Reference::Var(Ix(ix))) = term.clone().erase(ctx) else {
             // We already check at the beginning of the function with the
@@ -214,9 +337,17 @@ impl Elab {
           // borrowing the environment.
           ctx.env.data[ix].clone()
         }
+
+        // Type check annotation, it does only checks the type of the
+        // annotation, and returns the value of the annotation.
+        //
+        // It changes the mode of type checking, from inferring to checking.
         Term::Anno(anno) => ctx
           .check(&anno.value, anno.type_repr.clone().erase(ctx).eval(&ctx.env))
           .eval(&ctx.env),
+
+        // Infers the type of a lambda, it does creates a new closure
+        // and returns the type of the closure.
         Term::Pi(pi) => {
           let name = Definition::new(pi.domain.name.text.clone());
           let domain = ctx.infer(&pi.domain.type_repr);
@@ -414,122 +545,5 @@ impl Expr {
         Value::Pi(name, pi.domain.icit, domain.into(), codomain)
       }
     }
-  }
-}
-
-impl Value {
-  /// Creates a rigid variable without applications and a
-  /// spine to it
-  pub fn rigid(lvl: Lvl) -> Self {
-    Value::Rigid(lvl, Default::default())
-  }
-
-  /// Creates a flexible variable without applications and a
-  /// spine to it
-  pub fn flexible(meta: MetaVar) -> Self {
-    Value::Flexible(meta, Default::default())
-  }
-
-  /// Creates a constructor
-  pub fn constructor(name: &str) -> Self {
-    Value::Constructor(name.to_string())
-  }
-
-  /// Forcing is important because it does removes the holes created
-  /// by the elaborator.
-  ///
-  /// It does returns a value without holes.
-  pub fn force(self) -> Self {
-    todo!()
-  }
-
-  /// Creates a new pi type
-  pub fn pi(name: &str, domain: Value, codomain: Closure) -> Self {
-    let name = Definition::new(name.to_string());
-    Value::Pi(name, Icit::Expl, domain.into(), codomain)
-  }
-
-  /// Performs unification between two values, its a
-  /// equality relation between two values.
-  ///
-  /// It does closes some holes.
-  ///
-  /// # Parameters
-  ///
-  /// - `self` - The left hand side of the unification
-  /// - `rhs`  - The right hand side of the unification
-  /// - `ctx`  - The context where the unification is happening
-  ///            right now
-  ///
-  /// # Returns
-  ///
-  /// It does returns an error if the unification fails. And a
-  /// unit if the unification succeeds.
-  ///
-  /// # Another stuff
-  ///
-  /// NOTE: I disabled the formatter so I can align values
-  /// and it looks cutier.
-  #[rustfmt::skip]
-  pub fn unify(self, rhs: Value, _: &Elab) -> miette::Result<()> {
-    /// Imports every stuff so we can't have a lot of
-    /// `::` in the code blowing or mind.
-    use Value::*;
-    use UnifyError::*;
-
-    // Forcing here is important because it does removes the holes created
-    // by the elaborator, and it does returns a value without holes.
-    //
-    // It's important to do this because we don't want to unify holes
-    // with values, because it will cause a lot of problems, and it will
-    // increase the pattern matching complexity.
-    match (self.force(), rhs.force()) {
-      // Type universe unification is always true, because
-      // we don't have universe polymorphism.
-      (Universe            , Universe) => Ok(()),
-
-      // Unification of literal values, it does checks if the values are equal
-      // directly. If they are not, it does returns an error.
-      (Int(v_a)            , Int(v_b)) if v_a == v_b => Ok(()), // 1 = 1, 2 = 2, etc...
-      (Str(v_a)            , Str(v_b)) if v_a == v_b => Ok(()), // "a" = "a", "b" = "b", etc...
-      (Int(v_a)            , Int(v_b))               => Err(MismatchBetweenInts(v_a, v_b))?,
-      (Str(v_a)            , Str(v_b))               => Err(MismatchBetweenStrs(v_a, v_b))?,
-
-      // Unification of application spines or meta variables, it does unifies
-      // flexibles, rigids and meta variable's spines.
-      //
-      // It does unifies the spines of the applications.
-      (Flexible(m_a, sp_a) , Flexible(m_b, sp_b)) => {
-        let _ = (m_a, m_b, sp_a, sp_b);
-        Ok(())
-      }
-      (Rigid(m_a, sp_a)    ,    Rigid(m_b, sp_b)) => {
-        let _ = (m_a, m_b, sp_a, sp_b);
-        Ok(())
-      }
-      (Flexible(m_a, sp_a) ,                   _) => {
-        let _ = (m_a, sp_a);
-        Ok(())
-      }
-      (_                   , Flexible(m_a, sp_a)) => {
-        let _ = (m_a, sp_a);
-        Ok(())
-      }
-
-      // Fallback case which will cause an error if we can't unify
-      // the values.
-      //
-      // It's the fallback of the fallbacks cases, the last error message
-      // and the least meaningful.
-      (_ , _) => Err(CantUnify)?,
-    }
-  }
-}
-
-impl Closure {
-  /// Binds a closure with a new environment with the
-  /// given value.
-  pub fn apply(self, argument: Value) -> Value {
-    self.term.eval(&self.env.create_new_value(argument))
   }
 }
