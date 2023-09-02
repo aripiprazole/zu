@@ -280,7 +280,7 @@ impl Value {
       (Flexible(m_a, sp_a) ,                  _t) |
       (_t                  , Flexible(m_a, sp_a)) => {
         let _ = (m_a, sp_a);
-        Ok(())
+        todo!()
       }
 
       // Fallback case which will cause an error if we can't unify
