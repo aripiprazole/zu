@@ -137,7 +137,14 @@ impl Value {
   ///
   /// It does returns a value without holes.
   pub fn force(self) -> Self {
-    todo!()
+    match self {
+        Value::Meta(ref m) => match m.take() {
+            Some(value) => value,
+            None => self.clone(),
+        },
+        Value::SrcPos(_, box value) => value,
+        _ => self,
+    }
   }
 
   /// Creates a new pi type
@@ -293,7 +300,19 @@ impl Elab {
         Term::Str(_) => Value::Prim(PrimKind::String),
         Term::Prim(_) => Value::Prim(PrimKind::Universe), // Type of type
         Term::Hole(_) | Term::Error(_) => ctx.fresh_meta().eval(&ctx.env),
-        Term::Fun(_) => todo!(),
+        Term::Fun(e) => {
+          let name = Definition::new(e.arguments.text.clone());
+          let domain = ctx.fresh_meta().eval(&ctx.env);
+          let codomain = ctx.create_new_value(&name.text, domain.clone()).infer(&e.value);
+
+          Value::Pi(name, Icit::Expl, domain.clone().into(), Closure {
+            env: ctx.env.clone(),
+
+            // Here we need to increase the level, because we are binding
+            // in a new environment.
+            term: codomain.quote(ctx.lvl + 1),
+          })
+        }
         Term::Elim(_) => todo!(),
 
         // Infers the type of a function application, it can apply
@@ -461,7 +480,7 @@ impl Quote for Value {
     match self {
       Value::Meta(meta_var) => Expr::Reference(crate::erase::Reference::MetaVar(meta_var)),
       Value::Flexible(meta, sp) => quote_sp(sp, Expr::Reference(crate::erase::Reference::MetaVar(meta)), nth),
-      Value::Rigid(lvl, sp) => quote_sp(sp, Expr::Reference(crate::erase::Reference::Var(lvl.into_ix(nth))), nth),
+      Value::Rigid(lvl, sp) => quote_sp(sp, Expr::Reference(crate::erase::Reference::Var(nth.into_ix(lvl))), nth),
       Value::Prim(kind) => Expr::Prim(Prim {
         kind,
         meta: Default::default(),
