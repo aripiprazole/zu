@@ -233,6 +233,8 @@ impl Value {
 
       // Lambda unification, that applies closures and pi types
       // using the spine of applications.
+      //
+      // It does unifies the closures and the pi types.
       (Lam(_, v_a)         , Lam(_, v_b)) => {
         v_a.apply(Value::rigid(ctx.lvl))
            .unify(v_b.apply(Value::rigid(ctx.lvl)), &ctx.increase_level())
@@ -244,6 +246,16 @@ impl Value {
       (Lam(_, v)           ,           t) => {
         v.apply(Value::rigid(ctx.lvl))
          .unify(t.apply(Value::rigid(ctx.lvl)), &ctx.increase_level())
+      }
+
+      // Pi type unification, it does unifies the domain and the codomain
+      // of the pi types.
+      //
+      // NOTE: cod stands for codomain, and dom stands for domain.
+      (Value::Pi(_, i_a, box dom_a, cod_a) , Value::Pi(_, i_b, box dom_b, cod_b)) if i_a == i_b => {
+        dom_a.unify(dom_b, ctx)?;
+        cod_a.apply(Value::rigid(ctx.lvl))
+             .unify(cod_b.apply(Value::rigid(ctx.lvl)), &ctx.increase_level())
       }
 
       // Unification of application spines or meta variables, it does unifies
@@ -260,7 +272,7 @@ impl Value {
       //
       // TODO: Solve
       (Flexible(m_a, sp_a) ,                  _t) |
-      (_t                  , Flexible(m_a, sp_a))               => {
+      (_t                  , Flexible(m_a, sp_a)) => {
         let _ = (m_a, sp_a);
         Ok(())
       }
