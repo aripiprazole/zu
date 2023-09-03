@@ -1,17 +1,19 @@
 use std::fmt::Display;
 
 /// The separator of a term.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Sep {
   Comma, // ,
   Semi,  // ;
+  Colon, // :
 
   /// *nothing*
+  #[default]
   None,
 }
 
 /// The disposal, if the terms are disposed horizontally or vertically.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Disposal {
   /// (
   ///   a,
@@ -20,16 +22,19 @@ pub enum Disposal {
   Vertical,
 
   /// (a, b)
+  #[default]
   Horizontal,
 }
 
 /// Deliminator of a term.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Delim {
   Paren,   // ( ... )
   Bracket, // [ ... ]
   Brace,   // { ... }
   Angle,   // < ... >
+
+  #[default]
   None,    // ...
 }
 
@@ -58,7 +63,24 @@ impl Display for Nfe {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     match self {
       Nfe::S(v) => write!(f, "{v}"),
-      Nfe::Apply { .. } => todo!(),
+      Nfe::Apply { values, sep, .. } => {
+        let mut iter = values.iter();
+
+        if let Some(first) = iter.next() {
+          write!(f, "{}", first)?;
+
+          for value in iter {
+            match sep {
+              Sep::Comma => write!(f, ", {}", value)?,
+              Sep::Semi => write!(f, "; {}", value)?,
+              Sep::Colon => write!(f, ": {}", value)?,
+              Sep::None => write!(f, "{}", value)?,
+            }
+          }
+        }
+
+        Ok(())
+      },
     }
   }
 }

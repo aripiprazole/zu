@@ -417,6 +417,7 @@ impl Resolver {
           })
           .collect::<Vec<_>>()
           .into_iter()
+          .rev()
           .fold(local.term(*fun.value), |callee, parameter| {
             Term::Fun(Fun {
               arguments: parameter,

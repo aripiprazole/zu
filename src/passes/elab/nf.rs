@@ -32,7 +32,7 @@ impl Expr {
       Group(_) => unreachable!(),
 
       // Values
-      Prim(_) => Value::Prim(PrimKind::Universe),
+      Prim(k) => Value::Prim(k.kind),
       Int(data) => Value::Int(data.value),
       Str(data) => Value::Str(data.value),
       Elim(_) => todo!("elim expr"),

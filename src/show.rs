@@ -37,7 +37,12 @@ impl Show {
         PrimKind::Int => Nfe::S("Int".to_string()),
         PrimKind::Universe => Nfe::S("*".to_string()),
       },
-      Term::Anno(_) => todo!(),
+      Term::Anno(anno) => Nfe::Apply {
+        values: vec![self.build(*anno.value), self.build(*anno.type_repr)],
+        sep: crate::nfe::Sep::Colon,
+        delim: crate::nfe::Delim::default(),
+        disposal: crate::nfe::Disposal::Horizontal,
+      },
       Term::Fun(_) => todo!(),
       Term::Elim(_) => todo!(),
       Term::Int(v) => Nfe::S(format!("{}", v.value)),
