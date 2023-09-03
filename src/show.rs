@@ -35,7 +35,7 @@ impl Show {
       Term::Prim(prim) => match prim.kind {
         PrimKind::String => Nfe::S("String".to_string()),
         PrimKind::Int => Nfe::S("Int".to_string()),
-        PrimKind::Universe => Nfe::S("Type".to_string()),
+        PrimKind::Universe => Nfe::S("*".to_string()),
       },
       Term::Anno(_) => todo!(),
       Term::Fun(_) => todo!(),

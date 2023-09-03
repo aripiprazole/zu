@@ -67,7 +67,7 @@ impl Elab {
         // Resolves and infers the type of a reference to a variable
         // in the environment. It does uses debruijin, and `erase` function
         // works very well with it.
-        Term::Reference(_) => {
+        Term::Reference(n) => {
           let Term::Reference(Reference::Var(Ix(ix))) = term.clone().erase(ctx) else {
             // We already check at the beginning of the function with the
             // pattern matching that the term is a reference.
@@ -76,6 +76,15 @@ impl Elab {
             unreachable!()
           };
 
+          // Get the types from the context, and returns the first one.
+          let mut types = ctx.types.clone();
+          while let Some((c, t)) = types.pop_front() {
+            if n.definition.text == c {
+              return t;
+            }
+          }
+
+          // TODO: Report error
           // Gets the value from the environment and clones it to avoid
           // borrowing the environment.
           ctx.env.data[ix].clone()

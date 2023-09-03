@@ -14,8 +14,8 @@ pub enum UnifyError {
   MismatchBetweenStrs(String, String),
 
   /// Unification error between two types
-  #[error("expected type {0}, got another {0}")]
-  #[diagnostic(url(docsrs), code(unify::str_mismatch))]
+  #[error("expected type {0}, got another {1}")]
+  #[diagnostic(url(docsrs), code(unify::cant_unify))]
   CantUnify(Nfe, Nfe),
 }
 
@@ -150,7 +150,9 @@ impl Value {
     match (self.force(), rhs.force()) {
       // Type universe unification is always true, because
       // we don't have universe polymorphism.
-      (Prim(k_a)   , Prim(k_b)) if k_a == k_b => Ok(()),
+      (Prim(PrimKind::Int)      ,      Prim(PrimKind::Int)) => Ok(()),
+      (Prim(PrimKind::String)   ,   Prim(PrimKind::String)) => Ok(()),
+      (Prim(PrimKind::Universe) , Prim(PrimKind::Universe)) => Ok(()),
 
       // Unification of literal values, it does checks if the values are equal
       // directly. If they are not, it does returns an error.
@@ -206,7 +208,10 @@ impl Value {
       //
       // It's the fallback of the fallbacks cases, the last error message
       // and the least meaningful.
-      (lhs , rhs) => Err(CantUnify(lhs.show(ctx), rhs.show(ctx)))?,
+      (a   ,   b) if a == b => Ok(()),
+      (lhs , rhs)           => {
+        Err(CantUnify(lhs.show(ctx), rhs.show(ctx)))?
+      },
     }
   }
 }
