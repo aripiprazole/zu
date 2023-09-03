@@ -99,13 +99,38 @@ impl<S: state::State> Element<S> for Definition<S> {
   }
 }
 
-#[derive(Default, Hash, PartialEq, Eq, Clone)]
+/// A span in the source code.
+#[derive(Hash, PartialEq, Eq, Clone)]
 pub struct Location {
   pub id: u64,
   pub start: usize,
   pub end: usize,
   pub filename: String,
+
+  /// If the location is synthesized, it means that it's not a real location
+  pub is_synthesized: bool,
 }
+
+impl Default for Location {
+  fn default() -> Self {
+    Self {
+      id: Default::default(),
+      start: Default::default(),
+      end: Default::default(),
+      filename: Default::default(),
+      is_synthesized: true,
+    }
+  }
+}
+
+/// The default constant for [`Location`].
+pub static SYNTHESIZED: Location = Location {
+  id: 0,
+  start: 0,
+  end: 0,
+  filename: String::new(),
+  is_synthesized: true,
+};
 
 impl Location {
   /// Creates a new instance of [`Location`].
@@ -115,6 +140,7 @@ impl Location {
       start,
       end,
       filename: filename.into(),
+      is_synthesized: false,
     }
   }
 }
@@ -232,7 +258,7 @@ impl<S: state::State> Element<S> for Pattern<S> {
 pub struct Case<S: state::State> {
   /// The pattern has a list of patterns, so we can pattern match a bunch of
   /// patterns at the same time.
-  /// 
+  ///
   /// It's just like: `Cons x xs`, `Cons x' xs'`. But never this place is empty.
   pub pattern: NonEmpty<Box<Pattern<S>>>,
   pub value: Box<Term<S>>,
@@ -253,7 +279,7 @@ pub struct Elim<S: state::State> {
   /// The scrutinee can be a list, it's useful for pattern matching with
   /// tuples, but when we don't have dependent pattern matching implemented,
   /// this is our way to pattern match tuples.
-  /// 
+  ///
   /// It's just like: `Cons x xs`, `Cons x' xs'`. But never this place is empty.
   pub scrutinee: NonEmpty<Box<Term<S>>>,
   pub patterns: Vec<Case<S>>,

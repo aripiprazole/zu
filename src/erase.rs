@@ -3,7 +3,7 @@ use std::rc::Rc;
 
 use nonempty::NonEmpty;
 
-use crate::ast::Location;
+use crate::ast::SYNTHESIZED;
 use crate::ast::state::State;
 use crate::ast::Anno;
 use crate::ast::Apply;
@@ -16,6 +16,7 @@ use crate::ast::Error;
 use crate::ast::Fun;
 use crate::ast::Hole;
 use crate::ast::Int;
+use crate::ast::Location;
 use crate::ast::Pattern;
 use crate::ast::Pi;
 use crate::ast::Prim;
@@ -24,13 +25,6 @@ use crate::ast::Term;
 use crate::passes::elab::Elab;
 use crate::passes::elab::Value;
 use crate::passes::resolver::Resolved;
-
-#[derive(Default, Debug, Clone, PartialEq, Eq, Hash)]
-pub enum MaybeSynthetized {
-  Handwritten(Location),
-  #[default]
-  Synthetized,
-}
 
 /// Represents the resolved state, it's the state of the syntax tree when it's resolved.
 #[derive(Default, Debug, Clone, PartialEq)]
@@ -41,7 +35,6 @@ impl State for Erased {
   type Arguments = Box<Term<Self>>;
   type Definition = Definition<Erased>;
   type Import = !;
-  type Meta = MaybeSynthetized;
   type Parameters = Self::Definition;
   type Reference = Reference;
 }
@@ -92,9 +85,9 @@ pub enum Reference {
   MetaVar(MetaVar),
 }
 
-impl<S: State<Meta = MaybeSynthetized>> Element<S> for Reference {
+impl<S: State<Meta = Location>> Element<S> for Reference {
   fn meta(&self) -> &S::Meta {
-    &MaybeSynthetized::Synthetized
+    &SYNTHESIZED
   }
 }
 
@@ -175,22 +168,18 @@ impl Term<Resolved> {
   pub fn erase(self, elab: &Elab) -> crate::ast::Term<Erased> {
     match self {
       Term::Group(_) => unreachable!(),
-      Term::Prim(u) => Term::Prim(Prim { kind: u.kind, meta: MaybeSynthetized::Handwritten(u.meta) }),
-      Term::Hole(h) => Term::Hole(Hole { meta: MaybeSynthetized::Handwritten(h.meta) }),
-      Term::Int(v) => Term::Int(Int { meta: MaybeSynthetized::Handwritten(v.meta), ..v }),
-      Term::Str(v) => Term::Str(Str { meta: MaybeSynthetized::Handwritten(v.meta), ..v }),
-      Term::Error(v) => Term::Error(Error {
-        meta: MaybeSynthetized::Handwritten(v.meta),
-        full_text: v.full_text,
-        message: v.message,
-      }),
+      Term::Prim(u) => Term::Prim(Prim { ..u }),
+      Term::Hole(h) => Term::Hole(Hole { ..h }),
+      Term::Int(v) => Term::Int(Int { ..v }),
+      Term::Str(v) => Term::Str(Str { ..v }),
+      Term::Error(v) => Term::Error(Error { ..v }),
       Term::Anno(v) => Term::Anno(Anno {
-        meta: MaybeSynthetized::Handwritten(v.meta),
+        meta: v.meta,
         value: v.value.erase(elab).into(),
         type_repr: v.type_repr.erase(elab).into(),
       }),
       Term::Elim(elim) => Term::Elim(Elim {
-        meta: MaybeSynthetized::Handwritten(elim.meta),
+        meta: elim.meta,
         scrutinee: NonEmpty::from_vec(
           elim
             .scrutinee
@@ -208,7 +197,7 @@ impl Term<Resolved> {
             let mut local = elab.clone();
 
             Case {
-              meta: MaybeSynthetized::Handwritten(case.meta),
+              meta: case.meta,
               pattern: NonEmpty::from_vec(case.pattern.into_iter().map(|value| value.erase(&mut local)).collect())
                 .unwrap(),
               value: case.value.erase(&local).into(),
@@ -217,7 +206,7 @@ impl Term<Resolved> {
           .collect(),
       }),
       Term::Fun(fun) => Term::Fun(Fun {
-        meta: MaybeSynthetized::Handwritten(fun.meta),
+        meta: fun.meta,
         arguments: Definition::new(fun.arguments.text.clone()),
         value: fun
           .value
@@ -229,19 +218,22 @@ impl Term<Resolved> {
         .into_iter()
         .fold(apply.callee.erase(elab), |acc, argument| {
           Term::Apply(Apply {
-            meta: MaybeSynthetized::Handwritten(argument.meta().clone()),
+            meta: argument.meta().clone(),
             callee: acc.into(),
             arguments: argument.erase(elab).into(),
           })
         }),
       Term::Pi(pi) => Term::Pi(Pi {
-        meta: MaybeSynthetized::Handwritten(pi.meta),
+        meta: pi.meta,
         icit: pi.icit,
         domain: Domain {
           icit: pi.domain.icit,
-          meta: MaybeSynthetized::Handwritten(pi.domain.meta),
+          meta: pi.domain.meta,
           type_repr: pi.domain.type_repr.erase(elab).into(),
-          name: Definition::new(pi.domain.name.text.clone()),
+          name: Definition {
+            meta: pi.domain.name.meta.clone(),
+            text: pi.domain.name.text.clone(),
+          },
         },
         codomain: pi.codomain.erase(elab).into(),
       }),

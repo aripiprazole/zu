@@ -65,8 +65,8 @@ impl Expr {
       }
     };
     // Add a source code position to the value
-    if let MaybeSynthetized::Handwritten(meta) = location {
-      value = Value::SrcPos(meta, value.into());
+    if !location.is_synthesized {
+      value = Value::SrcPos(location, value.into());
     }
     value
   }
