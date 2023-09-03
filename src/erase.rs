@@ -3,6 +3,7 @@ use std::rc::Rc;
 
 use nonempty::NonEmpty;
 
+use crate::ast::Location;
 use crate::ast::state::State;
 use crate::ast::Anno;
 use crate::ast::Apply;
@@ -24,8 +25,12 @@ use crate::passes::elab::Elab;
 use crate::passes::elab::Value;
 use crate::passes::resolver::Resolved;
 
-#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Empty;
+#[derive(Default, Debug, Clone, PartialEq, Eq, Hash)]
+pub enum MaybeSynthetized {
+  Handwritten(Location),
+  #[default]
+  Synthetized,
+}
 
 /// Represents the resolved state, it's the state of the syntax tree when it's resolved.
 #[derive(Default, Debug, Clone, PartialEq)]
@@ -36,7 +41,7 @@ impl State for Erased {
   type Arguments = Box<Term<Self>>;
   type Definition = Definition<Erased>;
   type Import = !;
-  type Meta = Empty;
+  type Meta = MaybeSynthetized;
   type Parameters = Self::Definition;
   type Reference = Reference;
 }
@@ -87,9 +92,9 @@ pub enum Reference {
   MetaVar(MetaVar),
 }
 
-impl<S: State<Meta = Empty>> Element<S> for Reference {
+impl<S: State<Meta = MaybeSynthetized>> Element<S> for Reference {
   fn meta(&self) -> &S::Meta {
-    &Empty
+    &MaybeSynthetized::Synthetized
   }
 }
 
@@ -144,12 +149,6 @@ impl std::ops::AddAssign<usize> for Ix {
   }
 }
 
-impl<S: State<Meta = ()>> Element<S> for Ix {
-  fn meta(&self) -> &S::Meta {
-    &()
-  }
-}
-
 impl Pattern<Resolved> {
   /// Erase a term to a term in the untyped lambda calculus.
   pub fn erase(self, ctx: &mut Elab) -> Box<crate::ast::Pattern<Erased>> {
@@ -176,22 +175,22 @@ impl Term<Resolved> {
   pub fn erase(self, elab: &Elab) -> crate::ast::Term<Erased> {
     match self {
       Term::Group(_) => unreachable!(),
-      Term::Prim(u) => Term::Prim(Prim { kind: u.kind, meta: Default::default() }),
-      Term::Hole(_) => Term::Hole(Hole { meta: Default::default() }),
-      Term::Int(v) => Term::Int(Int { meta: Default::default(), ..v }),
-      Term::Str(v) => Term::Str(Str { meta: Default::default(), ..v }),
+      Term::Prim(u) => Term::Prim(Prim { kind: u.kind, meta: MaybeSynthetized::Handwritten(u.meta) }),
+      Term::Hole(h) => Term::Hole(Hole { meta: MaybeSynthetized::Handwritten(h.meta) }),
+      Term::Int(v) => Term::Int(Int { meta: MaybeSynthetized::Handwritten(v.meta), ..v }),
+      Term::Str(v) => Term::Str(Str { meta: MaybeSynthetized::Handwritten(v.meta), ..v }),
       Term::Error(v) => Term::Error(Error {
-        meta: Default::default(),
+        meta: MaybeSynthetized::Handwritten(v.meta),
         full_text: v.full_text,
         message: v.message,
       }),
       Term::Anno(v) => Term::Anno(Anno {
-        meta: Default::default(),
+        meta: MaybeSynthetized::Handwritten(v.meta),
         value: v.value.erase(elab).into(),
         type_repr: v.type_repr.erase(elab).into(),
       }),
       Term::Elim(elim) => Term::Elim(Elim {
-        meta: Default::default(),
+        meta: MaybeSynthetized::Handwritten(elim.meta),
         scrutinee: NonEmpty::from_vec(
           elim
             .scrutinee
@@ -209,7 +208,7 @@ impl Term<Resolved> {
             let mut local = elab.clone();
 
             Case {
-              meta: Default::default(),
+              meta: MaybeSynthetized::Handwritten(case.meta),
               pattern: NonEmpty::from_vec(case.pattern.into_iter().map(|value| value.erase(&mut local)).collect())
                 .unwrap(),
               value: case.value.erase(&local).into(),
@@ -218,7 +217,7 @@ impl Term<Resolved> {
           .collect(),
       }),
       Term::Fun(fun) => Term::Fun(Fun {
-        meta: Default::default(),
+        meta: MaybeSynthetized::Handwritten(fun.meta),
         arguments: Definition::new(fun.arguments.text.clone()),
         value: fun
           .value
@@ -230,17 +229,17 @@ impl Term<Resolved> {
         .into_iter()
         .fold(apply.callee.erase(elab), |acc, argument| {
           Term::Apply(Apply {
-            meta: Default::default(),
+            meta: MaybeSynthetized::Handwritten(argument.meta().clone()),
             callee: acc.into(),
             arguments: argument.erase(elab).into(),
           })
         }),
       Term::Pi(pi) => Term::Pi(Pi {
-        meta: Default::default(),
+        meta: MaybeSynthetized::Handwritten(pi.meta),
         icit: pi.icit,
         domain: Domain {
           icit: pi.domain.icit,
-          meta: Default::default(),
+          meta: MaybeSynthetized::Handwritten(pi.domain.meta),
           type_repr: pi.domain.type_repr.erase(elab).into(),
           name: Definition::new(pi.domain.name.text.clone()),
         },

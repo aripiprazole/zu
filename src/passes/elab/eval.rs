@@ -25,7 +25,8 @@ impl Expr {
       }
     }
 
-    match self {
+    let location = self.meta().clone();
+    let mut value = match self {
       // Removed
       Error(_) => unreachable!(),
       Hole(_) => unreachable!(),
@@ -62,6 +63,11 @@ impl Expr {
 
         Value::Pi(name, pi.domain.icit, domain.into(), codomain)
       }
+    };
+    // Add a source code position to the value
+    if let MaybeSynthetized::Handwritten(meta) = location {
+      value = Value::SrcPos(meta, value.into());
     }
+    value
   }
 }
