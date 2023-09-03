@@ -118,10 +118,23 @@ Property: crate::ast::Property<Parsed> = {
 
 /// Parses a signature, this is a term that can be used as a type.
 Constructor: crate::ast::Constructor<Parsed> = {
-  <s: @L> "|" <name:Reference> ":" <type_repr:Term> <e: @R> => crate::ast::Constructor {
-    name,
-    type_repr: type_repr.into(),
-    meta: crate::ast::Location::new(s, e, filename, &unique),
+  <s: @L> "|" <name:Reference> ":" <type_repr:Term> <e: @R> => {
+    if name.text.chars().next().unwrap().is_lowercase() {
+      errors.push(lalrpop_util::ErrorRecovery {
+        dropped_tokens: vec![],
+        error: lalrpop_util::ParseError::User {
+          error: crate::passes::parser::InnerError::InvalidVariantCase {
+            err_span: name.meta.clone().into(),
+          }
+        },
+      });
+    }
+
+    crate::ast::Constructor {
+      name,
+      type_repr: type_repr.into(),
+      meta: crate::ast::Location::new(s, e, filename, &unique),
+    }
   },
 };
 

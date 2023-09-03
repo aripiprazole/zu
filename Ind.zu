@@ -4,8 +4,8 @@ module Ind
 /// or it's successor `Succ`, which takes the previous and returns the
 /// next natural number.
 inductive data Nat where
-| Zero : Nat
-| Succ : Nat -> Nat
+  Zero : Nat,
+  Succ : Nat -> Nat
 
 /// Defines a simple sum aritimetic function which sums with church
 /// encoding.
