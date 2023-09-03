@@ -6,8 +6,8 @@ use crate::erase::Lvl;
 use crate::erase::MetaHole;
 use crate::erase::Reference;
 use crate::nfe::Nfe;
+use crate::passes::elab::quote::Quote;
 use crate::passes::elab::Elab;
-use crate::passes::elab::Quote;
 use crate::passes::elab::Value;
 
 /// The context we need to pretty print a type right now.
