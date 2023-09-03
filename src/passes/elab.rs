@@ -168,8 +168,9 @@ impl Elab {
     }
   }
 
-  /// Increases the debruijin level of the context
-  pub fn increase_level(&self) -> Elab {
+  /// Lifts the debruijin level of the context, and increases
+  /// the level of the context by 1.
+  pub fn lift(&self) -> Elab {
     let mut new_ctx = self.clone();
     new_ctx.lvl += 1;
     new_ctx

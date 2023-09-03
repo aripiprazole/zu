@@ -95,7 +95,7 @@ impl<S: State<Meta = Empty>> Element<S> for Reference {
 
 /// Defines a debruijin index.
 #[derive(Default, Debug, Clone, Hash, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Lvl(usize);
+pub struct Lvl(pub usize);
 
 impl Lvl {
   /// Transforms a level into a debruijin index.

@@ -19,8 +19,60 @@ pub enum UnifyError {
   CantUnify(Nfe, Nfe),
 }
 
+/// Partial renaming from Γ to Δ. It does renames the variables
+/// from Γ to Δ.
+///
+/// It does returns a list of pairs of the variables that were
+/// renamed.
+pub struct PartialRenaming {
+  /// The size of domain Γ.
+  pub domain: Lvl,
+
+  /// The size of codomain Δ, that will be mapped from Γ.
+  pub codomain: Lvl,
+
+  /// The renaming function, that maps the variables from Γ to Δ.
+  pub renames: im_rc::HashMap<Lvl, Lvl>,
+}
+
+impl PartialRenaming {
+  /// Lifts a partial renaming over an extra bound variable.
+  ///
+  /// Given (σ : PartialRenaming Γ Δ),
+  ///   (lift σ : PartialRenaming (Γ, x : A[σ]) (Δ, x : A)).
+  pub fn lift(mut self) -> Self {
+    self.domain += 1;
+    self.codomain += 1;
+    self.renames.insert(self.codomain, self.domain);
+
+    self
+  }
+
+  /// invert : (Γ : Cxt) → (spine : Sub Δ Γ) → PartialRenaming Γ Δ@
+  pub fn invert(lvl: Lvl, spine: Spine) -> miette::Result<Self> {
+    let _ = lvl;
+    let _ = spine;
+    todo!()
+  }
+
+  /// Perform partial renaming on right-most term while searching the occurrences of
+  /// the variable to rename.
+  pub fn rename(self, m: MetaVar, value: Value) -> miette::Result<Expr> {
+    let _ = m;
+    let _ = value;
+    todo!()
+  }
+}
+
 /// SECTION: Pattern unification
-impl Value {}
+impl Value {
+  /// solve : (Γ : Cxt) → (spine : Sub Δ Γ) → (m : MetaVar) → (lvl : Lvl) → ()
+  pub fn solve(self, spine: Spine, m: MetaVar, lvl: Lvl) -> miette::Result<()> {
+    let _ = PartialRenaming::invert(lvl, spine)?;
+    let _ = pren.rename(m, self);
+    todo!()
+  }
+}
 
 /// SECTION: Forcing
 impl Value {
@@ -109,15 +161,15 @@ impl Value {
       // It does unifies the closures and the pi types.
       (Lam(_, v_a)         , Lam(_, v_b)) => {
         v_a.apply(Value::rigid(ctx.lvl))
-           .unify(v_b.apply(Value::rigid(ctx.lvl)), &ctx.increase_level())
+           .unify(v_b.apply(Value::rigid(ctx.lvl)), &ctx.lift())
       }
       (t                   ,   Lam(_, v)) => {
         t.apply(Value::rigid(ctx.lvl))
-         .unify(v.apply(Value::rigid(ctx.lvl)), &ctx.increase_level())
+         .unify(v.apply(Value::rigid(ctx.lvl)), &ctx.lift())
       }
       (Lam(_, v)           ,           t) => {
         v.apply(Value::rigid(ctx.lvl))
-         .unify(t.apply(Value::rigid(ctx.lvl)), &ctx.increase_level())
+         .unify(t.apply(Value::rigid(ctx.lvl)), &ctx.lift())
       }
 
       // Pi type unification, it does unifies the domain and the codomain
@@ -127,7 +179,7 @@ impl Value {
       (Value::Pi(_, i_a, box dom_a, cod_a) , Value::Pi(_, i_b, box dom_b, cod_b)) if i_a == i_b => {
         dom_a.unify(dom_b, ctx)?;
         cod_a.apply(Value::rigid(ctx.lvl))
-             .unify(cod_b.apply(Value::rigid(ctx.lvl)), &ctx.increase_level())
+             .unify(cod_b.apply(Value::rigid(ctx.lvl)), &ctx.lift())
       }
 
       // Unification of application spines or meta variables, it does unifies
@@ -143,11 +195,7 @@ impl Value {
       // It does require a solver function.
       //
       // TODO: Solve
-      (Flexible(m_a, sp_a) , _t) | (_t , Flexible(m_a, sp_a)) => {
-        let _ = (m_a, sp_a);
-
-        todo!("unification of meta variables")
-      }
+      (Flexible(m, sp) , t) | (t , Flexible(m, sp)) => t.solve(sp, m, ctx.lvl),
 
       // Fallback case which will cause an error if we can't unify
       // the values.
