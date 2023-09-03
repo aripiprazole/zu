@@ -1,6 +1,8 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
+use nonempty::NonEmpty;
+
 use crate::ast::state::State;
 use crate::ast::Anno;
 use crate::ast::Apply;
@@ -22,6 +24,9 @@ use crate::passes::elab::Elab;
 use crate::passes::elab::Value;
 use crate::passes::resolver::Resolved;
 
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Empty;
+
 /// Represents the resolved state, it's the state of the syntax tree when it's resolved.
 #[derive(Default, Debug, Clone, PartialEq)]
 pub struct Erased;
@@ -31,7 +36,7 @@ impl State for Erased {
   type Arguments = Box<Term<Self>>;
   type Definition = Definition<Erased>;
   type Import = !;
-  type Meta = ();
+  type Meta = Empty;
   type Parameters = Self::Definition;
   type Reference = Reference;
 }
@@ -82,9 +87,9 @@ pub enum Reference {
   MetaVar(MetaVar),
 }
 
-impl<S: State<Meta = ()>> Element<S> for Reference {
+impl<S: State<Meta = Empty>> Element<S> for Reference {
   fn meta(&self) -> &S::Meta {
-    &()
+    &Empty
   }
 }
 
@@ -147,16 +152,22 @@ impl<S: State<Meta = ()>> Element<S> for Ix {
 
 impl Pattern<Resolved> {
   /// Erase a term to a term in the untyped lambda calculus.
-  pub fn erase(self) -> crate::ast::Pattern<Erased> {
-    Pattern {
-      meta: (),
-      constructor: Reference::Var(Ix(0)),
-      arguments: self
-        .arguments
-        .into_iter()
-        .map(|argument| Definition::new(argument.text.clone()))
-        .collect(),
-    }
+  pub fn erase(self, ctx: &mut Elab) -> Box<crate::ast::Pattern<Erased>> {
+    Box::new(match self {
+      Pattern::Var(n, _) => Pattern::Var(Definition::new(n.text.clone()), Default::default()),
+      Pattern::Constructor(n, v, _) => Pattern::Constructor(
+        Definition::new(n.text.clone()),
+        v.into_iter()
+          .map(|pattern| {
+            ctx.lvl += 1;
+
+            *pattern.erase(ctx)
+          })
+          .collect(),
+        Default::default(),
+      ),
+      Pattern::Wildcard(_) => todo!(),
+    })
   }
 }
 
@@ -165,35 +176,49 @@ impl Term<Resolved> {
   pub fn erase(self, elab: &Elab) -> crate::ast::Term<Erased> {
     match self {
       Term::Group(_) => unreachable!(),
-      Term::Prim(u) => Term::Prim(Prim { kind: u.kind, meta: () }),
-      Term::Hole(_) => Term::Hole(Hole { meta: () }),
-      Term::Int(v) => Term::Int(Int { meta: (), ..v }),
-      Term::Str(v) => Term::Str(Str { meta: (), ..v }),
+      Term::Prim(u) => Term::Prim(Prim { kind: u.kind, meta: Default::default() }),
+      Term::Hole(_) => Term::Hole(Hole { meta: Default::default() }),
+      Term::Int(v) => Term::Int(Int { meta: Default::default(), ..v }),
+      Term::Str(v) => Term::Str(Str { meta: Default::default(), ..v }),
       Term::Error(v) => Term::Error(Error {
-        meta: (),
+        meta: Default::default(),
         full_text: v.full_text,
         message: v.message,
       }),
       Term::Anno(v) => Term::Anno(Anno {
-        meta: (),
+        meta: Default::default(),
         value: v.value.erase(elab).into(),
         type_repr: v.type_repr.erase(elab).into(),
       }),
       Term::Elim(elim) => Term::Elim(Elim {
-        meta: (),
-        scrutinee: elim.scrutinee.erase(elab).into(),
+        meta: Default::default(),
+        scrutinee: NonEmpty::from_vec(
+          elim
+            .scrutinee
+            .into_iter()
+            .map(|value| value.erase(elab).into())
+            .collect(),
+        )
+        .unwrap(),
         patterns: elim
           .patterns
           .into_iter()
-          .map(|pattern| Case {
-            meta: (),
-            pattern: pattern.pattern.erase(),
-            value: pattern.value.erase(elab).into(),
+          .map(|case| {
+            // Creates a new local environment for the case, that will increase the level of the
+            // environment.
+            let mut local = elab.clone();
+
+            Case {
+              meta: Default::default(),
+              pattern: NonEmpty::from_vec(case.pattern.into_iter().map(|value| value.erase(&mut local)).collect())
+                .unwrap(),
+              value: case.value.erase(&local).into(),
+            }
           })
           .collect(),
       }),
       Term::Fun(fun) => Term::Fun(Fun {
-        meta: (),
+        meta: Default::default(),
         arguments: Definition::new(fun.arguments.text.clone()),
         value: fun
           .value
@@ -205,17 +230,17 @@ impl Term<Resolved> {
         .into_iter()
         .fold(apply.callee.erase(elab), |acc, argument| {
           Term::Apply(Apply {
-            meta: (),
+            meta: Default::default(),
             callee: acc.into(),
             arguments: argument.erase(elab).into(),
           })
         }),
       Term::Pi(pi) => Term::Pi(Pi {
-        meta: (),
+        meta: Default::default(),
         icit: pi.icit,
         domain: Domain {
           icit: pi.domain.icit,
-          meta: (),
+          meta: Default::default(),
           type_repr: pi.domain.type_repr.erase(elab).into(),
           name: Definition::new(pi.domain.name.text.clone()),
         },

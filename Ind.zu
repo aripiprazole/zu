@@ -11,8 +11,8 @@ inductive data Nat where
 /// encoding.
 fun `+ : Nat -> Nat -> Nat = \a, b ->
   elim a of
-    Zero   => Zero,
-    Succ n => (Succ (n + b))
+    Zero     =>  Zero,
+    Succ (n) => (Succ (n + b))
 
 @eval Zero + (Succ Zero)
 @type Succ (Succ Zero)

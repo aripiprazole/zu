@@ -396,12 +396,12 @@ Factor: crate::ast::Term<Parsed> = {
   <s: @L> <value:Call> "." <name:Reference> <e: @R> => {
     // Report the error
     errors.push(lalrpop_util::ErrorRecovery {
-        dropped_tokens: vec![],
-        error: lalrpop_util::ParseError::User {
-            error: crate::passes::parser::InnerError::UnsupportedRecordIndex {
-                err_span: name.meta.into(),
-            }
-        },
+      dropped_tokens: vec![],
+      error: lalrpop_util::ParseError::User {
+        error: crate::passes::parser::InnerError::UnsupportedRecordIndex {
+          err_span: name.meta.into(),
+        }
+      },
     });
 
     // Return the default sentinel value for statements, which is an error.
@@ -539,19 +539,42 @@ Call: crate::ast::Term<Parsed> = {
   Apply,
 };
 
-SimplePattern: crate::ast::Pattern<Parsed> = {
-  <s: @L> <constructor:Reference> <arguments:Reference*> <e: @R> => crate::ast::Pattern {
-    constructor,
-    arguments,
-    meta: crate::ast::Location::new(s, e, filename, &unique),
+Arguments: Vec<crate::ast::Pattern<Parsed>> = {
+  "(" <arguments:Sep<",", Pattern>> ")" => arguments,
+};
+
+Pattern: crate::ast::Pattern<Parsed> = {
+  <s: @L> <constructor:Reference> <arguments:Arguments?> <e: @R> => match arguments {
+    // The case that the pattern is a variable and have arguments, like:
+    // some (x y z), it should be parsed as a constructor with arguments, but it
+    // will trigger an error
+    Some(arguments) if constructor.text.chars().next().unwrap().is_lowercase() => {
+      errors.push(lalrpop_util::ErrorRecovery {
+        dropped_tokens: vec![],
+        error: lalrpop_util::ParseError::User {
+          error: crate::passes::parser::InnerError::UnexpectedVariablePatternWithArguments {
+            err_span: constructor.meta.clone().into(),
+          }
+        },
+      });
+
+      crate::ast::Pattern::Constructor(constructor, arguments, crate::ast::Location::new(s, e, filename, &unique))
+    },
+    Some(arguments) => crate::ast::Pattern::Constructor(constructor, arguments, crate::ast::Location::new(s, e, filename, &unique)),
+    None if constructor.text.chars().next().unwrap().is_uppercase() => crate::ast::Pattern::Constructor(
+      constructor,
+      vec![],
+      crate::ast::Location::new(s, e, filename, &unique),
+    ),
+    None => crate::ast::Pattern::Var(constructor, crate::ast::Location::new(s, e, filename, &unique))
   },
 };
 
 /// Parses a case expression, this is a list of cases followed by a pipe and
 /// a value.
 Case: crate::ast::Case<Parsed> = {
-  <s: @L> <pattern:SimplePattern> "=>" <value:Call> <e: @R> => crate::ast::Case {
-    pattern,
+  <s: @L> <pattern:Sep1<",", Pattern>> "=>" <value:Call> <e: @R> => crate::ast::Case {
+    pattern: nonempty::NonEmpty::from_vec(pattern.into_iter().map(Box::new).collect()).unwrap(),
     value: value.into(),
     meta: crate::ast::Location::new(s, e, filename, &unique),
   },
@@ -564,14 +587,7 @@ Case: crate::ast::Case<Parsed> = {
     errors.push(error);
 
     crate::ast::Case {
-      pattern: crate::ast::Pattern {
-        constructor: crate::passes::parser::Reference {
-          text: "Error".to_string(),
-          meta: crate::ast::Location::new(s, e, filename, &unique),
-        },
-        arguments: vec![],
-        meta: crate::ast::Location::new(s, e, filename, &unique),
-      },
+      pattern: nonempty::nonempty![Box::new(crate::ast::Pattern::Wildcard(crate::ast::Location::new(s, e, filename, &unique)))],
       value: crate::ast::Term::Error(crate::ast::Error {
         message,
         full_text: (&input[s..e]).to_string(),
@@ -597,8 +613,8 @@ pub Term: crate::ast::Term<Parsed> = {
 
   /// Parses a elim expression, this is a list of cases followed by a pipe and
   /// a value.
-  <s: @L> "elim" <scrutinee:Term> "of" <cases:Sep<",", Case>> <e: @R> => crate::ast::Term::Elim(crate::ast::Elim {
-    scrutinee: scrutinee.into(),
+  <s: @L> "elim" <scrutinee:Sep1<"and", Term>> "of" <cases:Sep<",", Case>> <e: @R> => crate::ast::Term::Elim(crate::ast::Elim {
+    scrutinee: nonempty::NonEmpty::from_vec(scrutinee.into_iter().map(Box::new).collect()).unwrap(),
     patterns: cases,
     meta: crate::ast::Location::new(s, e, filename, &unique),
   }),
@@ -644,6 +660,13 @@ Reference: crate::passes::parser::Reference = {
     text: text.to_string(),
     meta: crate::ast::Location::new(s, e, filename, &unique),
   }
+};
+
+Sep1<U, T>: nonempty::NonEmpty<T> = {
+  <vec: Sep<U, T>> => match vec {
+    mut vec if vec.len() == 0 => panic!("expected at least one element"),
+    vec => nonempty::NonEmpty::from_vec(vec).unwrap(),
+  },
 };
 
 /// Separated by commas, this is used for function arguments. It's useful

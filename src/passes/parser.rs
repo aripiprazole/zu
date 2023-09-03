@@ -202,6 +202,39 @@ pub enum InnerError {
     err_span: SourceSpan,
   },
 
+  /// Invalid variant case. Where the variant case doesn't have a
+  /// capitalized name, or it's not a valid name.
+  ///
+  /// The names should be like: `String`, or `Int`, or `True`, or `False`.
+  ///
+  /// Names like: `a`, `something`, will be invalid, because they can be confused
+  /// with variables.
+  #[error("invalid variant case")]
+  #[diagnostic(code(zu::invalid_variant_case), url(docsrs), help("maybe capitalize the name"))]
+  InvalidVariantCase {
+    /// The name of the variant data. It's the span of the
+    /// name that will be pointed in the error message.
+    #[label = "here"]
+    err_span: SourceSpan,
+  },
+
+  /// The parser found an unexpected argument spine in a variable
+  /// pattern.
+  ///
+  /// It the pattern is a variable pattern, it can't have arguments.
+  #[error("invalid variant case")]
+  #[diagnostic(
+    code(zu::unexpected_variable_pattern_with_arguments),
+    url(docsrs),
+    help("maybe capitalize the name")
+  )]
+  UnexpectedVariablePatternWithArguments {
+    /// The name of the pattern data. It's the span of the
+    /// name that will be pointed in the error message.
+    #[label = "here"]
+    err_span: SourceSpan,
+  },
+
   /// The parser found a token that it doesn't recognize as valid. The
   /// typed token won't be recognized by the parser.
   #[error("invalid token")]

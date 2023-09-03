@@ -208,16 +208,13 @@ impl<S: state::State> Element<S> for Int<S> {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Pattern<S: state::State> {
   /// A variable pattern.
-  Var(Identifier<S>, S::Meta),
+  Var(S::Definition, S::Meta),
 
   /// A constructor pattern.
-  Constructor(Identifier<S>, Vec<Pattern<S>>, S::Meta),
+  Constructor(S::Definition, Vec<Pattern<S>>, S::Meta),
 
   /// A wildcard pattern.
   Wildcard(S::Meta),
-
-  /// A literal pattern.
-  Literal(Term<S>, S::Meta),
 }
 
 impl<S: state::State> Element<S> for Pattern<S> {
@@ -226,7 +223,6 @@ impl<S: state::State> Element<S> for Pattern<S> {
       Pattern::Var(_, meta) => meta,
       Pattern::Constructor(_, _, meta) => meta,
       Pattern::Wildcard(meta) => meta,
-      Pattern::Literal(_, meta) => meta,
     }
   }
 }
@@ -238,7 +234,7 @@ pub struct Case<S: state::State> {
   /// patterns at the same time.
   /// 
   /// It's just like: `Cons x xs`, `Cons x' xs'`. But never this place is empty.
-  pub pattern: NonEmpty<Pattern<S>>,
+  pub pattern: NonEmpty<Box<Pattern<S>>>,
   pub value: Box<Term<S>>,
   pub meta: S::Meta,
 }
@@ -259,7 +255,7 @@ pub struct Elim<S: state::State> {
   /// this is our way to pattern match tuples.
   /// 
   /// It's just like: `Cons x xs`, `Cons x' xs'`. But never this place is empty.
-  pub scrutinee: NonEmpty<Term<S>>,
+  pub scrutinee: NonEmpty<Box<Term<S>>>,
   pub patterns: Vec<Case<S>>,
   pub meta: S::Meta,
 }
