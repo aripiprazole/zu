@@ -146,8 +146,8 @@ fn program() -> miette::Result<()> {
 
   let command = Command::parse();
 
-  let mut elab = Elab::new(LoggerReporter);
   let resolver = Resolver::new(command.main, command.include)?;
+  let mut elab = Elab::new(resolver.files.clone(), LoggerReporter);
   let environment = Environment::default();
 
   // Resolve the file and import the declarations

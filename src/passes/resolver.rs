@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::rc::Rc;
 
 use fxhash::FxBuildHasher;
@@ -35,7 +34,7 @@ impl<S: state::State<Meta = Location>> Element<S> for Reference {
   }
 }
 
-type FileMap = HashMap<String, String>;
+pub type FileMap = im_rc::HashMap<String, String>;
 
 #[derive(thiserror::Error, miette::Diagnostic, Debug)]
 pub enum InnerError {
@@ -200,7 +199,7 @@ fn read_file(path: String, files: &mut FileMap) -> miette::Result<File<Parsed>> 
 impl Resolver {
   /// Creates and parses a new resolver.
   pub fn new(file: String, inputs: Vec<String>) -> miette::Result<Resolver> {
-    let mut files = HashMap::new();
+    let mut files = im_rc::HashMap::new();
     let file = read_file(file, &mut files)?;
     let mut inputs = inputs
       .into_iter()

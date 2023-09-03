@@ -3,6 +3,9 @@ use std::cell::RefCell;
 use std::fmt::Debug;
 use std::rc::Rc;
 
+use miette::NamedSource;
+
+use super::resolver::FileMap;
 use super::resolver::Resolved;
 use crate::ast::*;
 use crate::erase::*;
@@ -18,11 +21,11 @@ pub type Tm = Term<Resolved>;
 /// It's used to debug and build values.
 pub type Expr = crate::ast::Term<Erased>;
 
-pub mod unification;
-pub mod quote;
-pub mod nf;
 pub mod check;
+pub mod eval;
 pub mod infer;
+pub mod quote;
+pub mod unification;
 
 /// Module representation with type table and typed values
 pub struct Mod {
@@ -36,16 +39,26 @@ pub struct Declaration {
   pub value: Value,
 }
 
-#[derive(thiserror::Error, Debug)]
-#[error("type error: {}", error)]
-pub struct UnknownTypeError {
-  error: String,
+#[derive(thiserror::Error, miette::Diagnostic, Debug)]
+#[error("type error: {message}")]
+#[diagnostic(code(type_error), help("this type error is caused by a type mismatch"), url(docsrs))]
+pub struct TypeError {
+  message: String,
+
+  #[source_code]
+  source_code: miette::NamedSource,
+
+  #[label("this type")]
+  lhs_span: Option<miette::SourceSpan>,
+
+  #[label("with this")]
+  rhs_span: Option<miette::SourceSpan>,
 }
 
 pub type Spine = im_rc::Vector<Value>;
 
 /// Create a new spine normal form
-/// 
+///
 /// It does creates a new spine normal form from a value.
 pub fn unspine(value: Value, spine: Spine) -> Value {
   spine.into_iter().fold(value, |value, argument| value.apply(argument))
@@ -86,22 +99,6 @@ pub trait Reporter: Debug {
   fn check(&self, value: Nfe, location: Location) -> miette::Result<()>;
 }
 
-/// The context of the elaborator
-#[derive(Debug, Clone)]
-pub struct Elab {
-  pub lvl: Lvl,
-  pub env: Environment,
-  pub types: im_rc::Vector<(String, Value)>,
-  pub reporter: Rc<dyn Reporter>,
-  pub position: RefCell<crate::ast::Location>,
-  pub unique: Cell<usize>,
-
-  /// A map from the name of the declaration to the type of the declaration
-  ///
-  /// It's a simple type table, so we don't rewrite everything.
-  pub tt: RefCell<intmap::IntMap<Value>>,
-}
-
 /// Defines the type of a term, elaborated to a value
 ///
 /// The type of a term is a value, but the type of a value is a type.
@@ -119,6 +116,18 @@ pub enum Value {
 }
 
 impl Value {
+  /// Gets a source span to improve error handling
+  pub fn source_span(&self) -> Option<Location> {
+    match self.clone() {
+      Value::Flexible(ref m, ..) => match m.take() {
+        Some(value) => value.source_span(),
+        None => None,
+      },
+      Value::SrcPos(span, _) => Some(span),
+      _ => None,
+    }
+  }
+
   /// Creates a rigid variable without applications and a
   /// spine to it
   pub fn rigid(lvl: Lvl) -> Self {
@@ -155,9 +164,27 @@ impl Value {
   }
 }
 
+/// The context of the elaborator
+#[derive(Debug, Clone)]
+pub struct Elab {
+  pub lvl: Lvl,
+  pub env: Environment,
+  pub types: im_rc::Vector<(String, Value)>,
+  pub reporter: Rc<dyn Reporter>,
+  pub position: RefCell<crate::ast::Location>,
+  pub unique: Cell<usize>,
+  pub files: FileMap,
+
+  /// A map from the name of the declaration to the type of the declaration
+  ///
+  /// It's a simple type table, so we don't rewrite everything.
+  pub tt: RefCell<intmap::IntMap<Value>>,
+}
+
 impl Elab {
-  pub fn new<T: Reporter + 'static>(reporter: T) -> Self {
+  pub fn new<T: Reporter + 'static>(files: FileMap, reporter: T) -> Self {
     Self {
+      files,
       env: Default::default(),
       lvl: Default::default(),
       types: Default::default(),
@@ -226,9 +253,27 @@ impl Elab {
   #[inline(always)]
   pub fn unify(&self, lhs: Value, rhs: Value) {
     if let Err(err) = lhs.unify(rhs, self) {
-      // TODO: add to error lists
-      panic!("{err}");
+      let message = err.to_string();
+      let position = self.position();
+      let code = self.files.get(&position.filename).unwrap().clone();
+      let (lhs_span, rhs_span) = match err {
+        unification::UnifyError::MismatchBetweenInts(_, _) => (None, None),
+        unification::UnifyError::MismatchBetweenStrs(_, _) => (None, None),
+        unification::UnifyError::CantUnify(_, _, lhs, rhs) => (lhs.map(Into::into), rhs.map(Into::into)),
+      };
+
+      panic!("{}", TypeError {
+        message,
+        source_code: NamedSource::new(position.filename, code),
+        lhs_span,
+        rhs_span,
+      });
     }
+  }
+
+  /// Clones the position
+  pub fn position(&self) -> Location {
+    self.position.borrow().clone()
   }
 
   /// Creates a new fresh meta variable that hasn't been evaluated yet.

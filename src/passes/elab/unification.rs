@@ -16,7 +16,7 @@ pub enum UnifyError {
   /// Unification error between two types
   #[error("expected type {0}, got another {1}")]
   #[diagnostic(url(docsrs), code(unify::cant_unify))]
-  CantUnify(Nfe, Nfe),
+  CantUnify(Nfe, Nfe, Option<Location>, Option<Location>),
 }
 
 /// Partial renaming from Γ to Δ. It does renames the variables
@@ -49,7 +49,7 @@ impl PartialRenaming {
   }
 
   /// invert : (Γ : Cxt) → (spine : Sub Δ Γ) → PartialRenaming Γ Δ@
-  pub fn invert(lvl: Lvl, spine: Spine) -> miette::Result<Self> {
+  pub fn invert(lvl: Lvl, spine: Spine) -> miette::Result<Self, UnifyError> {
     let _ = lvl;
     let _ = spine;
     todo!()
@@ -57,7 +57,7 @@ impl PartialRenaming {
 
   /// Perform partial renaming on right-most term while searching the occurrences of
   /// the variable to rename.
-  pub fn rename(self, m: MetaVar, value: Value) -> miette::Result<Expr> {
+  pub fn rename(self, m: MetaVar, value: Value) -> miette::Result<Expr, UnifyError> {
     let _ = m;
     let _ = value;
     todo!()
@@ -67,7 +67,7 @@ impl PartialRenaming {
 /// SECTION: Pattern unification
 impl Value {
   /// solve : (Γ : Cxt) → (spine : Sub Δ Γ) → (m : MetaVar) → (lvl : Lvl) → ()
-  pub fn solve(self, spine: Spine, m: MetaVar, lvl: Lvl) -> miette::Result<()> {
+  pub fn solve(self, spine: Spine, m: MetaVar, lvl: Lvl) -> miette::Result<(), UnifyError> {
     // unsound
     m.update(self);
     let _ = spine;
@@ -120,7 +120,7 @@ impl Value {
   /// NOTE: I disabled the formatter so I can align values
   /// and it looks cutier.
   #[rustfmt::skip]
-  pub fn unify(self, rhs: Value, ctx: &Elab) -> miette::Result<()> {
+  pub fn unify(self, rhs: Value, ctx: &Elab) -> miette::Result<(), UnifyError> {
     /// Imports every stuff so we can't have a lot of
     /// `::` in the code blowing or mind.
     use Value::*;
@@ -131,7 +131,7 @@ impl Value {
     /// 
     /// It requires that the spines have the same length, and it does unifies
     /// the spines.
-    fn unify_sp(sp_a: Spine, sp_b: Spine, ctx: &Elab) -> miette::Result<()> {
+    fn unify_sp(sp_a: Spine, sp_b: Spine, ctx: &Elab) -> miette::Result<(), UnifyError> {
       assert!(sp_a.len() == sp_b.len(), "spines must have the same length");
 
       for (u_a, u_b) in sp_a.into_iter().zip(sp_b) {
@@ -140,6 +140,14 @@ impl Value {
 
       Ok(())
     }
+
+    // Debug locations for types, its useful to display better error messages
+    // to the final user of the language.
+    //
+    // Like if the type is hand-written, it will display the location of the
+    // type in the source code.
+    let lhs_location = self.source_span();
+    let rhs_location = rhs.source_span();
 
     // Forcing here is important because it does removes the holes created
     // by the elaborator, and it does returns a value without holes.
@@ -208,10 +216,7 @@ impl Value {
       //
       // It's the fallback of the fallbacks cases, the last error message
       // and the least meaningful.
-      (a   ,   b) if a == b => Ok(()),
-      (lhs , rhs)           => {
-        Err(CantUnify(lhs.show(ctx), rhs.show(ctx)))?
-      },
+      (lhs , rhs)           => Err(CantUnify(lhs.show(ctx), rhs.show(ctx), lhs_location, rhs_location))?,
     }
   }
 }
