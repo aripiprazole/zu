@@ -39,14 +39,25 @@ pub struct Declaration {
   pub value: Value,
 }
 
-#[derive(thiserror::Error, miette::Diagnostic, Debug)]
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+#[error("elaboration error")]
+#[diagnostic(code(elaboration_error), url(docsrs))]
+pub struct ElaborationError {
+  #[source_code]
+  source_code: miette::NamedSource,
+
+  #[related]
+  related: Vec<TypeError>,
+}
+
+#[derive(thiserror::Error, miette::Diagnostic, Debug, Clone)]
 #[error("type error: {message}")]
-#[diagnostic(code(type_error), help("this type error is caused by a type mismatch"), url(docsrs))]
+#[diagnostic(code(type_error), url(docsrs))]
 pub struct TypeError {
   message: String,
 
-  #[source_code]
-  source_code: miette::NamedSource,
+  #[label("here")]
+  span: miette::SourceSpan,
 
   #[label("this type")]
   lhs_span: Option<miette::SourceSpan>,
@@ -174,6 +185,7 @@ pub struct Elab {
   pub position: RefCell<crate::ast::Location>,
   pub unique: Cell<usize>,
   pub files: FileMap,
+  pub errors: RefCell<Vec<TypeError>>,
 
   /// A map from the name of the declaration to the type of the declaration
   ///
@@ -192,6 +204,7 @@ impl Elab {
       position: Default::default(),
       tt: Default::default(),
       unique: Default::default(),
+      errors: Default::default(),
     }
   }
 
@@ -237,6 +250,17 @@ impl Elab {
       }
     }
 
+    // Get the current file errors to report
+    let mut errors = self.errors.borrow_mut();
+    if !errors.is_empty() {
+      let position = file.meta;
+      let source_code = self.files.get(&position.filename).unwrap().clone();
+      return Err(ElaborationError {
+        source_code: NamedSource::new(position.filename, source_code),
+        related: errors.drain(..).collect(),
+      })?;
+    }
+
     Ok(Mod {
       name: file.name,
       declarations,
@@ -253,18 +277,17 @@ impl Elab {
   #[inline(always)]
   pub fn unify(&self, lhs: Value, rhs: Value) {
     if let Err(err) = lhs.unify(rhs, self) {
-      let message = err.to_string();
       let position = self.position();
-      let code = self.files.get(&position.filename).unwrap().clone();
+      let message = err.to_string();
       let (lhs_span, rhs_span) = match err {
         unification::UnifyError::MismatchBetweenInts(_, _) => (None, None),
         unification::UnifyError::MismatchBetweenStrs(_, _) => (None, None),
         unification::UnifyError::CantUnify(_, _, lhs, rhs) => (lhs.map(Into::into), rhs.map(Into::into)),
       };
 
-      panic!("{}", TypeError {
+      self.errors.borrow_mut().push(TypeError {
         message,
-        source_code: NamedSource::new(position.filename, code),
+        span: position.into(),
         lhs_span,
         rhs_span,
       });
