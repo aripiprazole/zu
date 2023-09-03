@@ -17,7 +17,7 @@ impl Elab {
       (t, expected) => {
         let inferred = self.infer(t);
         self.unify(expected.clone(), inferred.clone());
-        t.clone().erase(self)
+        expected.quote(self.lvl)
       }
     }
   }

@@ -68,9 +68,13 @@ impl PartialRenaming {
 impl Value {
   /// solve : (Γ : Cxt) → (spine : Sub Δ Γ) → (m : MetaVar) → (lvl : Lvl) → ()
   pub fn solve(self, spine: Spine, m: MetaVar, lvl: Lvl) -> miette::Result<()> {
-    let _ = PartialRenaming::invert(lvl, spine)?;
-    let _ = pren.rename(m, self);
-    todo!()
+    // unsound
+    m.update(self);
+    let _ = spine;
+    let _ = lvl;
+
+    // TODO: Make this thing sound
+    Ok(())
   }
 }
 

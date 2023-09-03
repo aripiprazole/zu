@@ -60,8 +60,7 @@ impl Elab {
                 }
               };
 
-              let u = ctx.check(&argument, domain);
-              codomain.apply(u.eval(&ctx.env))
+              codomain.apply(ctx.check(&argument, domain).eval(&ctx.env))
             })
         }
 
