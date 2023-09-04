@@ -6,6 +6,7 @@ use std::rc::Rc;
 
 use miette::NamedSource;
 
+use self::unification::UnifyError;
 use super::resolver::FileMap;
 use super::resolver::Resolved;
 use crate::ast::*;
@@ -51,28 +52,20 @@ pub struct ElaborationError {
   related: Vec<TypeError>,
 }
 
+/// Type error that can be reported to the user
 #[derive(thiserror::Error, miette::Diagnostic, Debug, Clone)]
-pub enum TypeError {
-  #[error("{message}")]
-  #[diagnostic(code(type_error), url(docsrs))]
-  TypeMismatch {
-    message: String,
+#[error("{message}")]
+#[diagnostic(code(type_error), url(docsrs))]
+pub struct TypeError {
+  message: UnifyError,
 
-    #[label("here")]
-    span: miette::SourceSpan,
-  },
+  /// The location that the error happened
+  #[label("here")]
+  span: miette::SourceSpan,
 
-  #[error("{message}")]
-  #[diagnostic(code(type_error), url(docsrs))]
-  HandwrittenTypeMismatch {
-    message: String,
-
-    #[label("here")]
-    span: miette::SourceSpan,
-
-    #[label("the type")]
-    type_span: Option<miette::SourceSpan>,
-  },
+  /// The location that may be have written the type.
+  #[label("the type")]
+  type_span: Option<miette::SourceSpan>,
 }
 
 #[derive(Default, Debug, Clone, PartialEq)]
@@ -311,16 +304,12 @@ impl Elab {
 
     if let Err(err) = lhs.unify(rhs, self) {
       let position = self.position();
-      let message = err.to_string();
-      self.errors.borrow_mut().push(match err {
-        CantUnify(_, _, lhs, _) => TypeError::HandwrittenTypeMismatch {
-          message,
-          span: position.into(),
-          type_span: lhs.or_none().map(Into::into),
-        },
-        _ => TypeError::TypeMismatch {
-          message,
-          span: position.into(),
+      self.errors.borrow_mut().push(TypeError {
+        message: err.clone(),
+        span: position.into(),
+        type_span: match err {
+          CantUnify(_, _, lhs, _) => lhs.or_none().map(Into::into),
+          _ => None,
         },
       });
     }
