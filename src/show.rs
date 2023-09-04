@@ -1,6 +1,6 @@
 use crate::ast::PrimKind;
 use crate::ast::Term;
-use crate::erase::Erased;
+use crate::erase::Quoted;
 use crate::erase::Ix;
 use crate::erase::Lvl;
 use crate::erase::MetaHole;
@@ -20,7 +20,7 @@ struct Show {
 }
 
 impl Show {
-  fn build(&self, term: Term<Erased>) -> Nfe {
+  fn build(&self, term: Term<Quoted>) -> Nfe {
     let _ = self.prec;
 
     match term {

@@ -1,6 +1,7 @@
 use std::cell::Cell;
 use std::cell::RefCell;
 use std::fmt::Debug;
+use std::ops::Deref;
 use std::rc::Rc;
 
 use miette::NamedSource;
@@ -19,7 +20,7 @@ pub type Tm = Term<Resolved>;
 /// The quoted version of [`Value`], but without locations, and closures
 ///
 /// It's used to debug and build values.
-pub type Expr = crate::ast::Term<Erased>;
+pub type Expr = crate::ast::Term<Quoted>;
 
 pub mod check;
 pub mod eval;
@@ -35,8 +36,8 @@ pub struct Mod {
 
 pub struct Declaration {
   pub name: String,
-  pub type_repr: Value,
-  pub value: Value,
+  pub type_repr: Type,
+  pub value: Type,
 }
 
 #[derive(Debug, thiserror::Error, miette::Diagnostic)]
@@ -51,38 +52,37 @@ pub struct ElaborationError {
 }
 
 #[derive(thiserror::Error, miette::Diagnostic, Debug, Clone)]
-#[error("type error: {message}")]
-#[diagnostic(code(type_error), url(docsrs))]
-pub struct TypeError {
-  message: String,
+pub enum TypeError {
+  #[error("{message}")]
+  #[diagnostic(code(type_error), url(docsrs))]
+  TypeMismatch {
+    message: String,
 
-  #[label("here")]
-  span: miette::SourceSpan,
+    #[label("here")]
+    span: miette::SourceSpan,
+  },
 
-  #[label("this type")]
-  lhs_span: Option<miette::SourceSpan>,
+  #[error("handwritten {message}")]
+  #[diagnostic(code(type_error), url(docsrs))]
+  HandwrittenTypeMismatch {
+    message: String,
 
-  #[label("with this")]
-  rhs_span: Option<miette::SourceSpan>,
-}
+    #[label("here")]
+    span: miette::SourceSpan,
 
-pub type Spine = im_rc::Vector<Value>;
-
-/// Create a new spine normal form
-///
-/// It does creates a new spine normal form from a value.
-pub fn unspine(value: Value, spine: Spine) -> Value {
-  spine.into_iter().fold(value, |value, argument| value.apply(argument))
+    #[label("the type")]
+    type_span: Option<miette::SourceSpan>,
+  },
 }
 
 #[derive(Default, Debug, Clone, PartialEq)]
 pub struct Environment {
-  pub data: im_rc::Vector<Value>,
+  pub data: im_rc::Vector<Type>,
 }
 
 impl Environment {
   /// Creates a new entry in the environment
-  pub fn create_new_value(&self, value: Value) -> Self {
+  pub fn create_new_value(&self, value: Type) -> Self {
     let mut data = self.data.clone();
     data.push_front(value);
     Self { data }
@@ -98,7 +98,7 @@ pub struct Closure {
 impl Closure {
   /// Binds a closure with a new environment with the
   /// given value.
-  pub fn apply(self, argument: Value) -> Value {
+  pub fn apply(self, argument: Type) -> Type {
     self.term.eval(&self.env.create_new_value(argument))
   }
 }
@@ -119,59 +119,81 @@ pub enum Value {
   Flexible(MetaVar, Spine),
   Rigid(Lvl, Spine),
   Lam(DefinitionRs, Closure),
-  Pi(DefinitionRs, Icit, Box<Value>, Closure),
+  Pi(DefinitionRs, Icit, Type, Closure),
   Int(isize),
-  Anno(Box<Value>, Box<Value>),
+  Anno(Type, Type),
   Str(String),
-  SrcPos(crate::ast::Location, Box<Value>),
 }
 
-impl Value {
-  /// Gets a source span to improve error handling
-  pub fn source_span(&self) -> Option<Location> {
-    match self.clone() {
-      Value::Flexible(ref m, ..) => match m.take() {
-        Some(value) => value.source_span(),
-        None => None,
-      },
-      Value::SrcPos(span, _) => Some(span),
-      _ => None,
-    }
+/// Type that holds all the information about a type, just like if
+/// it's handwritten, synthesized, etc.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Type(pub Box<Value>, pub Location);
+
+pub type Spine = im_rc::Vector<Type>;
+
+/// Create a new spine normal form
+///
+/// It does creates a new spine normal form from a value.
+pub fn unspine(value: Type, spine: Spine) -> Type {
+  spine.into_iter().fold(value, |value, argument| value.apply(argument))
+}
+
+impl Deref for Type {
+  type Target = Value;
+
+  fn deref(&self) -> &Self::Target {
+    &self.0
+  }
+}
+
+impl Type {
+  /// Creates a type without location
+  pub fn synthesized(value: Value) -> Self {
+    Self(Box::new(value), Default::default())
   }
 
+  /// Creates a new type with a value and a location
+  pub fn new(location: Location, value: Value) -> Self {
+    Self(Box::new(value), location)
+  }
+}
+
+impl Type {
   /// Creates a rigid variable without applications and a
   /// spine to it
   pub fn rigid(lvl: Lvl) -> Self {
-    Value::Rigid(lvl, Default::default())
+    Type::synthesized(Value::Rigid(lvl, Default::default()))
   }
 
   /// Creates a flexible variable without applications and a
   /// spine to it
   pub fn flexible(meta: MetaVar) -> Self {
-    Value::Flexible(meta, Default::default())
+    Type::synthesized(Value::Flexible(meta, Default::default()))
   }
 
   /// Function apply, it does applies a value to a value
   /// creating a new value.
-  pub fn apply(self, argument: Value) -> Self {
+  pub fn apply(self, argument: Type) -> Self {
     match self {
-      Value::Lam(_, closure) => closure.apply(argument),
-      Value::Flexible(meta, mut spine) => {
+      Type(box Value::Lam(_, closure), _) => closure.apply(argument),
+      Type(box Value::Flexible(meta, mut spine), location) => {
         spine.push_back(argument);
-        Value::Flexible(meta, spine)
+        Type::new(location, Value::Flexible(meta, spine))
       }
-      Value::Rigid(lvl, mut spine) => {
+      Type(box Value::Rigid(lvl, mut spine), location) => {
         spine.push_back(argument);
-        Value::Rigid(lvl, spine)
+        Type::new(location, Value::Rigid(lvl, spine))
       }
       _ => panic!("expected a function, got another value"),
     }
   }
 
   /// Creates a new pi type
-  pub fn pi(name: &str, domain: Value, codomain: Closure) -> Self {
+  pub fn pi(name: &str, domain: Type, codomain: Closure) -> Self {
     let name = Definition::new(name.to_string());
-    Value::Pi(name, Icit::Expl, domain.into(), codomain)
+
+    Type::synthesized(Value::Pi(name, Icit::Expl, domain, codomain))
   }
 }
 
@@ -180,7 +202,7 @@ impl Value {
 pub struct Elab {
   pub lvl: Lvl,
   pub env: Environment,
-  pub types: im_rc::Vector<(String, Value)>,
+  pub types: im_rc::Vector<(String, Type)>,
   pub reporter: Rc<dyn Reporter>,
   pub position: RefCell<crate::ast::Location>,
   pub unique: Cell<usize>,
@@ -190,7 +212,7 @@ pub struct Elab {
   /// A map from the name of the declaration to the type of the declaration
   ///
   /// It's a simple type table, so we don't rewrite everything.
-  pub tt: RefCell<intmap::IntMap<Value>>,
+  pub tt: RefCell<intmap::IntMap<Type>>,
 }
 
 impl Elab {
@@ -275,21 +297,22 @@ impl Elab {
   /// NOTE: I disabled the formatter so I can align values
   /// and it looks cutier.
   #[inline(always)]
-  pub fn unify(&self, lhs: Value, rhs: Value) {
+  pub fn unify(&self, lhs: Type, rhs: Type) {
+    use unification::UnifyError::*;
+
     if let Err(err) = lhs.unify(rhs, self) {
       let position = self.position();
       let message = err.to_string();
-      let (lhs_span, rhs_span) = match err {
-        unification::UnifyError::MismatchBetweenInts(_, _) => (None, None),
-        unification::UnifyError::MismatchBetweenStrs(_, _) => (None, None),
-        unification::UnifyError::CantUnify(_, _, lhs, rhs) => (lhs.map(Into::into), rhs.map(Into::into)),
-      };
-
-      self.errors.borrow_mut().push(TypeError {
-        message,
-        span: position.into(),
-        lhs_span,
-        rhs_span,
+      self.errors.borrow_mut().push(match err {
+        CantUnify(_, _, lhs, _) => TypeError::HandwrittenTypeMismatch {
+          message,
+          span: position.into(),
+          type_span: lhs.or_none().map(Into::into),
+        },
+        _ => TypeError::TypeMismatch {
+          message,
+          span: position.into(),
+        },
       });
     }
   }
@@ -307,9 +330,9 @@ impl Elab {
   }
 
   /// Binds a new value in the context.
-  pub fn create_new_value(&self, name: &str, value: Value) -> Self {
+  pub fn create_new_value(&self, name: &str, value: Type) -> Self {
     let mut data = self.clone();
-    data.env = data.env.create_new_value(Value::rigid(data.lvl));
+    data.env = data.env.create_new_value(Type::rigid(data.lvl));
     data.types = data
       .types
       .clone()

@@ -3,37 +3,19 @@ use std::rc::Rc;
 
 use nonempty::NonEmpty;
 
-use crate::ast::SYNTHESIZED;
-use crate::ast::state::State;
-use crate::ast::Anno;
-use crate::ast::Apply;
-use crate::ast::Case;
-use crate::ast::Definition;
-use crate::ast::Domain;
-use crate::ast::Element;
-use crate::ast::Elim;
-use crate::ast::Error;
-use crate::ast::Fun;
-use crate::ast::Hole;
-use crate::ast::Int;
-use crate::ast::Location;
-use crate::ast::Pattern;
-use crate::ast::Pi;
-use crate::ast::Prim;
-use crate::ast::Str;
-use crate::ast::Term;
+use crate::ast::*;
 use crate::passes::elab::Elab;
-use crate::passes::elab::Value;
+use crate::passes::elab::Type;
 use crate::passes::resolver::Resolved;
 
 /// Represents the resolved state, it's the state of the syntax tree when it's resolved.
 #[derive(Default, Debug, Clone, PartialEq)]
-pub struct Erased;
+pub struct Quoted;
 
-impl State for Erased {
+impl State for Quoted {
   type Anno = Anno<Self>;
   type Arguments = Box<Term<Self>>;
-  type Definition = Definition<Erased>;
+  type Definition = Definition<Quoted>;
   type Import = !;
   type Parameters = Self::Definition;
   type Reference = Reference;
@@ -41,7 +23,7 @@ impl State for Erased {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum MetaHole {
-  Defined(Value),
+  Defined(Type),
   Nothing(Lvl),
 }
 
@@ -59,11 +41,11 @@ impl MetaVar {
     Self(Rc::new(RefCell::new(MetaHole::Nothing(elab.lvl))))
   }
 
-  pub fn new(value: Value) -> Self {
+  pub fn new(value: Type) -> Self {
     Self(Rc::new(RefCell::new(MetaHole::Defined(value))))
   }
 
-  pub fn update(&self, value: Value) {
+  pub fn update(&self, value: Type) {
     *self.0.borrow_mut() = MetaHole::Defined(value)
   }
 
@@ -71,7 +53,7 @@ impl MetaVar {
     self.0.borrow().clone()
   }
 
-  pub fn take(&self) -> Option<Value> {
+  pub fn take(&self) -> Option<Type> {
     match &*self.0.borrow() {
       MetaHole::Defined(value) => value.clone().into(),
       MetaHole::Nothing(_) => None,
@@ -144,7 +126,7 @@ impl std::ops::AddAssign<usize> for Ix {
 
 impl Pattern<Resolved> {
   /// Erase a term to a term in the untyped lambda calculus.
-  pub fn erase(self, ctx: &mut Elab) -> Box<crate::ast::Pattern<Erased>> {
+  pub fn erase(self, ctx: &mut Elab) -> Box<crate::ast::Pattern<Quoted>> {
     Box::new(match self {
       Pattern::Var(n, _) => Pattern::Var(Definition::new(n.text.clone()), Default::default()),
       Pattern::Constructor(n, v, _) => Pattern::Constructor(
@@ -165,7 +147,7 @@ impl Pattern<Resolved> {
 
 impl Term<Resolved> {
   /// Erase a term to a term in the untyped lambda calculus.
-  pub fn erase(self, elab: &Elab) -> crate::ast::Term<Erased> {
+  pub fn erase(self, elab: &Elab) -> crate::ast::Term<Quoted> {
     match self {
       Term::Group(_) => unreachable!(),
       Term::Prim(u) => Term::Prim(Prim { ..u }),

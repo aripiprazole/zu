@@ -1,3 +1,4 @@
+use super::Type;
 use super::*;
 
 #[derive(miette::Diagnostic, thiserror::Error, Debug, Clone, PartialEq)]
@@ -16,7 +17,7 @@ pub enum UnifyError {
   /// Unification error between two types
   #[error("expected type {0}, got another {1}")]
   #[diagnostic(url(docsrs), code(unify::cant_unify))]
-  CantUnify(Nfe, Nfe, Option<Location>, Option<Location>),
+  CantUnify(Nfe, Nfe, Location, Location),
 }
 
 /// Partial renaming from Γ to Δ. It does renames the variables
@@ -44,7 +45,6 @@ impl PartialRenaming {
     self.domain += 1;
     self.codomain += 1;
     self.renames.insert(self.codomain, self.domain);
-
     self
   }
 
@@ -57,7 +57,7 @@ impl PartialRenaming {
 
   /// Perform partial renaming on right-most term while searching the occurrences of
   /// the variable to rename.
-  pub fn rename(self, m: MetaVar, value: Value) -> miette::Result<Expr, UnifyError> {
+  pub fn rename(self, m: MetaVar, value: Type) -> miette::Result<Expr, UnifyError> {
     let _ = m;
     let _ = value;
     todo!()
@@ -65,7 +65,7 @@ impl PartialRenaming {
 }
 
 /// SECTION: Pattern unification
-impl Value {
+impl Type {
   /// solve : (Γ : Cxt) → (spine : Sub Δ Γ) → (m : MetaVar) → (lvl : Lvl) → ()
   pub fn solve(self, spine: Spine, m: MetaVar, lvl: Lvl) -> miette::Result<(), UnifyError> {
     // unsound
@@ -79,25 +79,24 @@ impl Value {
 }
 
 /// SECTION: Forcing
-impl Value {
+impl Type {
   /// Forcing is important because it does removes the holes created
   /// by the elaborator.
   ///
   /// It does returns a value without holes.
-  pub fn force(self) -> Self {
-    match self {
+  pub fn force(self) -> Type {
+    Type::new(self.1.clone(), match *self.0 {
       Value::Flexible(ref m, ref spine) => match m.take() {
-        Some(value) => unspine(value, spine.clone()),
-        None => self.clone(),
+        Some(value) => *unspine(value, spine.clone()).0,
+        None => *self.clone().0,
       },
-      Value::SrcPos(_, box value) => value,
-      _ => self,
-    }
+      _ => *self.0,
+    })
   }
 }
 
 /// SECTION: Basic unification
-impl Value {
+impl Type {
   /// Performs unification between two values, its a
   /// equality relation between two values.
   ///
@@ -120,7 +119,7 @@ impl Value {
   /// NOTE: I disabled the formatter so I can align values
   /// and it looks cutier.
   #[rustfmt::skip]
-  pub fn unify(self, rhs: Value, ctx: &Elab) -> miette::Result<(), UnifyError> {
+  pub fn unify(self, rhs: Type, ctx: &Elab) -> miette::Result<(), UnifyError> {
     /// Imports every stuff so we can't have a lot of
     /// `::` in the code blowing or mind.
     use Value::*;
@@ -141,14 +140,6 @@ impl Value {
       Ok(())
     }
 
-    // Debug locations for types, its useful to display better error messages
-    // to the final user of the language.
-    //
-    // Like if the type is hand-written, it will display the location of the
-    // type in the source code.
-    let lhs_location = self.source_span();
-    let rhs_location = rhs.source_span();
-
     // Forcing here is important because it does removes the holes created
     // by the elaborator, and it does returns a value without holes.
     //
@@ -158,50 +149,50 @@ impl Value {
     match (self.force(), rhs.force()) {
       // Type universe unification is always true, because
       // we don't have universe polymorphism.
-      (Prim(PrimKind::Int)      ,      Prim(PrimKind::Int)) => Ok(()),
-      (Prim(PrimKind::String)   ,   Prim(PrimKind::String)) => Ok(()),
-      (Prim(PrimKind::Universe) , Prim(PrimKind::Universe)) => Ok(()),
+      (Type(box Prim(PrimKind::Int), _)      ,      Type(box Prim(PrimKind::Int), _)) => Ok(()),
+      (Type(box Prim(PrimKind::String), _)   ,   Type(box Prim(PrimKind::String), _)) => Ok(()),
+      (Type(box Prim(PrimKind::Universe), _) , Type(box Prim(PrimKind::Universe), _)) => Ok(()),
 
       // Unification of literal values, it does checks if the values are equal
       // directly. If they are not, it does returns an error.
-      (Int(v_a)            , Int(v_b)) if v_a == v_b => Ok(()), // 1 = 1, 2 = 2, etc...
-      (Str(v_a)            , Str(v_b)) if v_a == v_b => Ok(()), // "a" = "a", "b" = "b", etc...
-      (Int(v_a)            , Int(v_b))               => Err(MismatchBetweenInts(v_a, v_b))?,
-      (Str(v_a)            , Str(v_b))               => Err(MismatchBetweenStrs(v_a, v_b))?,
+      (Type(box Int(v_a), _)            , Type(box Int(v_b), _)) if v_a == v_b => Ok(()), // 1 = 1, 2 = 2, etc...
+      (Type(box Str(v_a), _)            , Type(box Str(v_b), _)) if v_a == v_b => Ok(()), // "a" = "a", "b" = "b", etc...
+      (Type(box Int(v_a), _)            , Type(box Int(v_b), _))               => Err(MismatchBetweenInts(v_a, v_b))?,
+      (Type(box Str(v_a), _)            , Type(box Str(v_b), _))               => Err(MismatchBetweenStrs(v_a, v_b))?,
 
       // Lambda unification, that applies closures and pi types
       // using the spine of applications.
       //
       // It does unifies the closures and the pi types.
-      (Lam(_, v_a)         , Lam(_, v_b)) => {
-        v_a.apply(Value::rigid(ctx.lvl))
-           .unify(v_b.apply(Value::rigid(ctx.lvl)), &ctx.lift())
+      (Type(box Lam(_, v_a), _)         , Type(box Lam(_, v_b), _)) => {
+        v_a.apply(Type::rigid(ctx.lvl))
+           .unify(v_b.apply(Type::rigid(ctx.lvl)), &ctx.lift())
       }
-      (t                   ,   Lam(_, v)) => {
-        t.apply(Value::rigid(ctx.lvl))
-         .unify(v.apply(Value::rigid(ctx.lvl)), &ctx.lift())
+      (t                                ,   Type(box Lam(_, v), _)) => {
+        t.apply(Type::rigid(ctx.lvl))
+         .unify(v.apply(Type::rigid(ctx.lvl)), &ctx.lift())
       }
-      (Lam(_, v)           ,           t) => {
-        v.apply(Value::rigid(ctx.lvl))
-         .unify(t.apply(Value::rigid(ctx.lvl)), &ctx.lift())
+      (Type(box Lam(_, v), _)           ,           t) => {
+        v.apply(Type::rigid(ctx.lvl))
+         .unify(t.apply(Type::rigid(ctx.lvl)), &ctx.lift())
       }
 
       // Pi type unification, it does unifies the domain and the codomain
       // of the pi types.
       //
       // NOTE: cod stands for codomain, and dom stands for domain.
-      (Value::Pi(_, i_a, box dom_a, cod_a) , Value::Pi(_, i_b, box dom_b, cod_b)) if i_a == i_b => {
+      (Type(box Value::Pi(_, i_a, dom_a, cod_a), _) , Type(box Value::Pi(_, i_b, dom_b, cod_b), _)) if i_a == i_b => {
         dom_a.unify(dom_b, ctx)?;
-        cod_a.apply(Value::rigid(ctx.lvl))
-             .unify(cod_b.apply(Value::rigid(ctx.lvl)), &ctx.lift())
+        cod_a.apply(Type::rigid(ctx.lvl))
+             .unify(cod_b.apply(Type::rigid(ctx.lvl)), &ctx.lift())
       }
 
       // Unification of application spines or meta variables, it does unifies
       // flexibles, rigids and meta variable's spines.
       //
       // It does unifies the spines of the applications.
-      (Flexible(m_a, sp_a) , Flexible(m_b, sp_b)) if m_a == m_b => unify_sp(sp_a, sp_b, ctx),
-      (Rigid(m_a, sp_a)    ,    Rigid(m_b, sp_b)) if m_a == m_b => unify_sp(sp_a, sp_b, ctx),
+      (Type(box Flexible(m_a, sp_a), _) , Type(box Flexible(m_b, sp_b), _)) if m_a == m_b => unify_sp(sp_a, sp_b, ctx),
+      (Type(box Rigid(m_a, sp_a)   , _) ,    Type(box Rigid(m_b, sp_b), _)) if m_a == m_b => unify_sp(sp_a, sp_b, ctx),
 
       // Unification of meta variables, it does unifies meta variables that
       // are present in the context.
@@ -209,14 +200,20 @@ impl Value {
       // It does require a solver function.
       //
       // TODO: Solve
-      (Flexible(m, sp) , t) | (t , Flexible(m, sp)) => t.solve(sp, m, ctx.lvl),
+      (Type(box Flexible(m, sp), _) , t) | (t , Type(box Flexible(m, sp), _)) => t.solve(sp, m, ctx.lvl),
 
       // Fallback case which will cause an error if we can't unify
       // the values.
       //
       // It's the fallback of the fallbacks cases, the last error message
       // and the least meaningful.
-      (lhs , rhs)           => Err(CantUnify(lhs.show(ctx), rhs.show(ctx), lhs_location, rhs_location))?,
+      //
+      // Debug locations for types, its useful to display better error messages
+      // to the final user of the language.
+      //
+      // Like if the type is hand-written, it will display the location of the
+      // type in the source code.
+      (lhs , rhs) => Err(CantUnify(lhs.show(ctx), rhs.show(ctx), lhs.1, rhs.1))?,
     }
   }
 }

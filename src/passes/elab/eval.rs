@@ -1,32 +1,32 @@
 use super::*;
+use crate::passes::elab::Type;
 
 impl Expr {
   /// Evaluates a value to a value in the WHNF.
   ///
   /// It does performs reductions.
-  pub fn eval(self, env: &Environment) -> Value {
+  pub fn eval(self, env: &Environment) -> Type {
     use crate::ast::Term::*;
 
     /// Evaluates an application
-    fn app(callee: Value, value: Value) -> Value {
+    fn app(callee: Type, value: Type) -> Type {
       match callee {
-        Value::Lam(_, lam) => lam.apply(value),
-        Value::Flexible(meta, mut spine) => {
+        Type(box Value::Lam(_, lam), _) => lam.apply(value),
+        Type(box Value::Flexible(meta, mut spine), location) => {
           spine.push_back(value);
 
-          Value::Flexible(meta, spine)
+          Type::new(location, Value::Flexible(meta, spine))
         }
-        Value::Rigid(lvl, mut spine) => {
+        Type(box Value::Rigid(lvl, mut spine), location) => {
           spine.push_back(value);
 
-          Value::Rigid(lvl, spine)
+          Type::new(location, Value::Rigid(lvl, spine))
         }
         _ => unreachable!(),
       }
     }
 
-    let location = self.meta().clone();
-    let mut value = match self {
+    Type::new(self.meta().clone(), match self {
       // Removed
       Error(_) => unreachable!(),
       Hole(_) => unreachable!(),
@@ -41,17 +41,17 @@ impl Expr {
         env: env.clone(),
         term: *e.value,
       }),
-      Apply(e) => app(e.callee.eval(env), e.arguments.eval(env)),
-      Reference(crate::erase::Reference::Var(Ix(ix))) => env.data[ix].clone(), /* TODO: HANDLE ERROR */
+      Apply(e) => return app(e.callee.eval(env), e.arguments.eval(env)),
+      Reference(crate::erase::Reference::Var(Ix(ix))) => return env.data[ix].clone(),
       Reference(crate::erase::Reference::MetaVar(meta)) => match meta.take() {
-        Some(value) => value,
-        None => Value::flexible(meta),
+        Some(value) => return value,
+        None => return Type::flexible(meta),
       },
       Anno(anno) => {
         let value = anno.value.eval(env);
         let type_repr = anno.type_repr.eval(env);
 
-        Value::Anno(value.into(), type_repr.into())
+        Value::Anno(value, type_repr)
       }
       Pi(pi) => {
         let name = Definition::new(pi.domain.name.text);
@@ -61,13 +61,8 @@ impl Expr {
           term: *pi.codomain,
         };
 
-        Value::Pi(name, pi.domain.icit, domain.into(), codomain)
+        Value::Pi(name, pi.domain.icit, domain, codomain)
       }
-    };
-    // Add a source code position to the value
-    if !location.is_synthesized {
-      value = Value::SrcPos(location, value.into());
-    }
-    value
+    })
   }
 }

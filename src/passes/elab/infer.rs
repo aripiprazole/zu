@@ -1,15 +1,17 @@
+use crate::passes::elab::Type;
+
 use super::*;
 
 impl Elab {
   /// Creates a new type elaborating it into a new
   /// value.
-  pub fn infer(&self, term: &Tm) -> Value {
+  pub fn infer(&self, term: &Tm) -> Type {
     /// Infers the type of a term in the context of the environment
     ///
     /// It does returns the type of the term.
     #[inline(always)]
-    fn imp(ctx: &Elab, term: &Tm) -> Value {
-      match term {
+    fn imp(ctx: &Elab, term: &Tm) -> Type {
+      Type::synthesized(match term {
         // Removed
         Term::Group(_) => unreachable!(),
 
@@ -17,13 +19,13 @@ impl Elab {
         Term::Int(_) => Value::Prim(PrimKind::Int),
         Term::Str(_) => Value::Prim(PrimKind::String),
         Term::Prim(_) => Value::Prim(PrimKind::Universe), // Type of type
-        Term::Hole(_) | Term::Error(_) => ctx.fresh_meta().eval(&ctx.env),
+        Term::Hole(_) | Term::Error(_) => return ctx.fresh_meta().eval(&ctx.env),
         Term::Fun(e) => {
           let name = Definition::new(e.arguments.text.clone());
           let domain = ctx.fresh_meta().eval(&ctx.env);
           let codomain = ctx.create_new_value(&name.text, domain.clone()).infer(&e.value);
 
-          Value::Pi(name, Icit::Expl, domain.clone().into(), Closure {
+          Value::Pi(name, Icit::Expl, domain.clone(), Closure {
             env: ctx.env.clone(),
 
             // Here we need to increase the level, because we are binding
@@ -38,7 +40,7 @@ impl Elab {
         Term::Apply(apply) => {
           let callee = ctx.infer(&apply.callee);
 
-          apply
+          return apply
             .arguments
             .iter()
             .cloned()
@@ -46,7 +48,7 @@ impl Elab {
             // and then applies the spine to the callee.
             .fold(callee, |callee, argument| {
               let (domain, codomain) = match callee.force() {
-                Value::Pi(_, _, box tt, closure) => (tt, closure),
+                Type(box Value::Pi(_, _, tt, closure), _) => (tt, closure),
                 value => {
                   let tt = ctx.fresh_meta().eval(&ctx.env);
                   let closure = Closure {
@@ -54,7 +56,7 @@ impl Elab {
                     term: ctx.create_new_value("x", tt.clone()).fresh_meta(),
                   };
 
-                  ctx.unify(Value::pi("x", tt.clone(), closure.clone()), value);
+                  ctx.unify(Type::pi("x", tt.clone(), closure.clone()), value);
 
                   (tt, closure)
                 }
@@ -87,14 +89,14 @@ impl Elab {
           // TODO: Report error
           // Gets the value from the environment and clones it to avoid
           // borrowing the environment.
-          ctx.env.data[ix].clone()
+          return ctx.env.data[ix].clone()
         }
 
         // Type check annotation, it does only checks the type of the
         // annotation, and returns the value of the annotation.
         //
         // It changes the mode of type checking, from inferring to checking.
-        Term::Anno(anno) => ctx
+        Term::Anno(anno) => return ctx
           .check(&anno.value, anno.type_repr.clone().erase(ctx).eval(&ctx.env))
           .eval(&ctx.env),
 
@@ -108,9 +110,9 @@ impl Elab {
             term: pi.codomain.clone().erase(ctx),
           };
 
-          Value::Pi(name, pi.domain.icit, domain.into(), codomain)
+          Value::Pi(name, pi.domain.icit, domain, codomain)
         }
-      }
+      })
     }
 
     let meta = term.meta();

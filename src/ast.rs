@@ -111,6 +111,17 @@ pub struct Location {
   pub is_synthesized: bool,
 }
 
+impl Location {
+  /// Returns the location if it's not synthesized.
+  pub fn or_none(self) -> Option<Location> {
+    if self.is_synthesized {
+      None
+    } else {
+      Some(self)
+    }
+  }
+}
+
 impl Default for Location {
   fn default() -> Self {
     Self {

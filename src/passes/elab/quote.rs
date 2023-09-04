@@ -1,12 +1,12 @@
-use super::*;
+use super::{*, Type};
 
 pub trait Quote {
   /// Quote a value to an expression
-  fn quote(self, nth: Lvl) -> Expr;
+  fn quote(&self, nth: Lvl) -> Expr;
 }
 
 impl Quote for Value {
-  fn quote(self, nth: Lvl) -> Expr {
+  fn quote(&self, nth: Lvl) -> Expr {
     /// Applies quoting for a spine of applications in
     /// a term.
     fn quote_sp(sp: Spine, term: Expr, nth: Lvl) -> Expr {
@@ -25,7 +25,7 @@ impl Quote for Value {
       })
     }
 
-    match self {
+    match self.clone() {
       Value::Flexible(meta, sp) => quote_sp(sp, Expr::Reference(crate::erase::Reference::MetaVar(meta)), nth),
       Value::Rigid(lvl, sp) => quote_sp(sp, Expr::Reference(crate::erase::Reference::Var(nth.into_ix(lvl))), nth),
       Value::Prim(kind) => Expr::Prim(Prim {
@@ -42,7 +42,7 @@ impl Quote for Value {
       }),
       Value::Lam(name, closure) => Expr::Fun(Fun {
         arguments: Definition::new(name.text),
-        value: closure.apply(Value::rigid(nth)).quote(nth + 1).into(),
+        value: closure.apply(Type::rigid(nth)).quote(nth + 1).into(),
         meta: Default::default(),
       }),
       Value::Pi(name, icit, domain, codomain) => Expr::Pi(Pi {
@@ -53,7 +53,7 @@ impl Quote for Value {
           icit,
           meta: Default::default(),
         },
-        codomain: codomain.apply(Value::rigid(nth)).quote(nth + 1).into(),
+        codomain: codomain.apply(Type::rigid(nth)).quote(nth + 1).into(),
         meta: Default::default(),
       }),
       Value::Anno(value, type_repr) => Expr::Anno(Anno {
@@ -61,7 +61,6 @@ impl Quote for Value {
         type_repr: type_repr.quote(nth).into(),
         meta: Default::default(),
       }),
-      Value::SrcPos(_, box value) => value.quote(nth),
     }
   }
 }
