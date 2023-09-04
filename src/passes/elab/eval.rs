@@ -11,22 +11,22 @@ impl Expr {
     /// Evaluates an application
     fn app(callee: Type, value: Type) -> Type {
       match callee {
-        Type(box Value::Lam(_, lam), _) => lam.apply(value),
-        Type(box Value::Flexible(meta, mut spine), location) => {
+        Type(_, Value::Lam(_, lam)) => lam.apply(value),
+        Type(location, Value::Flexible(meta, mut spine)) => {
           spine.push_back(value);
 
-          Type::new(location, Value::Flexible(meta, spine))
+          Type(location, Value::Flexible(meta, spine))
         }
-        Type(box Value::Rigid(lvl, mut spine), location) => {
+        Type(location, Value::Rigid(lvl, mut spine)) => {
           spine.push_back(value);
 
-          Type::new(location, Value::Rigid(lvl, spine))
+          Type(location, Value::Rigid(lvl, spine))
         }
         _ => unreachable!(),
       }
     }
 
-    Type::new(self.meta().clone(), match self {
+    Type(self.meta().clone(), match self {
       // Removed
       Error(_) => unreachable!(),
       Hole(_) => unreachable!(),
@@ -51,7 +51,7 @@ impl Expr {
         let value = anno.value.eval(env);
         let type_repr = anno.type_repr.eval(env);
 
-        Value::Anno(value, type_repr)
+        Value::Anno(value.into(), type_repr.into())
       }
       Pi(pi) => {
         let name = Definition::new(pi.domain.name.text);
@@ -61,7 +61,7 @@ impl Expr {
           term: *pi.codomain,
         };
 
-        Value::Pi(name, pi.domain.icit, domain, codomain)
+        Value::Pi(name, pi.domain.icit, domain.into(), codomain)
       }
     })
   }

@@ -119,16 +119,30 @@ pub enum Value {
   Flexible(MetaVar, Spine),
   Rigid(Lvl, Spine),
   Lam(DefinitionRs, Closure),
-  Pi(DefinitionRs, Icit, Type, Closure),
+  Pi(DefinitionRs, Icit, Box<Type>, Closure),
   Int(isize),
-  Anno(Type, Type),
+  Anno(Box<Type>, Box<Type>),
   Str(String),
 }
 
 /// Type that holds all the information about a type, just like if
 /// it's handwritten, synthesized, etc.
 #[derive(Debug, Clone, PartialEq)]
-pub struct Type(pub Box<Value>, pub Location);
+pub struct Type(pub Location, pub Value);
+
+impl Type {
+  /// Gets the location of type
+  #[inline(always)]
+  pub fn location(&self) -> Location {
+    self.0.clone()
+  }
+
+  /// Gets the value of the type
+  #[inline(always)]
+  pub fn value(&self) -> Value {
+    self.1.clone()
+  }
+}
 
 pub type Spine = im_rc::Vector<Type>;
 
@@ -143,19 +157,14 @@ impl Deref for Type {
   type Target = Value;
 
   fn deref(&self) -> &Self::Target {
-    &self.0
+    &self.1
   }
 }
 
 impl Type {
   /// Creates a type without location
   pub fn synthesized(value: Value) -> Self {
-    Self(Box::new(value), Default::default())
-  }
-
-  /// Creates a new type with a value and a location
-  pub fn new(location: Location, value: Value) -> Self {
-    Self(Box::new(value), location)
+    Self(SYNTHESIZED.clone(), value)
   }
 }
 
@@ -176,14 +185,14 @@ impl Type {
   /// creating a new value.
   pub fn apply(self, argument: Type) -> Self {
     match self {
-      Type(box Value::Lam(_, closure), _) => closure.apply(argument),
-      Type(box Value::Flexible(meta, mut spine), location) => {
+      Type(_, Value::Lam(_, closure)) => closure.apply(argument),
+      Type(location, Value::Flexible(meta, mut spine)) => {
         spine.push_back(argument);
-        Type::new(location, Value::Flexible(meta, spine))
+        Type(location, Value::Flexible(meta, spine))
       }
-      Type(box Value::Rigid(lvl, mut spine), location) => {
+      Type(location, Value::Rigid(lvl, mut spine)) => {
         spine.push_back(argument);
-        Type::new(location, Value::Rigid(lvl, spine))
+        Type(location, Value::Rigid(lvl, spine))
       }
       _ => panic!("expected a function, got another value"),
     }
@@ -193,7 +202,7 @@ impl Type {
   pub fn pi(name: &str, domain: Type, codomain: Closure) -> Self {
     let name = Definition::new(name.to_string());
 
-    Type::synthesized(Value::Pi(name, Icit::Expl, domain, codomain))
+    Type::synthesized(Value::Pi(name, Icit::Expl, domain.into(), codomain))
   }
 }
 

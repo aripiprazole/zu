@@ -8,7 +8,7 @@ impl Elab {
 
       // Unifies the domain with the function parameter, and the codomain
       // with it's body
-      (Term::Fun(ref fun), Type(box Value::Pi(_, _, dom, cod), _)) => self
+      (Term::Fun(ref fun), Type(_, Value::Pi(_, _, box dom, cod))) => self
         .create_new_value(&fun.arguments.text, dom)
         .check(&fun.value, cod.apply(Type::rigid(self.lvl))),
 

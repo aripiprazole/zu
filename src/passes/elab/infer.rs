@@ -25,7 +25,7 @@ impl Elab {
           let domain = ctx.fresh_meta().eval(&ctx.env);
           let codomain = ctx.create_new_value(&name.text, domain.clone()).infer(&e.value);
 
-          Value::Pi(name, Icit::Expl, domain.clone(), Closure {
+          Value::Pi(name, Icit::Expl, domain.clone().into(), Closure {
             env: ctx.env.clone(),
 
             // Here we need to increase the level, because we are binding
@@ -48,7 +48,7 @@ impl Elab {
             // and then applies the spine to the callee.
             .fold(callee, |callee, argument| {
               let (domain, codomain) = match callee.force() {
-                Type(box Value::Pi(_, _, tt, closure), _) => (tt, closure),
+                Type(_, Value::Pi(_, _, box tt, closure)) => (tt, closure),
                 value => {
                   let tt = ctx.fresh_meta().eval(&ctx.env);
                   let closure = Closure {
@@ -110,7 +110,7 @@ impl Elab {
             term: pi.codomain.clone().erase(ctx),
           };
 
-          Value::Pi(name, pi.domain.icit, domain, codomain)
+          Value::Pi(name, pi.domain.icit, domain.into(), codomain)
         }
       })
     }

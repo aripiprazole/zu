@@ -85,12 +85,12 @@ impl Type {
   ///
   /// It does returns a value without holes.
   pub fn force(self) -> Type {
-    Type::new(self.1.clone(), match *self.0 {
+    Type(self.location(), match self.1 {
       Value::Flexible(ref m, ref spine) => match m.take() {
-        Some(value) => *unspine(value, spine.clone()).0,
-        None => *self.clone().0,
+        Some(value) => unspine(value, spine.clone()).value(),
+        None => self.value(),
       },
-      _ => *self.0,
+      _ => self.value(),
     })
   }
 }
@@ -149,50 +149,40 @@ impl Type {
     match (self.force(), rhs.force()) {
       // Type universe unification is always true, because
       // we don't have universe polymorphism.
-      (Type(box Prim(PrimKind::Int), _)      ,      Type(box Prim(PrimKind::Int), _)) => Ok(()),
-      (Type(box Prim(PrimKind::String), _)   ,   Type(box Prim(PrimKind::String), _)) => Ok(()),
-      (Type(box Prim(PrimKind::Universe), _) , Type(box Prim(PrimKind::Universe), _)) => Ok(()),
+      (Type(_, Prim(PrimKind::Int     )), Type(_, Prim(PrimKind::Int)     )) => Ok(()),
+      (Type(_, Prim(PrimKind::String  )), Type(_, Prim(PrimKind::String)  )) => Ok(()),
+      (Type(_, Prim(PrimKind::Universe)), Type(_, Prim(PrimKind::Universe))) => Ok(()),
 
       // Unification of literal values, it does checks if the values are equal
       // directly. If they are not, it does returns an error.
-      (Type(box Int(v_a), _)            , Type(box Int(v_b), _)) if v_a == v_b => Ok(()), // 1 = 1, 2 = 2, etc...
-      (Type(box Str(v_a), _)            , Type(box Str(v_b), _)) if v_a == v_b => Ok(()), // "a" = "a", "b" = "b", etc...
-      (Type(box Int(v_a), _)            , Type(box Int(v_b), _))               => Err(MismatchBetweenInts(v_a, v_b))?,
-      (Type(box Str(v_a), _)            , Type(box Str(v_b), _))               => Err(MismatchBetweenStrs(v_a, v_b))?,
-
-      // Lambda unification, that applies closures and pi types
-      // using the spine of applications.
-      //
-      // It does unifies the closures and the pi types.
-      (Type(box Lam(_, v_a), _)         , Type(box Lam(_, v_b), _)) => {
-        v_a.apply(Type::rigid(ctx.lvl))
-           .unify(v_b.apply(Type::rigid(ctx.lvl)), &ctx.lift())
-      }
-      (t                                ,   Type(box Lam(_, v), _)) => {
-        t.apply(Type::rigid(ctx.lvl))
-         .unify(v.apply(Type::rigid(ctx.lvl)), &ctx.lift())
-      }
-      (Type(box Lam(_, v), _)           ,           t) => {
-        v.apply(Type::rigid(ctx.lvl))
-         .unify(t.apply(Type::rigid(ctx.lvl)), &ctx.lift())
-      }
-
-      // Pi type unification, it does unifies the domain and the codomain
-      // of the pi types.
-      //
-      // NOTE: cod stands for codomain, and dom stands for domain.
-      (Type(box Value::Pi(_, i_a, dom_a, cod_a), _) , Type(box Value::Pi(_, i_b, dom_b, cod_b), _)) if i_a == i_b => {
-        dom_a.unify(dom_b, ctx)?;
-        cod_a.apply(Type::rigid(ctx.lvl))
-             .unify(cod_b.apply(Type::rigid(ctx.lvl)), &ctx.lift())
-      }
+      (Type(_, Int(v_a))                , Type(_, Int(v_b))) if v_a == v_b => Ok(()), // 1 = 1, 2 = 2, etc...
+      (Type(_, Str(v_a))                , Type(_, Str(v_b))) if v_a == v_b => Ok(()), // "a" = "a", "b" = "b", etc...
+      (Type(_, Int(v_a))                , Type(_, Int(v_b)))               => Err(MismatchBetweenInts(v_a, v_b))?,
+      (Type(_, Str(v_a))                , Type(_, Str(v_b)))               => Err(MismatchBetweenStrs(v_a, v_b))?,
 
       // Unification of application spines or meta variables, it does unifies
       // flexibles, rigids and meta variable's spines.
       //
       // It does unifies the spines of the applications.
-      (Type(box Flexible(m_a, sp_a), _) , Type(box Flexible(m_b, sp_b), _)) if m_a == m_b => unify_sp(sp_a, sp_b, ctx),
-      (Type(box Rigid(m_a, sp_a)   , _) ,    Type(box Rigid(m_b, sp_b), _)) if m_a == m_b => unify_sp(sp_a, sp_b, ctx),
+      (Type(_, Flexible(m_a, sp_a))     , Type(_, Flexible(m_b, sp_b))) if m_a == m_b => unify_sp(sp_a, sp_b, ctx),
+      (Type(_,    Rigid(m_a, sp_a))     , Type(_,    Rigid(m_b, sp_b))) if m_a == m_b => unify_sp(sp_a, sp_b, ctx),
+
+      // Lambda unification, that applies closures and pi types
+      // using the spine of applications.
+      //
+      // It does unifies the closures and the pi types.
+      (Type(_, Lam(_, v_a))             ,            Type(_, Lam(_, v_b))) => {
+        v_a.apply(Type::rigid(ctx.lvl))
+           .unify(v_b.apply(Type::rigid(ctx.lvl)), &ctx.lift())
+      }
+      (Type(_, Lam(_, v_a))             ,                              tt) => {
+        v_a.apply(Type::rigid(ctx.lvl))
+           .unify(tt.apply(Type::rigid(ctx.lvl)), &ctx.lift())
+      }
+      (tt                               ,            Type(_, Lam(_, v_b))) => {
+        tt.apply(Type::rigid(ctx.lvl))
+          .unify(v_b.apply(Type::rigid(ctx.lvl)), &ctx.lift())
+      }
 
       // Unification of meta variables, it does unifies meta variables that
       // are present in the context.
@@ -200,7 +190,17 @@ impl Type {
       // It does require a solver function.
       //
       // TODO: Solve
-      (Type(box Flexible(m, sp), _) , t) | (t , Type(box Flexible(m, sp), _)) => t.solve(sp, m, ctx.lvl),
+      (Type(_, Flexible(m, sp)), t) | (t, Type(_, Flexible(m, sp))) => t.solve(sp, m, ctx.lvl),
+
+      // Pi type unification, it does unifies the domain and the codomain
+      // of the pi types.
+      //
+      // NOTE: cod stands for codomain, and dom stands for domain.
+      (Type(_, Value::Pi(_, i_a, box dom_a, cod_a)) , Type(_, Value::Pi(_, i_b, box dom_b, cod_b))) if i_a == i_b => {
+        dom_a.unify(dom_b, ctx)?;
+        cod_a.apply(Type::rigid(ctx.lvl))
+             .unify(cod_b.apply(Type::rigid(ctx.lvl)), &ctx.lift())
+      }
 
       // Fallback case which will cause an error if we can't unify
       // the values.
@@ -213,7 +213,7 @@ impl Type {
       //
       // Like if the type is hand-written, it will display the location of the
       // type in the source code.
-      (lhs , rhs) => Err(CantUnify(lhs.show(ctx), rhs.show(ctx), lhs.1, rhs.1))?,
+      (lhs, rhs) => Err(CantUnify(lhs.show(ctx), rhs.show(ctx), lhs.0, rhs.0))?,
     }
   }
 }
