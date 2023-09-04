@@ -17,7 +17,7 @@ pub enum UnifyError {
   /// Unification error between two types
   #[error("expected type {0}, got another {1}")]
   #[diagnostic(url(docsrs), code(unify::cant_unify))]
-  CantUnify(Nfe, Nfe, Location, Location),
+  CantUnify(Nfe, Nfe),
 }
 
 /// Partial renaming from Γ to Δ. It does renames the variables
@@ -213,7 +213,7 @@ impl Type {
       //
       // Like if the type is hand-written, it will display the location of the
       // type in the source code.
-      (lhs, rhs) => Err(CantUnify(lhs.show(ctx), rhs.show(ctx), lhs.0, rhs.0))?,
+      (lhs, rhs) => Err(CantUnify(lhs.show(ctx), rhs.show(ctx)))?,
     }
   }
 }

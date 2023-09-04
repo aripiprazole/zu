@@ -302,13 +302,14 @@ impl Elab {
   pub fn unify(&self, lhs: Type, rhs: Type) {
     use unification::UnifyError::*;
 
+    let location = lhs.location();
     if let Err(err) = lhs.unify(rhs, self) {
       let position = self.position();
       self.errors.borrow_mut().push(TypeError {
         message: err.clone(),
         span: position.into(),
         type_span: match err {
-          CantUnify(_, _, lhs, _) => lhs.or_none().map(Into::into),
+          CantUnify(_, _) => location.or_none().map(Into::into),
           _ => None,
         },
       });
