@@ -28,19 +28,16 @@ pub mod eval;
 pub mod infer;
 pub mod quote;
 pub mod unification;
+pub mod globals;
 
-/// Module representation with type table and typed values
-pub struct Mod {
+/// Module representation with type table and typed values.
+pub struct Module {
   pub name: String,
-  pub declarations: Vec<Declaration>,
+  pub declarations: Vec<globals::Declaration>,
 }
 
-pub struct Declaration {
-  pub name: String,
-  pub type_repr: Type,
-  pub value: Type,
-}
-
+/// A couple of type errors, within a source code, this represents all the errors
+/// per file.
 #[derive(Debug, thiserror::Error, miette::Diagnostic)]
 #[error("elaboration error")]
 #[diagnostic(code(elaboration_error), url(docsrs))]
@@ -48,6 +45,7 @@ pub struct ElaborationError {
   #[source_code]
   source_code: miette::NamedSource,
 
+  /// All related errors to the file
   #[related]
   related: Vec<TypeError>,
 }
@@ -71,6 +69,7 @@ pub struct TypeError {
 #[derive(Default, Debug, Clone, PartialEq)]
 pub struct Environment {
   pub data: im_rc::Vector<Type>,
+  pub globals: globals::GlobalEnvironment,
 }
 
 impl Environment {
@@ -78,7 +77,7 @@ impl Environment {
   pub fn create_new_value(&self, value: Type) -> Self {
     let mut data = self.data.clone();
     data.push_front(value);
-    Self { data }
+    Self { data, globals: self.globals.clone() }
   }
 }
 
@@ -244,7 +243,7 @@ impl Elab {
   /// with types.
   ///
   /// It does elaborates the types of the file.
-  pub fn elaborate(&mut self, _: Environment, file: File<Resolved>) -> miette::Result<Mod> {
+  pub fn elaborate(&mut self, _: Environment, file: File<Resolved>) -> miette::Result<Module> {
     let declarations = vec![];
 
     for stmt in file.stmts {
@@ -260,7 +259,7 @@ impl Elab {
 
           self.reporter.evaluate(expr, location)?;
         }
-        Stmt::Type(s) => {
+        Stmt::Check(s) => {
           let location = s.value.meta().clone();
           let value = self.infer(&s.value);
           let expr = value.show(self);
@@ -285,7 +284,7 @@ impl Elab {
       })?;
     }
 
-    Ok(Mod {
+    Ok(Module {
       name: file.name,
       declarations,
     })

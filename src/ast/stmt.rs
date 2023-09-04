@@ -8,12 +8,12 @@ use super::*;
 /// @type 10
 /// ```
 #[derive(Debug, Clone)]
-pub struct Type<S: state::State> {
+pub struct Check<S: state::State> {
   pub value: Term<S>,
   pub meta: S::Meta,
 }
 
-impl<S: state::State> Element<S> for Type<S> {
+impl<S: state::State> Element<S> for Check<S> {
   fn meta(&self) -> &S::Meta {
     &self.meta
   }
@@ -55,7 +55,7 @@ pub enum Stmt<S: state::State> {
   Eval(Eval<S>),
 
   /// Gets a type for a term.
-  Type(Type<S>),
+  Check(Check<S>),
 
   /// Defines a signature.
   Signature(S::Siganture),
@@ -82,7 +82,7 @@ impl<S: state::State> Debug for Stmt<S> {
       Self::Inductive(arg0) => arg0.fmt(f),
       Self::Binding(arg0) => arg0.fmt(f),
       Self::Eval(arg0) => arg0.fmt(f),
-      Self::Type(arg0) => arg0.fmt(f),
+      Self::Check(arg0) => arg0.fmt(f),
       Self::Signature(arg0) => arg0.fmt(f),
       Self::Import(arg0) => arg0.fmt(f),
     }
@@ -102,7 +102,7 @@ impl<S: state::State> Element<S> for Stmt<S> {
       Stmt::Inductive(inductive) => &inductive.meta,
       Stmt::Binding(binding) => &binding.meta,
       Stmt::Eval(downgrade) => &downgrade.meta,
-      Stmt::Type(downgrade) => &downgrade.meta,
+      Stmt::Check(downgrade) => &downgrade.meta,
       Self::Signature(downgrade) => downgrade.meta(),
       Stmt::Import(downgrade) => downgrade.meta(),
     }

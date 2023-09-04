@@ -281,7 +281,7 @@ impl Resolver {
         value: self.term(stmt.value),
         meta: stmt.meta,
       }),
-      Stmt::Type(stmt) => Stmt::Type(Type {
+      Stmt::Check(stmt) => Stmt::Check(Check {
         value: self.term(stmt.value),
         meta: stmt.meta,
       }),

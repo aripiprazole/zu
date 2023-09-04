@@ -225,7 +225,7 @@ Stmt: crate::ast::Stmt<Parsed> = {
   }),
 
   // Parses `@type` command, which types a term and prints the result.
-  <s: @L> "@type" <value:Term> <e: @R> => crate::ast::Stmt::Type(crate::ast::Type {
+  <s: @L> "@type" <value:Term> <e: @R> => crate::ast::Stmt::Check(crate::ast::Check {
     value,
     meta: crate::ast::Location::new(s, e, filename, &unique),
   }),
