@@ -87,7 +87,7 @@ impl Type {
   pub fn force(self) -> Type {
     Type(self.location(), match self.1 {
       Value::Flexible(ref m, ref spine) => match m.take() {
-        Some(value) => unspine(value, spine.clone()).value(),
+        Some(value) => return unspine(value, spine.clone()),
         None => self.value(),
       },
       _ => self.value(),

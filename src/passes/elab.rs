@@ -62,7 +62,7 @@ pub enum TypeError {
     span: miette::SourceSpan,
   },
 
-  #[error("handwritten {message}")]
+  #[error("{message}")]
   #[diagnostic(code(type_error), url(docsrs))]
   HandwrittenTypeMismatch {
     message: String,
