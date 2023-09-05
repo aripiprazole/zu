@@ -23,6 +23,9 @@ lalrpop_mod! {
     pub zu
 }
 
+/// Meta variables stuff, like holes, etc.
+pub mod meta;
+
 /// Debruijin indexes module. It does convert the
 /// named variables to the debruijin indexes.
 pub mod debruijin;
