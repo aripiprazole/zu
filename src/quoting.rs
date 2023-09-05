@@ -7,6 +7,7 @@ use crate::ast::*;
 pub use crate::debruijin::*;
 use crate::passes::elab::Elab;
 use crate::passes::elab::Type;
+use crate::passes::resolver::Definition;
 use crate::passes::resolver::Resolved;
 
 /// Represents the resolved state, it's the state of the syntax tree when it's resolved.

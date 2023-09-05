@@ -32,7 +32,7 @@ pub trait State: Default + Debug + Clone + PartialEq {
   type NameSet: Debug + Clone + PartialEq = Self::Definition;
 
   // SECTION: Elements
-  type Definition: Ast<Self> = Rc<Definition<Self>>;
+  type Definition: Ast<Self> = Rc<crate::passes::resolver::Definition<Self>>;
   type Closure: Ast<Self> = Fun<Self>;
   type Elim: Ast<Self> = Elim<Self>;
   type Reference: Ast<Self>;
@@ -71,54 +71,6 @@ pub enum DefinitionKind {
   Constructor,
   Inductive,
   Binding,
-}
-
-/// A definition. It has a text, and a location.
-#[derive(Default, Debug, Clone, Hash, PartialEq)]
-pub struct Definition<S: state::State> {
-  pub text: String,
-  pub meta: S::Meta,
-  pub is_global: bool,
-}
-
-impl <M, FS: state::State<Meta = M>> Definition<FS> {
-  /// Converts the definition into a new definition with a different state.
-  pub fn shift<TS: state::State<Meta = M>>(self) -> Definition<TS> {
-    Definition {
-      text: self.text,
-      meta: self.meta,
-      is_global: self.is_global,
-    }
-  }
-}
-
-impl<S: state::State> Definition<S>
-where
-  S::Meta: Default,
-{
-  /// Creates a new instance of [`Definition`].
-  pub fn new(text: String) -> Self {
-    Self {
-      text,
-      is_global: false,
-      meta: S::Meta::default(),
-    }
-  }
-
-  /// Creates a new instance of [`Definition`].
-  pub fn global(text: String) -> Self {
-    Self {
-      text,
-      is_global: true,
-      meta: S::Meta::default(),
-    }
-  }
-}
-
-impl<S: state::State> Element<S> for Definition<S> {
-  fn meta(&self) -> &S::Meta {
-    &self.meta
-  }
 }
 
 /// A span in the source code.

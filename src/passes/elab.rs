@@ -7,6 +7,7 @@ use std::rc::Rc;
 use miette::NamedSource;
 
 use self::unification::UnifyError;
+use super::resolver::Definition;
 use super::resolver::FileMap;
 use super::resolver::Resolved;
 use crate::ast::*;
