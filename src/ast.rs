@@ -9,7 +9,7 @@ use std::rc::Rc;
 #[derive(Default, Debug, Clone)]
 pub struct File<S: state::State> {
   pub name: String,
-  pub stmts: Vec<Stmt<S>>,
+  pub top_levels: Vec<TopLevel<S>>,
   pub meta: S::Meta,
 }
 
@@ -480,8 +480,8 @@ pub use decl::*;
 pub mod decl;
 
 use nonempty::NonEmpty;
-pub use stmt::*;
-mod stmt;
+pub use top_level::*;
+mod top_level;
 
 pub use type_repr::*;
 pub mod type_repr;

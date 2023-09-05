@@ -140,20 +140,20 @@ impl Elab {
   pub fn elaborate(&mut self, _: Environment, file: File<Resolved>) -> miette::Result<Module> {
     let declarations = vec![];
 
-    for stmt in file.stmts {
-      match stmt {
+    for top_level in file.top_levels {
+      match top_level {
         // Sentinel values
-        Stmt::Error(_) => {}
-        Stmt::Inductive(_) => todo!(),
-        Stmt::Binding(_) => todo!(),
-        Stmt::Eval(s) => {
+        TopLevel::Error(_) => {}
+        TopLevel::Inductive(_) => todo!(),
+        TopLevel::Binding(_) => todo!(),
+        TopLevel::Eval(s) => {
           let location = s.value.meta().clone();
           let value = s.value.erase(self).eval(&self.env);
           let expr = value.show(self);
 
           self.reporter.evaluate(expr, location)?;
         }
-        Stmt::Check(s) => {
+        TopLevel::Check(s) => {
           let location = s.value.meta().clone();
           let value = self.infer(&s.value);
           let expr = value.show(self);
@@ -162,8 +162,8 @@ impl Elab {
         }
 
         // Erased values, the types with `!`
-        Stmt::Signature(_) => unreachable!(),
-        Stmt::Import(_) => unreachable!(),
+        TopLevel::Signature(_) => unreachable!(),
+        TopLevel::Import(_) => unreachable!(),
       }
     }
 

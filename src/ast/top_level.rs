@@ -40,7 +40,7 @@ impl<S: state::State> Element<S> for Eval<S> {
 
 /// A statement. It can be an inductive type, or a downgrade.
 #[derive(Clone)]
-pub enum Stmt<S: state::State> {
+pub enum TopLevel<S: state::State> {
   Error(Error<S>),
 
   /// An inductive type is a statement that introduces a new inductive
@@ -65,7 +65,7 @@ pub enum Stmt<S: state::State> {
   Import(S::Import),
 }
 
-impl<S: state::State> Stmt<S> {
+impl<S: state::State> TopLevel<S> {
   pub fn as_declaration(&self) -> Option<&dyn Declaration<S>> {
     match self {
       Self::Inductive(inductive) => Some(inductive),
@@ -75,7 +75,7 @@ impl<S: state::State> Stmt<S> {
   }
 }
 
-impl<S: state::State> Debug for Stmt<S> {
+impl<S: state::State> Debug for TopLevel<S> {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     match self {
       Self::Error(arg0) => arg0.fmt(f),
@@ -89,22 +89,22 @@ impl<S: state::State> Debug for Stmt<S> {
   }
 }
 
-impl<S: state::State> Recovery<S> for Stmt<S> {
+impl<S: state::State> Recovery<S> for TopLevel<S> {
   fn recover_from_error(error: Error<S>) -> Self {
-    Stmt::Error(error)
+    TopLevel::Error(error)
   }
 }
 
-impl<S: state::State> Element<S> for Stmt<S> {
+impl<S: state::State> Element<S> for TopLevel<S> {
   fn meta(&self) -> &S::Meta {
     match self {
-      Stmt::Error(error) => &error.meta,
-      Stmt::Inductive(inductive) => &inductive.meta,
-      Stmt::Binding(binding) => &binding.meta,
-      Stmt::Eval(downgrade) => &downgrade.meta,
-      Stmt::Check(downgrade) => &downgrade.meta,
+      TopLevel::Error(error) => &error.meta,
+      TopLevel::Inductive(inductive) => &inductive.meta,
+      TopLevel::Binding(binding) => &binding.meta,
+      TopLevel::Eval(downgrade) => &downgrade.meta,
+      TopLevel::Check(downgrade) => &downgrade.meta,
       Self::Signature(downgrade) => downgrade.meta(),
-      Stmt::Import(downgrade) => downgrade.meta(),
+      TopLevel::Import(downgrade) => downgrade.meta(),
     }
   }
 }

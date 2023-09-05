@@ -25,11 +25,11 @@ match {
 /// Parses an entire file declaration into the abstract Parsed tree, so
 /// we can resolve and typecheck it.
 pub File: crate::ast::File<Parsed> = {
-  <s: @L> <name:ModuleName?> <stmts:TopLevel*> <e: @R> => crate::ast::File {
+  <s: @L> <name:ModuleName?> <top_levels:Stmt*> <e: @R> => crate::ast::File {
     // Remove the .zu extension from filenames, so the modules are more
     // idiomatic.
     name: name.unwrap_or_else(|| filename.to_string().replace(".zu", "")),
-    stmts,
+    top_levels,
     meta: crate::ast::Location::new(s, e, filename, &unique),
   },
 };
@@ -209,30 +209,30 @@ Semi: std::string::String = {
 
 /// Top-level statements, this is a statement that can be used
 /// outside of a block.
-TopLevel: crate::ast::Stmt<Parsed> = {
-  <stmt:Stmt> <semi:Semi?> => stmt,
+Stmt: crate::ast::TopLevel<Parsed> = {
+  <top_level:TopLevel> <semi:Semi?> => top_level,
 }
 
 /// Parses a top-level statement, this is a statement that can be used
 /// outside of a block.
-Stmt: crate::ast::Stmt<Parsed> = {
+TopLevel: crate::ast::TopLevel<Parsed> = {
   // SECTION: Commands
   // 
   // Parses `@eval` command, which evaluates a term and prints the result.
-  <s: @L> "@eval" <value:Term> <e: @R> => crate::ast::Stmt::Eval(crate::ast::Eval {
+  <s: @L> "@eval" <value:Term> <e: @R> => crate::ast::TopLevel::Eval(crate::ast::Eval {
     value,
     meta: crate::ast::Location::new(s, e, filename, &unique),
   }),
 
   // Parses `@type` command, which types a term and prints the result.
-  <s: @L> "@type" <value:Term> <e: @R> => crate::ast::Stmt::Check(crate::ast::Check {
+  <s: @L> "@type" <value:Term> <e: @R> => crate::ast::TopLevel::Check(crate::ast::Check {
     value,
     meta: crate::ast::Location::new(s, e, filename, &unique),
   }),
 
   // Parses `@import` command, which set to the resolver to import to the
   // current file.
-  <s: @L> "import" <import:Reference> <e: @R> => crate::ast::Stmt::Import(crate::passes::parser::Import {
+  <s: @L> "import" <import:Reference> <e: @R> => crate::ast::TopLevel::Import(crate::passes::parser::Import {
     text: import.text,
     meta: crate::ast::Location::new(s, e, filename, &unique),
   }),
@@ -257,7 +257,7 @@ Stmt: crate::ast::Stmt<Parsed> = {
     });
 
     // Return the default sentinel value for statements, which is an error.
-    crate::ast::Stmt::Error(crate::ast::Error {
+    crate::ast::TopLevel::Error(crate::ast::Error {
       message: format!("unsupported coinductive data `{}`", name.text),
       full_text: (&input[s..e]).to_string(),
       meta: crate::ast::Location::new(s, e, filename, &unique),
@@ -284,7 +284,7 @@ Stmt: crate::ast::Stmt<Parsed> = {
     });
 
     // Return the default sentinel value for statements, which is an error.
-    crate::ast::Stmt::Error(crate::ast::Error {
+    crate::ast::TopLevel::Error(crate::ast::Error {
       message: format!("unsupported inductive data `{}`", name.text),
       full_text: (&input[s..e]).to_string(),
       meta: crate::ast::Location::new(s, e, filename, &unique),
@@ -314,7 +314,7 @@ Stmt: crate::ast::Stmt<Parsed> = {
       });
 
       // Return the default sentinel value for statements, which is an error.
-      crate::ast::Stmt::Error(crate::ast::Error {
+      crate::ast::TopLevel::Error(crate::ast::Error {
         message: format!("expected a type or value for binding `{}`", name.text),
         full_text: (&input[s..e]).to_string(),
         meta: crate::ast::Location::new(s, e, filename, &unique),
@@ -322,7 +322,7 @@ Stmt: crate::ast::Stmt<Parsed> = {
     }
     // Infer Binding
     (None, Some(value)) => {
-      crate::ast::Stmt::Binding(crate::ast::Binding {
+      crate::ast::TopLevel::Binding(crate::ast::Binding {
         doc_strings,
         attributes: vec![],
         type_repr: crate::ast::Term::Hole(crate::ast::Hole {
@@ -335,7 +335,7 @@ Stmt: crate::ast::Stmt<Parsed> = {
     }
     // Signature
     (Some(type_repr), None) => {
-      crate::ast::Stmt::Signature(crate::passes::parser::Signature {
+      crate::ast::TopLevel::Signature(crate::passes::parser::Signature {
         type_repr: type_repr.into(),
         name,
         meta: crate::ast::Location::new(s, e, filename, &unique),
@@ -343,7 +343,7 @@ Stmt: crate::ast::Stmt<Parsed> = {
     }
     // Typed Binding
     (Some(type_repr), Some(value)) => {
-      crate::ast::Stmt::Binding(crate::ast::Binding {
+      crate::ast::TopLevel::Binding(crate::ast::Binding {
         doc_strings,
         attributes: vec![],
         type_repr: type_repr.into(),

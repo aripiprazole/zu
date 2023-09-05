@@ -290,27 +290,27 @@ impl Resolver {
     let mut scope = Scope::default();
 
     // Define all the statements into the scope
-    for stmt in file.stmts.iter() {
-      self.define(&mut scope, stmt);
+    for top_level in file.top_levels.iter() {
+      self.define(&mut scope, top_level);
     }
 
     // Replace the current scope with the new one, so
     // we can handle this scope in the future.
     let old_scope = std::mem::take(&mut self.file_scope);
     self.file_scope = scope;
-    let stmts = file.stmts.into_iter().flat_map(|stmt| self.resolve(stmt)).collect();
+    let top_levels = file.top_levels.into_iter().flat_map(|top_level| self.resolve(top_level)).collect();
     self.file_scope = old_scope;
 
     File {
       name: file.name,
-      stmts,
+      top_levels,
       meta: file.meta,
     }
   }
 
   /// Defines a statement. It's useful to define the references.
-  fn define(&mut self, scope: &mut Scope, stmt: &Stmt<Parsed>) {
-    let Some(declaration) = stmt.as_declaration() else {
+  fn define(&mut self, scope: &mut Scope, top_level: &TopLevel<Parsed>) {
+    let Some(declaration) = top_level.as_declaration() else {
       return;
     };
 
@@ -328,19 +328,19 @@ impl Resolver {
   }
 
   /// Evaluates a statement, resolving the references.
-  fn resolve(&mut self, stmt: Stmt<Parsed>) -> Vec<Stmt<Resolved>> {
-    vec![match stmt {
-      Stmt::Inductive(_) => todo!(),
-      Stmt::Error(error) => Stmt::Error(Error { ..error }),
-      Stmt::Eval(stmt) => Stmt::Eval(Eval {
-        value: self.term(stmt.value),
-        meta: stmt.meta,
+  fn resolve(&mut self, top_level: TopLevel<Parsed>) -> Vec<TopLevel<Resolved>> {
+    vec![match top_level {
+      TopLevel::Inductive(_) => todo!(),
+      TopLevel::Error(error) => TopLevel::Error(Error { ..error }),
+      TopLevel::Eval(top_level) => TopLevel::Eval(Eval {
+        value: self.term(top_level.value),
+        meta: top_level.meta,
       }),
-      Stmt::Check(stmt) => Stmt::Check(Check {
-        value: self.term(stmt.value),
-        meta: stmt.meta,
+      TopLevel::Check(top_level) => TopLevel::Check(Check {
+        value: self.term(top_level.value),
+        meta: top_level.meta,
       }),
-      Stmt::Signature(signature) => {
+      TopLevel::Signature(signature) => {
         let name = signature.name.text.clone();
         let location = signature.name.meta.clone();
         let value = self.term(signature.type_repr);
@@ -358,13 +358,13 @@ impl Resolver {
 
         return vec![];
       }
-      Stmt::Binding(stmt) => {
-        let name = stmt.name.text.clone();
-        let location = stmt.name.meta.clone();
+      TopLevel::Binding(top_level) => {
+        let name = top_level.name.text.clone();
+        let location = top_level.name.meta.clone();
         let definition = Rc::new(Definition {
           is_global: true,
-          meta: stmt.meta.clone(),
-          text: stmt.name.text.clone(),
+          meta: top_level.meta.clone(),
+          text: top_level.name.text.clone(),
         });
 
         // Dont allow redefining a binding with a binding.
@@ -373,8 +373,8 @@ impl Resolver {
             .errors
             .push(InnerError::AlreadyDefinedSignature(AlreadyDefinedSignature {
               module: name.clone(),
-              source_code: self.get_source_code(&stmt.name.meta),
-              span: stmt.name.meta.clone().into(),
+              source_code: self.get_source_code(&top_level.name.meta),
+              span: top_level.name.meta.clone().into(),
               declaration_span: location.clone().into(),
             }));
         }
@@ -386,16 +386,16 @@ impl Resolver {
           Some((type_repr, _)) => Term::Anno(Anno {
             meta: type_repr.meta().clone(),
             type_repr: type_repr.clone().into(),
-            value: self.term(stmt.type_repr).into(),
+            value: self.term(top_level.type_repr).into(),
           }),
-          None => self.term(stmt.type_repr),
+          None => self.term(top_level.type_repr),
         };
 
         // Change the type of the definition.
-        let doc_strings = stmt.doc_strings.into_iter().map(|doc| DocString { ..doc }).collect();
+        let doc_strings = top_level.doc_strings.into_iter().map(|doc| DocString { ..doc }).collect();
 
         // Resolve the attributes.
-        let attributes = stmt
+        let attributes = top_level
           .attributes
           .into_iter()
           .map(|attribute| self.attribute(attribute))
@@ -405,16 +405,16 @@ impl Resolver {
         self.scope.insert(name, definition.clone());
 
         // Resolve the type and the value of the binding.
-        Stmt::Binding(Binding {
+        TopLevel::Binding(Binding {
           doc_strings,
           attributes,
           name: definition,
-          meta: stmt.meta,
+          meta: top_level.meta,
           type_repr,
-          value: self.term(stmt.value),
+          value: self.term(top_level.value),
         })
       }
-      Stmt::Import(import) => {
+      TopLevel::Import(import) => {
         let Some(file) = self.inputs.get(&import.text).cloned() else {
           let error = InnerError::UnresolvedImport(UnresolvedImport {
             module: import.text.clone(),
@@ -430,7 +430,7 @@ impl Resolver {
         };
 
         // Resolve the file and concatenate the statements.
-        return self.file(file).stmts;
+        return self.file(file).top_levels;
       }
     }]
   }
