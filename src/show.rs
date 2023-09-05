@@ -72,7 +72,10 @@ impl Show {
         MetaHole::Defined(value) => self.show(value.quote(self.lvl)),
         MetaHole::Nothing => Nfe::S("?".into()),
       },
-      Term::Reference(Reference::Var(Ix(ix))) => Nfe::S(self.names[ix].clone()),
+      Term::Reference(Reference::Var(Ix(ix))) => match self.names.get(ix) {
+          Some(x) => Nfe::S(x.into()),
+          None => Nfe::S("*internal error*".into()),
+      },
       Term::Pi(pi) => Nfe::Apply(Apply {
         values: vec![
           Nfe::Apply(Apply {

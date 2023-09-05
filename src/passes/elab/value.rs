@@ -104,7 +104,10 @@ impl Type {
         spine.push_back(argument);
         Type(location, Value::Rigid(lvl, spine))
       }
-      _ => panic!("expected a function, got another value: {:?}", self.1),
+      _ => {
+        log::error!("expected a function, got another value: {:?}", self.1);
+        self
+      }
     }
   }
 }

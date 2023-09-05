@@ -2,6 +2,8 @@ module Example
 
 fun Nat : Type = (T : Type -> (T -> T) -> T -> T)
 
-fun zero : Nat = \T, s, z -> z
+fun zero : Nat = \T, succ, zero -> zero
 
-fun succ : Nat -> Nat = \n, N, s, z -> (n N s z)
+fun nat = \T, succ, zero -> succ (succ zero)
+
+@type nat Int (\prev -> 10) 20
