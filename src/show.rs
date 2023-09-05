@@ -24,7 +24,18 @@ struct Show {
 }
 
 impl Show {
-  fn build(&self, term: Term<Quoted>) -> Nfe {
+  fn bind(&self, name: &str) -> Show {
+    let mut names = self.names.clone();
+    names.push(name.to_string());
+
+    Show {
+      prec: self.prec,
+      lvl: self.lvl + 1,
+      names,
+    }
+  }
+
+  fn show(&self, term: Term<Quoted>) -> Nfe {
     let _ = self.prec;
 
     match term {
@@ -41,13 +52,16 @@ impl Show {
         PrimKind::Universe => Nfe::S("*".to_string()),
       },
       Term::Anno(anno) => Nfe::Apply {
-        values: vec![self.build(*anno.value), self.build(*anno.type_repr)],
+        values: vec![self.show(*anno.value), self.show(*anno.type_repr)],
         sep: Sep::Colon,
         delim: Delim::default(),
         disposal: Disposal::Horizontal,
       },
       Term::Fun(fun) => Nfe::Apply {
-        values: vec![Nfe::S(fun.arguments.text.clone()), self.build(*fun.value)],
+        values: vec![
+          Nfe::S(fun.arguments.text.clone()),
+          self.bind(&fun.arguments.text).show(*fun.value),
+        ],
         sep: Sep::ArrL,
         delim: Delim::None,
         disposal: Disposal::Horizontal,
@@ -57,14 +71,14 @@ impl Show {
       Term::Str(v) => Nfe::S(format!("\"{}\"", v.value)),
       Term::Reference(Reference::Global(m)) => Nfe::S(m.definition.text.clone()),
       Term::Reference(Reference::MetaVar(m)) => match m.get() {
-        MetaHole::Defined(value) => self.build(value.quote(self.lvl)),
+        MetaHole::Defined(value) => self.show(value.quote(self.lvl)),
         MetaHole::Nothing => Nfe::S("?".into()),
       },
       Term::Reference(Reference::Var(Ix(ix))) => Nfe::S(self.names[ix].clone()),
       Term::Pi(pi) => Nfe::Apply {
         values: vec![
           Nfe::Apply {
-            values: vec![Nfe::S(pi.domain.name.text.clone()), self.build(*pi.domain.type_repr)],
+            values: vec![Nfe::S(pi.domain.name.text.clone()), self.show(*pi.domain.type_repr)],
             sep: Sep::Colon,
             delim: match pi.domain.icit {
               Icit::Expl => Delim::Paren,
@@ -72,7 +86,7 @@ impl Show {
             },
             disposal: Disposal::Horizontal,
           },
-          self.build(*pi.codomain),
+          self.bind(&pi.domain.name.text).show(*pi.codomain),
         ],
         delim: Delim::None,
         sep: Sep::ArrL,
@@ -92,6 +106,6 @@ impl Value {
       names: elab.types.clone().into_iter().map(|(k, _)| k).collect(),
     };
 
-    show.build(self.clone().quote(elab.lvl))
+    show.show(self.clone().quote(elab.lvl))
   }
 }
