@@ -150,14 +150,13 @@ impl Elab {
         // Also should be used for structures, classes, modules.
         TopLevel::Inductive(_) => todo!(),
         TopLevel::Binding(s) => {
-          let type_repr = s.type_repr.erase(self).eval(&self.env);
-          let type_repr = self.check(&s.value, type_repr);
-          let value = s.value.erase(self).eval(&self.env);
+          let type_repr = self.check(&s.type_repr, Type::universe()).eval(&self.env);
+          let value = self.check(&s.value, type_repr.clone()).eval(&self.env);
 
           // Create a binding
           self.env.globals.insert(s.name.text.clone(), globals::Declaration {
             name: s.name,
-            type_repr: type_repr.eval(&self.env),
+            type_repr,
             value,
           });
         },

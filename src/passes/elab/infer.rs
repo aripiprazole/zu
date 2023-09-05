@@ -20,7 +20,7 @@ impl Elab {
         Term::Prim(_) => Value::Prim(PrimKind::Universe), // Type of type
         Term::Hole(_) | Term::Error(_) => return ctx.fresh_meta().eval(&ctx.env),
         Term::Fun(e) => {
-          let name = Definition::new(e.arguments.text.clone());
+          let name = e.arguments.as_shift();
           let domain = ctx.fresh_meta().eval(&ctx.env);
           let codomain = ctx.create_new_value(&name.text, domain.clone()).infer(&e.value);
 
@@ -71,7 +71,7 @@ impl Elab {
           let declaration = ctx.env.globals.lookup(&name.definition.text);
 
           // Return the type of the declaration
-          return declaration.type_repr.clone()
+          return declaration.type_repr.clone();
         }
 
         // Resolves and infers the type of a reference to a variable
@@ -112,17 +112,7 @@ impl Elab {
 
         // Infers the type of a lambda, it does creates a new closure
         // and returns the type of the closure.
-        Term::Pi(pi) => {
-          let name = Definition::new(pi.domain.name.text.clone());
-          let domain = ctx.infer(&pi.domain.type_repr);
-          let closure = ctx.create_new_value(&pi.domain.name.text, domain.clone());
-          let codomain = Closure {
-            term: pi.codomain.clone().erase(&closure),
-            env: closure.env,
-          };
-
-          Value::Pi(name, pi.domain.icit, domain.into(), codomain)
-        }
+        Term::Pi(_) => Value::Prim(PrimKind::Universe),
       })
     }
 
