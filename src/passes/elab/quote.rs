@@ -56,11 +56,6 @@ impl Quote for Value {
         codomain: codomain.apply(Type::rigid(nth)).quote(nth + 1).into(),
         meta: Default::default(),
       }),
-      Value::Anno(value, type_repr) => Expr::Anno(Anno {
-        value: value.quote(nth).into(),
-        type_repr: type_repr.quote(nth).into(),
-        meta: Default::default(),
-      }),
     }
   }
 }

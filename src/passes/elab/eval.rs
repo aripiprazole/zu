@@ -47,12 +47,7 @@ impl Expr {
         Some(value) => return value,
         None => return Type::flexible(meta),
       },
-      Anno(anno) => {
-        let value = anno.value.eval(env);
-        let type_repr = anno.type_repr.eval(env);
-
-        Value::Anno(value.into(), type_repr.into())
-      }
+      Anno(anno) => anno.value.eval(env).value(),
       Pi(pi) => {
         let name = Definition::new(pi.domain.name.text);
         let domain = pi.domain.type_repr.eval(env);

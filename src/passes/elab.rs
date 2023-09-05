@@ -107,14 +107,13 @@ pub trait Reporter: Debug {
 /// The type of a term is a value, but the type of a value is a type.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Value {
+  Int(isize),
+  Str(String),
   Prim(PrimKind),
   Flexible(MetaVar, Spine),
   Rigid(Lvl, Spine),
   Lam(DefinitionRs, Closure),
   Pi(DefinitionRs, Icit, Box<Type>, Closure),
-  Int(isize),
-  Anno(Box<Type>, Box<Type>),
-  Str(String),
 }
 
 /// Type that holds all the information about a type, just like if
