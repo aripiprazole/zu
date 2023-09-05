@@ -21,7 +21,7 @@ fn eval(expr: Expr, env: &Environment) -> Type {
     Group(_) => unreachable!(),
 
     // Values
-    Hole(h) => todo!("meta variable: {h:?}"),
+    Hole(_) => Value::Flexible(self::MetaVar::default(), im_rc::vector![]),
     Prim(k) => Value::Prim(k.kind),
     Int(data) => Value::Int(data.value),
     Str(data) => Value::Str(data.value),

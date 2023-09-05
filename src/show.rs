@@ -50,7 +50,7 @@ impl Show {
       Term::Reference(Reference::Global(m)) => Nfe::S(m.definition.text.clone()),
       Term::Reference(Reference::MetaVar(m)) => match m.get() {
         MetaHole::Defined(value) => self.build(value.quote(self.lvl)),
-        MetaHole::Nothing(n) => Nfe::S(format!("?{n:?}")),
+        MetaHole::Nothing => Nfe::S("?".into()),
       },
       Term::Reference(Reference::Var(Ix(ix))) => Nfe::S(self.names[ix].clone()),
     }

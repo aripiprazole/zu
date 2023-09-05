@@ -235,7 +235,7 @@ impl Elab {
   ///
   /// It does creates a new meta variable with a unique id.
   pub fn fresh_meta(&self) -> Expr {
-    Expr::Reference(Reference::MetaVar(MetaVar::new_unique(self)))
+    Expr::Reference(Reference::MetaVar(MetaVar::default()))
   }
 
   pub fn create_new_binder(&self, name: &str) -> Self {

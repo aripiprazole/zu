@@ -1,14 +1,17 @@
-use std::{rc::Rc, cell::RefCell};
+use std::cell::RefCell;
+use std::rc::Rc;
 
-use crate::{passes::elab::{Type, Elab}, quoting::Lvl};
+use crate::passes::elab::Type;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Default, Debug, Clone, PartialEq)]
 pub enum MetaHole {
   Defined(Type),
-  Nothing(Lvl),
+
+  #[default]
+  Nothing,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Default, Debug, Clone)]
 pub struct MetaVar(pub Rc<RefCell<MetaHole>>);
 
 impl PartialEq for MetaVar {
@@ -18,10 +21,6 @@ impl PartialEq for MetaVar {
 }
 
 impl MetaVar {
-  pub fn new_unique(elab: &Elab) -> Self {
-    Self(Rc::new(RefCell::new(MetaHole::Nothing(elab.lvl))))
-  }
-
   pub fn new(value: Type) -> Self {
     Self(Rc::new(RefCell::new(MetaHole::Defined(value))))
   }
@@ -37,7 +36,7 @@ impl MetaVar {
   pub fn take(&self) -> Option<Type> {
     match &*self.0.borrow() {
       MetaHole::Defined(value) => value.clone().into(),
-      MetaHole::Nothing(_) => None,
+      MetaHole::Nothing => None,
     }
   }
 }
