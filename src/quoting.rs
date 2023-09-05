@@ -65,6 +65,7 @@ impl MetaVar {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Reference {
+  Global(crate::passes::resolver::Reference),
   Var(Ix),
   MetaVar(MetaVar),
 }
@@ -171,6 +172,7 @@ impl Term<Resolved> {
         },
         codomain: pi.codomain.erase(elab).into(),
       }),
+      Term::Reference(reference) if reference.definition.is_global => Term::Reference(Reference::Global(reference)),
       Term::Reference(reference) => {
         let mut ix = 0;
         let mut types = elab.types.clone();

@@ -76,6 +76,12 @@ pub struct Reference {
   pub meta: Location,
 }
 
+impl Reference {
+  pub fn text(&self) -> &str {
+    &self.definition.text
+  }
+}
+
 impl<S: state::State<Meta = Location>> Element<S> for Reference {
   fn meta(&self) -> &Location {
     &self.meta
@@ -467,7 +473,6 @@ impl Resolver {
           })
           .collect::<Vec<_>>()
           .into_iter()
-          .rev()
           .fold(local.term(*fun.value), |callee, parameter| {
             Term::Fun(Fun {
               arguments: parameter,

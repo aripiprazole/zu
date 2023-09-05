@@ -41,7 +41,7 @@ pub mod quoting;
 pub mod show;
 
 /// Pretty print abstract syntax tree that represents
-/// the normalised terms. 
+/// the normalised terms.
 pub mod nfe;
 
 /// The compiler passes.
@@ -105,11 +105,11 @@ impl Reporter for LoggerReporter {
 
 /// Capitalizes the first character in s.
 fn capitalize(s: &str) -> String {
-    let mut c = s.chars();
-    match c.next() {
-        None => String::new(),
-        Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
-    }
+  let mut c = s.chars();
+  match c.next() {
+    None => String::new(),
+    Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
+  }
 }
 
 /// Logger function for the fern logger.

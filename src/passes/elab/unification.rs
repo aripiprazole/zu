@@ -66,7 +66,10 @@ impl PartialRenaming {
 
 /// SECTION: Pattern unification
 impl Type {
-  /// solve : (Γ : Cxt) → (spine : Sub Δ Γ) → (m : MetaVar) → (lvl : Lvl) → ()
+  /// solve : (Γ : Cxt) → (spine : Sub Δ Γ) → (m : MetaVar) → ()
+  ///   Γ ?m spine ?= self
+  /// 
+  /// The function will transform: `Γ ?m spine ?= self` into `Γ ?m = \spine. self`
   pub fn solve(self, spine: Spine, m: MetaVar, lvl: Lvl) -> miette::Result<(), UnifyError> {
     // unsound
     m.update(self);

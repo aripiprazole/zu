@@ -1,4 +1,5 @@
-use super::{*, Type};
+use super::Type;
+use super::*;
 
 pub trait Quote {
   /// Quote a value to an expression
