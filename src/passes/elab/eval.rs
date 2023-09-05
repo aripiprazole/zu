@@ -18,10 +18,10 @@ fn eval(expr: Expr, env: &Environment) -> Type {
   Type(expr.meta().clone(), match expr {
     // Removed
     Error(_) => unreachable!(),
-    Hole(_) => unreachable!(),
     Group(_) => unreachable!(),
 
     // Values
+    Hole(h) => todo!("meta variable: {h:?}"),
     Prim(k) => Value::Prim(k.kind),
     Int(data) => Value::Int(data.value),
     Str(data) => Value::Str(data.value),
