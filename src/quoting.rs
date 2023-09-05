@@ -134,7 +134,6 @@ impl Term<Resolved> {
         }
 
         log::debug!("all variables in the context: {:?}", elab.types.iter().map(|(n, _)| n).collect::<Vec<_>>());
-
         todo!("reference not found error handling: {}", reference.text())
       }
     }

@@ -65,6 +65,15 @@ impl Elab {
             });
         }
 
+        // Resolves global references, and returns the type of the
+        // global.
+        Term::Reference(name) if name.definition.is_global => {
+          let declaration = ctx.env.globals.lookup(&name.definition.text);
+
+          // Return the type of the declaration
+          return declaration.type_repr.clone()
+        }
+
         // Resolves and infers the type of a reference to a variable
         // in the environment. It does uses debruijin, and `erase` function
         // works very well with it.
@@ -74,7 +83,7 @@ impl Elab {
             // pattern matching that the term is a reference.
             //
             // So this is unreachable.
-            unreachable!()
+            unreachable!("term is not a reference: {:?}", term)
           };
 
           // Get the types from the context, and returns the first one.

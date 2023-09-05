@@ -2,6 +2,12 @@ module Example
 
 fun Id : {T} -> T -> T = \T, x -> x
 
-fun Nat = T : Type -> T
+fun Nat = T : Type -> (T -> T) -> T -> T
+
+fun zero : Nat = \T, s, z -> z
+
+fun succ : Nat -> Nat = \n, N, s, z -> (n N s z)
+
+@eval (succ (succ zero)) Int (\x -> 1) 0
 
 @eval (\f, x -> f x) (\x -> x) 10
