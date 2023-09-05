@@ -99,10 +99,7 @@ impl Term<Resolved> {
       Term::Fun(fun) => Term::Fun(Fun {
         meta: fun.meta,
         arguments: fun.arguments.as_shift(),
-        value: fun
-          .value
-          .erase(&elab.create_new_binder(&fun.arguments.text))
-          .into(),
+        value: fun.value.erase(&elab.create_new_binder(&fun.arguments.text)).into(),
       }),
       Term::Apply(apply) => apply
         .arguments
@@ -135,6 +132,8 @@ impl Term<Resolved> {
           }
           ix += 1;
         }
+
+        log::debug!("all variables in the context: {:?}", elab.types.iter().map(|(n, _)| n).collect::<Vec<_>>());
 
         todo!("reference not found error handling: {}", reference.text())
       }

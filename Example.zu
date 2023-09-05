@@ -2,4 +2,6 @@ module Example
 
 fun Id : {T} -> T -> T = \T, x -> x
 
+fun Nat = T : Type -> T
+
 @eval (\f, x -> f x) (\x -> x) 10

@@ -1,6 +1,5 @@
-use crate::passes::elab::Type;
-
 use super::*;
+use crate::passes::elab::Type;
 
 impl Elab {
   /// Creates a new type elaborating it into a new
@@ -63,7 +62,7 @@ impl Elab {
               };
 
               codomain.apply(ctx.check(&argument, domain).eval(&ctx.env))
-            })
+            });
         }
 
         // Resolves and infers the type of a reference to a variable
@@ -89,25 +88,28 @@ impl Elab {
           // TODO: Report error
           // Gets the value from the environment and clones it to avoid
           // borrowing the environment.
-          return ctx.env.data[ix].clone()
+          return ctx.env.data[ix].clone();
         }
 
         // Type check annotation, it does only checks the type of the
         // annotation, and returns the value of the annotation.
         //
         // It changes the mode of type checking, from inferring to checking.
-        Term::Anno(anno) => return ctx
-          .check(&anno.value, anno.type_repr.clone().erase(ctx).eval(&ctx.env))
-          .eval(&ctx.env),
+        Term::Anno(anno) => {
+          return ctx
+            .check(&anno.value, anno.type_repr.clone().erase(ctx).eval(&ctx.env))
+            .eval(&ctx.env)
+        }
 
         // Infers the type of a lambda, it does creates a new closure
         // and returns the type of the closure.
         Term::Pi(pi) => {
           let name = Definition::new(pi.domain.name.text.clone());
           let domain = ctx.infer(&pi.domain.type_repr);
+          let closure = ctx.create_new_value(&pi.domain.name.text, domain.clone());
           let codomain = Closure {
-            env: ctx.env.create_new_value(domain.clone()),
-            term: pi.codomain.clone().erase(ctx),
+            term: pi.codomain.clone().erase(&closure),
+            env: closure.env,
           };
 
           Value::Pi(name, pi.domain.icit, domain.into(), codomain)
