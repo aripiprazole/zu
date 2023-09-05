@@ -58,20 +58,31 @@ impl Type {
 
 impl Type {
   /// Creates a type without location
+  #[inline(always)]
   pub fn synthesized(value: Value) -> Self {
     Self(SYNTHESIZED.clone(), value)
   }
 
   /// Creates a rigid variable without applications and a
   /// spine to it
+  #[inline(always)]
   pub fn rigid(lvl: Lvl) -> Self {
     Type::synthesized(Value::Rigid(lvl, Default::default()))
   }
 
   /// Creates a flexible variable without applications and a
   /// spine to it
+  #[inline(always)]
   pub fn flexible(meta: MetaVar) -> Self {
     Type::synthesized(Value::Flexible(meta, Default::default()))
+  }
+
+  /// Creates a new pi type
+  #[inline(always)]
+  pub fn pi(name: &str, domain: Type, codomain: Closure) -> Self {
+    let name = Definition::new(name.to_string());
+
+    Type::synthesized(Value::Pi(name, Icit::Expl, domain.into(), codomain))
   }
 
   /// Function apply, it does applies a value to a value
@@ -87,15 +98,8 @@ impl Type {
         spine.push_back(argument);
         Type(location, Value::Rigid(lvl, spine))
       }
-      _ => panic!("expected a function, got another value"),
+      _ => panic!("expected a function, got another value: {:?}", self.1),
     }
-  }
-
-  /// Creates a new pi type
-  pub fn pi(name: &str, domain: Type, codomain: Closure) -> Self {
-    let name = Definition::new(name.to_string());
-
-    Type::synthesized(Value::Pi(name, Icit::Expl, domain.into(), codomain))
   }
 }
 

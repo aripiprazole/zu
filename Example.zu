@@ -1,3 +1,3 @@
 module Example
 
-@eval (\x -> x is Int) 10
+@eval (\f, x -> f x) (\x -> x) 10

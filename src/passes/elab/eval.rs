@@ -8,24 +8,6 @@ impl Expr {
   pub fn eval(self, env: &Environment) -> Type {
     use crate::ast::Term::*;
 
-    /// Evaluates an application
-    fn app(callee: Type, value: Type) -> Type {
-      match callee {
-        Type(_, Value::Lam(_, lam)) => lam.apply(value),
-        Type(location, Value::Flexible(meta, mut spine)) => {
-          spine.push_back(value);
-
-          Type(location, Value::Flexible(meta, spine))
-        }
-        Type(location, Value::Rigid(lvl, mut spine)) => {
-          spine.push_back(value);
-
-          Type(location, Value::Rigid(lvl, spine))
-        }
-        _ => unreachable!(),
-      }
-    }
-
     Type(self.meta().clone(), match self {
       // Removed
       Error(_) => unreachable!(),
@@ -41,13 +23,13 @@ impl Expr {
         env: env.clone(),
         term: *e.value,
       }),
-      Apply(e) => return app(e.callee.eval(env), e.arguments.eval(env)),
+      Apply(e) => return e.callee.eval(env).apply(e.arguments.eval(env)),
       Reference(crate::quoting::Reference::Var(Ix(ix))) => return env.data[ix].clone(),
       Reference(crate::quoting::Reference::MetaVar(meta)) => match meta.take() {
         Some(value) => return value,
         None => return Type::flexible(meta),
       },
-      Anno(anno) => anno.value.eval(env).value(),
+      Anno(anno) => return anno.value.eval(env),
       Pi(pi) => {
         let name = Definition::new(pi.domain.name.text);
         let domain = pi.domain.type_repr.eval(env);
