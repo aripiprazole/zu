@@ -1,14 +1,18 @@
+use crate::ast::Icit;
 use crate::ast::PrimKind;
 use crate::ast::Term;
-use crate::quoting::Quoted;
-use crate::quoting::Ix;
-use crate::quoting::Lvl;
-use crate::quoting::MetaHole;
-use crate::quoting::Reference;
+use crate::nfe::Delim;
+use crate::nfe::Disposal;
 use crate::nfe::Nfe;
+use crate::nfe::Sep;
 use crate::passes::elab::quote::Quote;
 use crate::passes::elab::Elab;
 use crate::passes::elab::Value;
+use crate::quoting::Ix;
+use crate::quoting::Lvl;
+use crate::quoting::MetaHole;
+use crate::quoting::Quoted;
+use crate::quoting::Reference;
 
 /// The context we need to pretty print a type right now.
 ///
@@ -28,7 +32,6 @@ impl Show {
       Term::Group(_) => todo!(),
 
       // Values
-      Term::Pi(_) => todo!(),
       Term::Hole(_) => todo!(),
       Term::Apply(_) => todo!(),
       Term::Error(_) => todo!(),
@@ -39,11 +42,16 @@ impl Show {
       },
       Term::Anno(anno) => Nfe::Apply {
         values: vec![self.build(*anno.value), self.build(*anno.type_repr)],
-        sep: crate::nfe::Sep::Colon,
-        delim: crate::nfe::Delim::default(),
-        disposal: crate::nfe::Disposal::Horizontal,
+        sep: Sep::Colon,
+        delim: Delim::default(),
+        disposal: Disposal::Horizontal,
       },
-      Term::Fun(_) => todo!(),
+      Term::Fun(fun) => Nfe::Apply {
+        values: vec![Nfe::S(fun.arguments.text.clone()), self.build(*fun.value)],
+        sep: Sep::ArrL,
+        delim: Delim::None,
+        disposal: Disposal::Horizontal,
+      },
       Term::Elim(_) => todo!(),
       Term::Int(v) => Nfe::S(format!("{}", v.value)),
       Term::Str(v) => Nfe::S(format!("\"{}\"", v.value)),
@@ -53,6 +61,23 @@ impl Show {
         MetaHole::Nothing => Nfe::S("?".into()),
       },
       Term::Reference(Reference::Var(Ix(ix))) => Nfe::S(self.names[ix].clone()),
+      Term::Pi(pi) => Nfe::Apply {
+        values: vec![
+          Nfe::Apply {
+            values: vec![Nfe::S(pi.domain.name.text.clone()), self.build(*pi.domain.type_repr)],
+            sep: Sep::Colon,
+            delim: match pi.domain.icit {
+              Icit::Expl => Delim::Paren,
+              Icit::Impl => Delim::Brace,
+            },
+            disposal: Disposal::Horizontal,
+          },
+          self.build(*pi.codomain),
+        ],
+        delim: Delim::None,
+        sep: Sep::ArrL,
+        disposal: Disposal::Horizontal,
+      },
     }
   }
 }

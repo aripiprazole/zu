@@ -1,5 +1,5 @@
 module Example
 
-fun Id : T : Type -> T -> T = \T, x -> x
+fun Id : {T} -> T -> T = \T, x -> x
 
-@eval (\f, x -> f x) (\x -> x) (Id _ 10)
+@type (\f, x -> f x) (\x -> x)
