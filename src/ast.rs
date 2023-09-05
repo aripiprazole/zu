@@ -81,6 +81,17 @@ pub struct Definition<S: state::State> {
   pub is_global: bool,
 }
 
+impl <M, FS: state::State<Meta = M>> Definition<FS> {
+  /// Converts the definition into a new definition with a different state.
+  pub fn shift<TS: state::State<Meta = M>>(self) -> Definition<TS> {
+    Definition {
+      text: self.text,
+      meta: self.meta,
+      is_global: self.is_global,
+    }
+  }
+}
+
 impl<S: state::State> Definition<S>
 where
   S::Meta: Default,
