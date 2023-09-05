@@ -1,8 +1,8 @@
 use crate::ast::Icit;
 use crate::ast::PrimKind;
 use crate::ast::Term;
+use crate::nfe::Apply;
 use crate::nfe::Delim;
-use crate::nfe::Disposal;
 use crate::nfe::Nfe;
 use crate::nfe::Sep;
 use crate::passes::elab::quote::Quote;
@@ -51,21 +51,19 @@ impl Show {
         PrimKind::Int => Nfe::S("Int".to_string()),
         PrimKind::Universe => Nfe::S("*".to_string()),
       },
-      Term::Anno(anno) => Nfe::Apply {
+      Term::Anno(anno) => Nfe::Apply(Apply {
         values: vec![self.show(*anno.value), self.show(*anno.type_repr)],
         sep: Sep::Colon,
-        delim: Delim::default(),
-        disposal: Disposal::Horizontal,
-      },
-      Term::Fun(fun) => Nfe::Apply {
+        ..Default::default()
+      }),
+      Term::Fun(fun) => Nfe::Apply(Apply {
         values: vec![
           Nfe::S(fun.arguments.text.clone()),
           self.bind(&fun.arguments.text).show(*fun.value),
         ],
         sep: Sep::ArrL,
-        delim: Delim::None,
-        disposal: Disposal::Horizontal,
-      },
+        ..Default::default()
+      }),
       Term::Elim(_) => todo!(),
       Term::Int(v) => Nfe::S(format!("{}", v.value)),
       Term::Str(v) => Nfe::S(format!("\"{}\"", v.value)),
@@ -75,23 +73,22 @@ impl Show {
         MetaHole::Nothing => Nfe::S("?".into()),
       },
       Term::Reference(Reference::Var(Ix(ix))) => Nfe::S(self.names[ix].clone()),
-      Term::Pi(pi) => Nfe::Apply {
+      Term::Pi(pi) => Nfe::Apply(Apply {
         values: vec![
-          Nfe::Apply {
+          Nfe::Apply(Apply {
             values: vec![Nfe::S(pi.domain.name.text.clone()), self.show(*pi.domain.type_repr)],
             sep: Sep::Colon,
             delim: match pi.domain.icit {
               Icit::Expl => Delim::Paren,
               Icit::Impl => Delim::Brace,
             },
-            disposal: Disposal::Horizontal,
-          },
+            ..Default::default()
+          }),
           self.bind(&pi.domain.name.text).show(*pi.codomain),
         ],
-        delim: Delim::None,
         sep: Sep::ArrL,
-        disposal: Disposal::Horizontal,
-      },
+        ..Default::default()
+      }),
     }
   }
 }

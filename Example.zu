@@ -2,4 +2,4 @@ module Example
 
 fun Id : {T} -> T -> T = \T, x -> x
 
-@eval (\f, x -> f x) (\x -> x)
+@eval (\f, x -> f x) (\x -> x) 10

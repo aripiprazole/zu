@@ -40,6 +40,17 @@ pub enum Delim {
   None, // ...
 }
 
+#[derive(Default, Debug, Clone, PartialEq, Eq)]
+pub struct Apply {
+  /// The arguments of the application.
+  pub values: Vec<Nfe>,
+
+  // SECTION: Pretty printing
+  pub sep: Sep,
+  pub delim: Delim,
+  pub disposal: Disposal,
+}
+
 /// Normal form of terms, that is used for the pretty printing.
 ///
 /// Ou nota fiscal se você estiver no brasil.
@@ -54,15 +65,7 @@ pub enum Nfe {
 
   /// Wraps a list of terms. It can contain a separator and a
   /// delimiter.
-  Apply {
-    /// The arguments of the application.
-    values: Vec<Nfe>,
-
-    // SECTION: Pretty printing
-    sep: Sep,
-    delim: Delim,
-    disposal: Disposal,
-  },
+  Apply(Apply),
 }
 
 impl Display for Nfe {
@@ -70,14 +73,14 @@ impl Display for Nfe {
     match self {
       Nfe::S(v) => write!(f, "{v}"),
       Nfe::Nil => write!(f, "?"),
-      Nfe::Apply { values, sep, delim, .. } => {
+      Nfe::Apply(Apply { values, sep, delim, .. }) => {
         let mut iter = values.iter();
         match delim {
-            Delim::Paren => write!(f, "(")?,
-            Delim::Bracket => write!(f, "[")?,
-            Delim::Brace => write!(f, "{{")?,
-            Delim::Angle => write!(f, "<")?,
-            Delim::None => {},
+          Delim::Paren => write!(f, "(")?,
+          Delim::Bracket => write!(f, "[")?,
+          Delim::Brace => write!(f, "{{")?,
+          Delim::Angle => write!(f, "<")?,
+          Delim::None => {}
         }
 
         if let Some(first) = iter.next() {
@@ -96,11 +99,11 @@ impl Display for Nfe {
         }
 
         match delim {
-            Delim::Paren => write!(f, ")")?,
-            Delim::Bracket => write!(f, "]")?,
-            Delim::Brace => write!(f, "}}")?,
-            Delim::Angle => write!(f, ">")?,
-            Delim::None => {},
+          Delim::Paren => write!(f, ")")?,
+          Delim::Bracket => write!(f, "]")?,
+          Delim::Brace => write!(f, "}}")?,
+          Delim::Angle => write!(f, ">")?,
+          Delim::None => {}
         }
 
         Ok(())
