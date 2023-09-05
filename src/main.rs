@@ -23,6 +23,10 @@ lalrpop_mod! {
     pub zu
 }
 
+/// Debruijin indexes module. It does convert the
+/// named variables to the debruijin indexes.
+pub mod debruijin;
+
 /// The abstract syntax tree for the language. The abstract
 /// syntax tree is the tree that represents the program
 /// in a tree form.
@@ -30,7 +34,7 @@ pub mod ast;
 
 /// Simplifies the tree to the quoted terms, it does
 /// erase a location information.
-pub mod erase;
+pub mod quoting;
 
 /// Pretty print the elaborated ast to the screen
 /// a type.

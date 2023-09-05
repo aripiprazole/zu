@@ -4,6 +4,7 @@ use std::rc::Rc;
 use nonempty::NonEmpty;
 
 use crate::ast::*;
+pub use crate::debruijin::*;
 use crate::passes::elab::Elab;
 use crate::passes::elab::Type;
 use crate::passes::resolver::Resolved;
@@ -70,57 +71,6 @@ pub enum Reference {
 impl<S: State<Meta = Location>> Element<S> for Reference {
   fn meta(&self) -> &S::Meta {
     &SYNTHESIZED
-  }
-}
-
-/// Defines a debruijin index.
-#[derive(Default, Debug, Clone, Hash, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Lvl(pub usize);
-
-impl Lvl {
-  /// Transforms a level into a debruijin index.
-  pub fn into_ix(&self, Lvl(lvl0): Lvl) -> Ix {
-    let Lvl(lvl1) = self;
-
-    Ix(lvl1 - lvl0 - 1)
-  }
-}
-
-impl std::ops::Add<usize> for Lvl {
-  type Output = Self;
-
-  fn add(self, rhs: usize) -> Self::Output {
-    Self(self.0 + rhs)
-  }
-}
-
-impl std::ops::AddAssign<usize> for Lvl {
-  fn add_assign(&mut self, rhs: usize) {
-    self.0 += rhs
-  }
-}
-
-impl<S: State<Meta = ()>> Element<S> for Lvl {
-  fn meta(&self) -> &S::Meta {
-    &()
-  }
-}
-
-/// Defines a debruijin index.
-#[derive(Debug, Clone, Hash, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Ix(pub usize);
-
-impl std::ops::Add<usize> for Ix {
-  type Output = Self;
-
-  fn add(self, rhs: usize) -> Self::Output {
-    Self(self.0 + rhs)
-  }
-}
-
-impl std::ops::AddAssign<usize> for Ix {
-  fn add_assign(&mut self, rhs: usize) {
-    self.0 += rhs
   }
 }
 

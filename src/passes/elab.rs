@@ -10,7 +10,7 @@ use self::unification::UnifyError;
 use super::resolver::FileMap;
 use super::resolver::Resolved;
 use crate::ast::*;
-use crate::erase::*;
+use crate::quoting::*;
 use crate::nfe::Nfe;
 use crate::passes::elab::quote::Quote;
 

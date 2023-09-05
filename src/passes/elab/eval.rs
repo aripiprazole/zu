@@ -42,8 +42,8 @@ impl Expr {
         term: *e.value,
       }),
       Apply(e) => return app(e.callee.eval(env), e.arguments.eval(env)),
-      Reference(crate::erase::Reference::Var(Ix(ix))) => return env.data[ix].clone(),
-      Reference(crate::erase::Reference::MetaVar(meta)) => match meta.take() {
+      Reference(crate::quoting::Reference::Var(Ix(ix))) => return env.data[ix].clone(),
+      Reference(crate::quoting::Reference::MetaVar(meta)) => match meta.take() {
         Some(value) => return value,
         None => return Type::flexible(meta),
       },

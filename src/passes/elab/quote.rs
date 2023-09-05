@@ -26,8 +26,8 @@ impl Quote for Value {
     }
 
     match self.clone() {
-      Value::Flexible(meta, sp) => quote_sp(sp, Expr::Reference(crate::erase::Reference::MetaVar(meta)), nth),
-      Value::Rigid(lvl, sp) => quote_sp(sp, Expr::Reference(crate::erase::Reference::Var(nth.into_ix(lvl))), nth),
+      Value::Flexible(meta, sp) => quote_sp(sp, Expr::Reference(crate::quoting::Reference::MetaVar(meta)), nth),
+      Value::Rigid(lvl, sp) => quote_sp(sp, Expr::Reference(crate::quoting::Reference::Var(nth.as_ix(lvl))), nth),
       Value::Prim(kind) => Expr::Prim(Prim {
         kind,
         meta: Default::default(),

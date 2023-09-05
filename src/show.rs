@@ -1,10 +1,10 @@
 use crate::ast::PrimKind;
 use crate::ast::Term;
-use crate::erase::Quoted;
-use crate::erase::Ix;
-use crate::erase::Lvl;
-use crate::erase::MetaHole;
-use crate::erase::Reference;
+use crate::quoting::Quoted;
+use crate::quoting::Ix;
+use crate::quoting::Lvl;
+use crate::quoting::MetaHole;
+use crate::quoting::Reference;
 use crate::nfe::Nfe;
 use crate::passes::elab::quote::Quote;
 use crate::passes::elab::Elab;
