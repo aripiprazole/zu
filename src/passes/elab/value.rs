@@ -63,6 +63,12 @@ impl Type {
     Self(SYNTHESIZED.clone(), value)
   }
 
+  /// Creates a new type universe
+  #[inline(always)]
+  pub fn universe() -> Self {
+    Type::synthesized(Value::Prim(PrimKind::Universe))
+  }
+
   /// Creates a rigid variable without applications and a
   /// spine to it
   #[inline(always)]

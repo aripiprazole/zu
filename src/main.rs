@@ -11,7 +11,6 @@ use miette::IntoDiagnostic;
 use nfe::Nfe;
 use owo_colors::OwoColorize;
 use passes::elab::Elab;
-use passes::elab::Environment;
 use passes::elab::Reporter;
 use passes::resolver::Resolver;
 
@@ -155,12 +154,11 @@ fn program() -> miette::Result<()> {
 
   let resolver = Resolver::new(command.main, command.include)?;
   let mut elab = Elab::new(resolver.files.clone(), LoggerReporter);
-  let environment = Environment::default();
 
   // Resolve the file and import the declarations
   // from the file.
   let file = resolver.resolve_and_import()?;
-  let file = elab.elaborate(environment, file)?;
+  let file = elab.elaborate(file)?;
   let _ = file;
 
   Ok(())

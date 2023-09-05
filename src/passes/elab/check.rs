@@ -1,4 +1,5 @@
-use super::{*, Type};
+use super::Type;
+use super::*;
 
 impl Elab {
   /// Checks a term against a type
@@ -8,9 +9,14 @@ impl Elab {
 
       // Unifies the domain with the function parameter, and the codomain
       // with it's body
-      (Term::Fun(ref fun), Type(_, Value::Pi(_, _, box dom, cod))) => self
-        .create_new_value(&fun.arguments.text, dom)
-        .check(&fun.value, cod.apply(Type::rigid(self.lvl))),
+      (Term::Fun(ref fun), Type(_, Value::Pi(_, _, box dom, cod))) => Term::Fun(Fun {
+        meta: fun.meta.clone(),
+        arguments: fun.arguments.as_shift(),
+        value: self
+          .create_new_value(&fun.arguments.text, dom)
+          .check(&fun.value, cod.apply(Type::rigid(self.lvl)))
+          .into(),
+      }),
 
       // Fallback case that will cause an error if we can't check
       // the term against the type.

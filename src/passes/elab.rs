@@ -137,15 +137,32 @@ impl Elab {
   /// with types.
   ///
   /// It does elaborates the types of the file.
-  pub fn elaborate(&mut self, _: Environment, file: File<Resolved>) -> miette::Result<Module> {
+  pub fn elaborate(&mut self, file: File<Resolved>) -> miette::Result<Module> {
     let declarations = vec![];
 
     for top_level in file.top_levels {
       match top_level {
         // Sentinel values
         TopLevel::Error(_) => {}
+
+        // Type checking and evaluation of bindings and inductive types.
+        // 
+        // Also should be used for structures, classes, modules.
         TopLevel::Inductive(_) => todo!(),
-        TopLevel::Binding(_) => todo!(),
+        TopLevel::Binding(s) => {
+          let type_repr = s.type_repr.erase(self).eval(&self.env);
+          let type_repr = self.check(&s.value, type_repr);
+          let value = s.value.erase(self).eval(&self.env);
+
+          // Create a binding
+          self.env.globals.insert(s.name.text.clone(), globals::Declaration {
+            name: s.name,
+            type_repr: type_repr.eval(&self.env),
+            value,
+          });
+        },
+
+        // Inline evaluation and checking functions. `@eval` and `@check`
         TopLevel::Eval(s) => {
           let location = s.value.meta().clone();
           let value = s.value.erase(self).eval(&self.env);
@@ -161,7 +178,7 @@ impl Elab {
           self.reporter.check(expr, location)?;
         }
 
-        // Erased values, the types with `!`
+        // Removed
         TopLevel::Signature(_) => unreachable!(),
         TopLevel::Import(_) => unreachable!(),
       }
@@ -219,6 +236,10 @@ impl Elab {
   /// It does creates a new meta variable with a unique id.
   pub fn fresh_meta(&self) -> Expr {
     Expr::Reference(Reference::MetaVar(MetaVar::new_unique(self)))
+  }
+
+  pub fn create_new_binder(&self, name: &str) -> Self {
+    self.create_new_value(name, self.fresh_meta().eval(&self.env))
   }
 
   /// Binds a new value in the context.

@@ -4,6 +4,7 @@ impl Expr {
   /// Evaluates a value to a value in the WHNF.
   ///
   /// It does performs reductions.
+  #[inline(always)]
   pub fn eval(self, env: &Environment) -> Type {
     eval(self, env)
   }

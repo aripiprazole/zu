@@ -6,19 +6,23 @@ pub type Global = crate::passes::resolver::Reference;
 /// A global declaration.
 #[derive(Debug, Clone)]
 pub struct Declaration {
-  pub name: String,
+  pub name: Rc<Definition<Resolved>>,
   pub type_repr: Type,
   pub value: Type,
 }
 
 #[derive(Default, Debug, Clone)]
 pub struct GlobalEnvironment {
-  pub data: im_rc::HashMap<String, Rc<Declaration>>,
+  pub data: Rc<RefCell<std::collections::HashMap<String, Rc<Declaration>>>>,
 }
 
 impl GlobalEnvironment {
   pub fn lookup(&self, name: &str) -> Rc<Declaration> {
-    self.data.get(name).unwrap().clone()
+    self.data.borrow().get(name).unwrap().clone()
+  }
+
+  pub fn insert(&mut self, name: String, value: Declaration) {
+    self.data.borrow_mut().insert(name, value.into());
   }
 }
 

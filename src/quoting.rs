@@ -37,9 +37,9 @@ impl Pattern<Resolved> {
   /// Erase a term to a term in the untyped lambda calculus.
   pub fn erase(self, ctx: &mut Elab) -> Box<crate::ast::Pattern<Quoted>> {
     Box::new(match self {
-      Pattern::Var(n, _) => Pattern::Var(Definition::new(n.text.clone()), Default::default()),
+      Pattern::Var(n, _) => Pattern::Var(n.as_shift(), Default::default()),
       Pattern::Constructor(n, v, _) => Pattern::Constructor(
-        Definition::new(n.text.clone()),
+        n.as_shift(),
         v.into_iter()
           .map(|pattern| {
             ctx.lvl += 1;
@@ -98,10 +98,10 @@ impl Term<Resolved> {
       }),
       Term::Fun(fun) => Term::Fun(Fun {
         meta: fun.meta,
-        arguments: Definition::new(fun.arguments.text.clone()),
+        arguments: fun.arguments.as_shift(),
         value: fun
           .value
-          .erase(&elab.create_new_value(&fun.arguments.text, elab.fresh_meta().eval(&elab.env)))
+          .erase(&elab.create_new_binder(&fun.arguments.text))
           .into(),
       }),
       Term::Apply(apply) => apply
@@ -121,13 +121,9 @@ impl Term<Resolved> {
           icit: pi.domain.icit,
           meta: pi.domain.meta,
           type_repr: pi.domain.type_repr.erase(elab).into(),
-          name: Definition {
-            is_global: false,
-            meta: pi.domain.name.meta.clone(),
-            text: pi.domain.name.text.clone(),
-          },
+          name: pi.domain.name.as_shift(),
         },
-        codomain: pi.codomain.erase(elab).into(),
+        codomain: pi.codomain.erase(&elab.create_new_binder(&pi.domain.name.text)).into(),
       }),
       Term::Reference(reference) if reference.definition.is_global => Term::Reference(Reference::Global(reference)),
       Term::Reference(reference) => {
@@ -140,7 +136,7 @@ impl Term<Resolved> {
           ix += 1;
         }
 
-        todo!("reference not found error handling")
+        todo!("reference not found error handling: {}", reference.text())
       }
     }
   }
