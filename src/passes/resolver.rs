@@ -266,6 +266,7 @@ impl Resolver {
     scope.all_possible_names.insert(
       name.text.clone(),
       Rc::new(Definition {
+        is_global: true,
         meta: name.meta.clone(),
         text: declaration.name().text.clone(),
       }),
@@ -307,6 +308,7 @@ impl Resolver {
         let name = stmt.name.text.clone();
         let location = stmt.name.meta.clone();
         let definition = Rc::new(Definition {
+          is_global: true,
           meta: stmt.meta.clone(),
           text: stmt.name.text.clone(),
         });
@@ -406,6 +408,7 @@ impl Resolver {
             // This is needed so we can access the names in the context.
             let name = argument.text.clone();
             let parameter = Rc::new(Definition {
+              is_global: false,
               text: argument.text.clone(),
               meta: argument.meta.clone(),
             });
@@ -494,6 +497,7 @@ impl Resolver {
       };
 
       let definition = Rc::new(Definition {
+        is_global: false,
         meta: location.clone(),
         text: match reference {
           Some(name) => name.text,

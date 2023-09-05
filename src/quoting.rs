@@ -163,6 +163,7 @@ impl Term<Resolved> {
           meta: pi.domain.meta,
           type_repr: pi.domain.type_repr.erase(elab).into(),
           name: Definition {
+            is_global: false,
             meta: pi.domain.name.meta.clone(),
             text: pi.domain.name.text.clone(),
           },

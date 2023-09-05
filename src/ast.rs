@@ -78,6 +78,7 @@ pub enum DefinitionKind {
 pub struct Definition<S: state::State> {
   pub text: String,
   pub meta: S::Meta,
+  pub is_global: bool,
 }
 
 impl<S: state::State> Definition<S>
@@ -88,6 +89,16 @@ where
   pub fn new(text: String) -> Self {
     Self {
       text,
+      is_global: false,
+      meta: S::Meta::default(),
+    }
+  }
+
+  /// Creates a new instance of [`Definition`].
+  pub fn global(text: String) -> Self {
+    Self {
+      text,
+      is_global: true,
       meta: S::Meta::default(),
     }
   }
