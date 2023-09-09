@@ -1,8 +1,8 @@
 module Example
 
 fun Nat  : Type       = {T} -> (T -> T) -> T -> T
-fun zero : Nat        = \T, succ, zero       -> zero
-fun succ : Nat -> Nat = \prev, T, succ, zero -> succ (prev T succ zero)
+fun zero : Nat        = \T    -> \succ, zero       -> zero
+fun succ : Nat -> Nat = \prev -> \T -> \succ, zero -> succ (prev T succ zero)
 
 @eval succ zero   // match succ zero with
   (\prev -> 10)   //   case Succ prev -> 10,

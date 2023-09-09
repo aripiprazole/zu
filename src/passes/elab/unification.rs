@@ -15,9 +15,9 @@ pub enum UnifyError {
   MismatchBetweenStrs(String, String),
 
   /// Icit mismatch between two values,
-  #[error("expected a value with icit: {0}, and got: {1}")]
+  #[error("expected a value with icit: {0} of `{2}`, and got: {1} of `{3}`")]
   #[diagnostic(url(docsrs), code(unify::icit_mismatch))]
-  IcitMismatch(Icit, Icit),
+  IcitMismatch(Icit, Icit, Nfe, Nfe),
 
   /// Unification error between two types
   #[error("expected type: `{0}`, got the type: `{1}`")]
@@ -196,8 +196,8 @@ impl Type {
       // of the pi types.
       //
       // NOTE: cod stands for codomain, and dom stands for domain.
-      (Type(_, Pi(_, i_a, ..))          ,               Type(_, Pi(_, i_b, ..))) if i_a != i_b => Err(IcitMismatch(i_a, i_b)),
-      (Type(_, Pi(_, _, box d_a, c_a))  , Type(_, Pi(_, _, box d_b, c_b))) => {
+      (ref lhs @ Type(_, Pi(_, i_a, ..)), ref rhs @ Type(_, Pi(_, i_b, ..))) if i_a != i_b => Err(IcitMismatch(i_a, i_b, lhs.show(ctx), rhs.show(ctx))),
+      (Type(_, Pi(_, _, box d_a, c_a))  ,   Type(_, Pi(_, _, box d_b, c_b)))               => {
         d_a.unify(d_b, ctx)?;
         c_a.apply(Type::rigid(ctx.lvl))
              .unify(c_b.apply(Type::rigid(ctx.lvl)), &ctx.lift())

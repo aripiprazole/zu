@@ -205,8 +205,24 @@ impl Elab {
 
   // SECTION: Insertion
   /// Inserts a new type in implicit argument position.
-  pub fn insert(&self, term: Tm, type_repr: Type) -> (Tm, Type) {
-    (term, type_repr)
+  pub fn insert(&self, term: Tm, mut type_repr: Type) -> (Tm, Type) {
+    let mut acc = term;
+    loop {
+      match type_repr.value() {
+        Value::Pi(_, Icit::Impl, _, cod) => {
+          let meta = self.fresh_meta().eval(&self.env);
+          acc = Term::Apply(Apply {
+            meta: acc.meta().clone(),
+            arguments: Box::new(Term::Hole(Hole {
+              meta: acc.meta().clone(),
+            })),
+            callee: Box::new(acc),
+          });
+          type_repr = cod.apply(meta);
+        }
+        _ => return (acc, type_repr)
+      }
+    }
   }
 
   // ENDSECTION: Insertion
