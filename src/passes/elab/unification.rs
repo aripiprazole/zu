@@ -5,17 +5,22 @@ use super::*;
 #[diagnostic()]
 pub enum UnifyError {
   /// Int value mismatch between two values,
-  #[error("expected int value {0} and got {1}")]
+  #[error("expected int value: {0}, and got: {1}")]
   #[diagnostic(url(docsrs), code(unify::int_mismatch))]
   MismatchBetweenInts(isize, isize),
 
   /// String value mismatch between two values,
-  #[error("expected string value {0} and got {1}")]
+  #[error("expected string value: \"{0}\", and got: \"{1}\"")]
   #[diagnostic(url(docsrs), code(unify::str_mismatch))]
   MismatchBetweenStrs(String, String),
 
+  /// Icit mismatch between two values,
+  #[error("expected a value with icit: {0}, and got: {1}")]
+  #[diagnostic(url(docsrs), code(unify::icit_mismatch))]
+  IcitMismatch(Icit, Icit),
+
   /// Unification error between two types
-  #[error("expected type {0}, got another {1}")]
+  #[error("expected type: `{0}`, got the type: `{1}`")]
   #[diagnostic(url(docsrs), code(unify::cant_unify))]
   CantUnify(Nfe, Nfe),
 }
@@ -68,7 +73,7 @@ impl PartialRenaming {
 impl Type {
   /// solve : (Γ : Cxt) → (spine : Sub Δ Γ) → (m : MetaVar) → ()
   ///   Γ ?m spine ?= self
-  /// 
+  ///
   /// The function will transform: `Γ ?m spine ?= self` into `Γ ?m = \spine. self`
   pub fn solve(self, spine: Spine, m: MetaVar, lvl: Lvl) -> miette::Result<(), UnifyError> {
     // unsound
@@ -187,6 +192,17 @@ impl Type {
           .unify(v_b.apply(Type::rigid(ctx.lvl)), &ctx.lift())
       }
 
+      // Pi type unification, it does unifies the domain and the codomain
+      // of the pi types.
+      //
+      // NOTE: cod stands for codomain, and dom stands for domain.
+      (Type(_, Pi(_, i_a, ..))          ,               Type(_, Pi(_, i_b, ..))) if i_a != i_b => Err(IcitMismatch(i_a, i_b)),
+      (Type(_, Pi(_, _, box d_a, c_a))  , Type(_, Pi(_, _, box d_b, c_b))) => {
+        d_a.unify(d_b, ctx)?;
+        c_a.apply(Type::rigid(ctx.lvl))
+             .unify(c_b.apply(Type::rigid(ctx.lvl)), &ctx.lift())
+      }
+
       // Unification of meta variables, it does unifies meta variables that
       // are present in the context.
       //
@@ -194,16 +210,6 @@ impl Type {
       //
       // TODO: Solve
       (Type(_, Flexible(m, sp)), t) | (t, Type(_, Flexible(m, sp))) => t.solve(sp, m, ctx.lvl),
-
-      // Pi type unification, it does unifies the domain and the codomain
-      // of the pi types.
-      //
-      // NOTE: cod stands for codomain, and dom stands for domain.
-      (Type(_, Value::Pi(_, i_a, box dom_a, cod_a)) , Type(_, Value::Pi(_, i_b, box dom_b, cod_b))) if i_a == i_b => {
-        dom_a.unify(dom_b, ctx)?;
-        cod_a.apply(Type::rigid(ctx.lvl))
-             .unify(cod_b.apply(Type::rigid(ctx.lvl)), &ctx.lift())
-      }
 
       // Fallback case which will cause an error if we can't unify
       // the values.

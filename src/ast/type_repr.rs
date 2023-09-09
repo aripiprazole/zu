@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use super::*;
 use crate::passes::parser::Parsed;
 
@@ -96,6 +98,15 @@ pub enum Icit {
 
   /// Implicit binder `{x : A}`.
   Impl,
+}
+
+impl Display for Icit {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    match self {
+      Icit::Expl => write!(f, "explicit"),
+      Icit::Impl => write!(f, "implicit"),
+    }
+  }
 }
 
 /// A pi type. It has a name, a domain, and a codomain.

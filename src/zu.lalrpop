@@ -10,7 +10,12 @@ grammar<'err, 'unique>(
 );
 
 extern {
+  // Defines the location type for the parser, this is used to report errors
+  // and to store the location of the parsed elements.
   type Location = usize;
+
+  // Defines the error type for the parser, this is used to report errors
+  // and to present the error.
   type Error = crate::passes::parser::InnerError;
 }
 
@@ -462,9 +467,9 @@ LogicalOp: std::string::String = {
   ">=" => ">=".to_string(),
   "++" => "++".to_string(),
   "**" => "**".to_string(),
-  "$" => "$".to_string(),
-  "<" => "<".to_string(),
-  ">" => ">".to_string(),
+  "$"  => "$".to_string(),
+  "<"  => "<".to_string(),
+  ">"  => ">".to_string(),
 };
 
 /// Logical operators, this is a list of terms separated by logical operators.
@@ -647,26 +652,6 @@ pub Term: crate::ast::Term<Parsed> = {
   },
 }
 
-/// Parses a relevent document string, this is a string that is used to document
-/// the code.
-DocString: crate::ast::DocString<Parsed> = <s: @L> <text:r"///.*\n"> <e: @R> => crate::ast::DocString {
-  text: (&text[2..]).to_string(),
-  full_text: text.to_string(),
-  meta: crate::ast::Location::new(s, e, filename, &unique),
-};
-
-Int: isize = <s:r"[0123456789]+"> => isize::from_str(s).unwrap();
-String: std::string::String = <text:r#""(\\\\|\\"|[^"\\])*""#> => (&text[1..text.len() - 1]).to_string();
-
-// Reference token text lexer
-Text: std::string::String = {
-  "`" <text:LogicalOp> => text.to_string(),
-  "`" <text:ArithmeticOp> => text.to_string(),
-  "`" <text:FactorOp> => text.to_string(),
-  <text:"_"> => text.to_string(),
-  <text:r"[a-zA-Z][a-zA-Z0-9/_]*"> => text.to_string(),
-}
-
 // Reference token lexer
 Reference: crate::passes::parser::Reference = {
   <s: @L> <text:Text> <e: @R> => crate::passes::parser::Reference {
@@ -675,6 +660,34 @@ Reference: crate::passes::parser::Reference = {
   }
 };
 
+/// Parses a relevent document string, this is a string that is used to document
+/// the code.
+DocString: crate::ast::DocString<Parsed> = <s: @L> <text:r"///.*\n"> <e: @R> => crate::ast::DocString {
+  text: (&text[2..]).to_string(),
+  full_text: text.to_string(),
+  meta: crate::ast::Location::new(s, e, filename, &unique),
+};
+
+// SECTION: Lexer
+// These are the tokens that are used to parse the language. They are used
+// to parse the language, and they are used to tokenize the input.
+
+Int   : isize               = <s:r"[0123456789]+">             => isize::from_str(s).unwrap();
+String: std::string::String = <text:r#""(\\\\|\\"|[^"\\])*""#> => (&text[1..text.len() - 1]).to_string();
+
+// Reference token text lexer
+Text  : std::string::String = {
+  "`" <text:LogicalOp>             => text.to_string(),
+  "`" <text:ArithmeticOp>          => text.to_string(),
+  "`" <text:FactorOp>              => text.to_string(),
+  <text:"_">                       => text.to_string(),
+  <text:r"[a-zA-Z][a-zA-Z0-9/_]*"> => text.to_string(),
+}
+
+// SECTION: Utils
+// These are functions that are used to make the parser more readable.
+
+/// Same thing as `Sep`, but it requires at least one element.
 Sep1<U, T>: nonempty::NonEmpty<T> = {
   <vec: Sep<U, T>> => match vec {
     mut vec if vec.len() == 0 => panic!("expected at least one element"),

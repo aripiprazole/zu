@@ -4,8 +4,7 @@ use super::*;
 impl Elab {
   /// Checks a term against a type
   pub fn check(&self, term: &Tm, type_repr: Type) -> Expr {
-    let x = type_repr.force();
-    match (term, x.clone()) {
+    match (term, type_repr.force()) {
       (Term::Hole(_), _) => self.fresh_meta(),
 
       // Unifies the domain with the function parameter, and the codomain
@@ -22,7 +21,7 @@ impl Elab {
       // Fallback case that will cause an error if we can't check
       // the term against the type.
       (t, expected) => {
-        let inferred = self.infer(t);
+        let (t, inferred) = self.insert(t.clone(), self.infer(t));
         self.unify(expected.clone(), inferred.clone());
         t.clone().erase(self)
       }

@@ -37,7 +37,7 @@ impl Elab {
         // Infers the type of a function application, it can apply
         // either a pi type, or a closure that is a lambda.
         Term::Apply(apply) => {
-          let callee = ctx.infer(&apply.callee);
+          let (_, callee) = ctx.insert(*apply.callee.clone(), ctx.infer(&apply.callee));
 
           let (domain, codomain) = match callee.clone().force() {
             Type(_, Value::Pi(_, _, box tt, closure)) => (tt, closure),

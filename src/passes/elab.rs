@@ -166,6 +166,7 @@ impl Elab {
         // Inline evaluation and checking functions. `@eval` and `@check`
         TopLevel::Eval(s) => {
           let location = s.value.meta().clone();
+          let _ = self.infer(&s.value); // Infers the type
           let value = s.value.erase(self).eval(&self.env);
           let expr = value.show(self);
 
@@ -202,27 +203,28 @@ impl Elab {
     })
   }
 
+  // SECTION: Insertion
+  /// Inserts a new type in implicit argument position.
+  pub fn insert(&self, term: Tm, type_repr: Type) -> (Tm, Type) {
+    (term, type_repr)
+  }
+
+  // ENDSECTION: Insertion
+
   /// Performs unification between two values, its a
   /// equality relation between two values.
   ///
   /// It does closes some holes.
-  ///
-  /// NOTE: I disabled the formatter so I can align values
-  /// and it looks cutier.
   #[inline(always)]
   pub fn unify(&self, lhs: Type, rhs: Type) {
-    use unification::UnifyError::*;
-
     let location = lhs.location();
+
     if let Err(err) = lhs.unify(rhs, self) {
       let position = self.position();
       self.errors.borrow_mut().push(TypeError {
         message: err.clone(),
         span: position.into(),
-        type_span: match err {
-          CantUnify(_, _) => location.or_none().map(Into::into),
-          _ => None,
-        },
+        type_span: location.or_none().map(Into::into),
       });
     }
   }
@@ -239,6 +241,7 @@ impl Elab {
     Expr::Reference(Reference::MetaVar(MetaVar::default()))
   }
 
+  /// Create a new binder that has a fresh meta variable.
   pub fn create_new_binder(&self, name: &str) -> Self {
     self.create_new_value(name, self.fresh_meta().eval(&self.env))
   }
