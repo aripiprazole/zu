@@ -6,4 +6,4 @@ fun zero : Nat = \T, succ, zero -> zero
 
 fun nat = \T, succ, zero -> succ (succ zero)
 
-@type nat Int (\prev -> 10) 20
+@eval zero Int (\prev -> 10) 20

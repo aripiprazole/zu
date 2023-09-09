@@ -16,6 +16,7 @@ pub struct Resolved;
 
 impl State for Resolved {
   type Anno = Anno<Self>;
+  type Arguments = Box<Term<Self>>;
   type Definition = Rc<Definition<Resolved>>;
   type Meta = Location;
   type Reference = Reference;
@@ -29,7 +30,7 @@ pub struct Definition<S: state::State> {
   pub is_global: bool,
 }
 
-impl <M: Clone, FS: state::State<Meta = M>> Definition<FS> {
+impl<M: Clone, FS: state::State<Meta = M>> Definition<FS> {
   /// Converts the definition into a new definition with a different state.
   pub fn as_shift<TS: state::State<Meta = M>>(&self) -> Definition<TS> {
     Definition {
@@ -40,7 +41,7 @@ impl <M: Clone, FS: state::State<Meta = M>> Definition<FS> {
   }
 }
 
-impl <M, FS: state::State<Meta = M>> Definition<FS> {
+impl<M, FS: state::State<Meta = M>> Definition<FS> {
   /// Converts the definition into a new definition with a different state.
   pub fn shift<TS: state::State<Meta = M>>(self) -> Definition<TS> {
     Definition {
@@ -309,7 +310,11 @@ impl Resolver {
     // we can handle this scope in the future.
     let old_scope = std::mem::take(&mut self.file_scope);
     self.file_scope = scope;
-    let top_levels = file.top_levels.into_iter().flat_map(|top_level| self.resolve(top_level)).collect();
+    let top_levels = file
+      .top_levels
+      .into_iter()
+      .flat_map(|top_level| self.resolve(top_level))
+      .collect();
     self.file_scope = old_scope;
 
     File {
@@ -403,7 +408,11 @@ impl Resolver {
         };
 
         // Change the type of the definition.
-        let doc_strings = top_level.doc_strings.into_iter().map(|doc| DocString { ..doc }).collect();
+        let doc_strings = top_level
+          .doc_strings
+          .into_iter()
+          .map(|doc| DocString { ..doc })
+          .collect();
 
         // Resolve the attributes.
         let attributes = top_level
@@ -484,6 +493,7 @@ impl Resolver {
           })
           .collect::<Vec<_>>()
           .into_iter()
+          .rev()
           .fold(local.term(*fun.value), |callee, parameter| {
             Term::Fun(Fun {
               arguments: parameter,
@@ -492,18 +502,14 @@ impl Resolver {
             })
           })
       }),
-      Term::Apply(apply) => {
-        // Resolve the callee and the arguments.
+      // Resolve the callee and the arguments.
+      Term::Apply(apply) => apply.arguments.into_iter().fold(self.term(*apply.callee), |acc, next| {
         Term::Apply(Apply {
-          callee: self.term(*apply.callee).into(),
-          arguments: apply
-            .arguments
-            .into_iter()
-            .map(|argument| self.term(argument))
-            .collect(),
-          meta: apply.meta,
+          callee: acc.into(),
+          arguments: self.term(next).into(),
+          meta: apply.meta.clone(),
         })
-      }
+      }),
       Term::Reference(reference) => self
         .find_reference(reference.clone())
         .map(|definition| {

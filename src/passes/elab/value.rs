@@ -69,6 +69,14 @@ impl Type {
     Type::synthesized(Value::Prim(PrimKind::Universe))
   }
 
+  /// Closes a type, it does creates a closure from a type
+  pub fn close(&self, ctx: &Elab) -> Closure {
+    Closure {
+      env: ctx.env.clone(),
+      term: self.quote(ctx.lvl + 1),
+    }
+  }
+
   /// Creates a rigid variable without applications and a
   /// spine to it
   #[inline(always)]

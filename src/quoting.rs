@@ -101,16 +101,11 @@ impl Term<Resolved> {
         arguments: fun.arguments.as_shift(),
         value: fun.value.erase(&elab.create_new_binder(&fun.arguments.text)).into(),
       }),
-      Term::Apply(apply) => apply
-        .arguments
-        .into_iter()
-        .fold(apply.callee.erase(elab), |acc, argument| {
-          Term::Apply(Apply {
-            meta: argument.meta().clone(),
-            callee: acc.into(),
-            arguments: argument.erase(elab).into(),
-          })
-        }),
+      Term::Apply(apply) => Term::Apply(Apply {
+        meta: apply.meta,
+        callee: apply.callee.erase(elab).into(),
+        arguments: apply.arguments.erase(elab).into(),
+      }),
       Term::Pi(pi) => Term::Pi(Pi {
         meta: pi.meta,
         icit: pi.icit,

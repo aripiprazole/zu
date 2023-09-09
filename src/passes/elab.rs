@@ -5,17 +5,16 @@ use std::ops::Deref;
 use std::rc::Rc;
 
 use miette::NamedSource;
+pub use value::*;
 
 use self::unification::UnifyError;
 use super::resolver::Definition;
 use super::resolver::FileMap;
 use super::resolver::Resolved;
 use crate::ast::*;
-use crate::quoting::*;
 use crate::nfe::Nfe;
 use crate::passes::elab::quote::Quote;
-
-pub use value::*;
+use crate::quoting::*;
 
 pub type DefinitionRs = Definition<Resolved>;
 
@@ -28,10 +27,10 @@ pub type Expr = crate::ast::Term<Quoted>;
 
 pub mod check;
 pub mod eval;
+pub mod globals;
 pub mod infer;
 pub mod quote;
 pub mod unification;
-pub mod globals;
 pub mod value;
 
 /// Module representation with type table and typed values.
@@ -81,7 +80,10 @@ impl Environment {
   pub fn create_new_value(&self, value: Type) -> Self {
     let mut data = self.data.clone();
     data.push_front(value);
-    Self { data, globals: self.globals.clone() }
+    Self {
+      data,
+      globals: self.globals.clone(),
+    }
   }
 }
 
@@ -146,7 +148,7 @@ impl Elab {
         TopLevel::Error(_) => {}
 
         // Type checking and evaluation of bindings and inductive types.
-        // 
+        //
         // Also should be used for structures, classes, modules.
         TopLevel::Inductive(_) => todo!(),
         TopLevel::Binding(s) => {
@@ -159,7 +161,7 @@ impl Elab {
             type_repr,
             value,
           });
-        },
+        }
 
         // Inline evaluation and checking functions. `@eval` and `@check`
         TopLevel::Eval(s) => {
@@ -245,12 +247,7 @@ impl Elab {
   pub fn create_new_value(&self, name: &str, value: Type) -> Self {
     let mut data = self.clone();
     data.env = data.env.create_new_value(Type::rigid(data.lvl));
-    data.types = data
-      .types
-      .clone()
-      .into_iter()
-      .chain(std::iter::once((name.into(), value)))
-      .collect();
+    data.types.push_front((name.to_string(), value));
     data.lvl += 1;
     data
   }

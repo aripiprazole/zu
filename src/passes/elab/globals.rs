@@ -21,6 +21,10 @@ impl GlobalEnvironment {
     self.data.borrow().get(name).unwrap().clone()
   }
 
+  pub fn lookup_value(&self, name: &str) -> Type {
+    self.lookup(name).value.clone()
+  }
+
   pub fn insert(&mut self, name: String, value: Declaration) {
     self.data.borrow_mut().insert(name, value.into());
   }

@@ -6,10 +6,12 @@ pub struct Lvl(pub usize);
 
 impl Lvl {
   /// Transforms a level into a debruijin index.
-  pub fn as_ix(&self, Lvl(lvl0): Lvl) -> Ix {
-    let Lvl(lvl1) = self;
+  pub fn as_ix(&self, Lvl(x): Lvl) -> Ix {
+    let Lvl(l) = *self;
+    assert!(l > x, "l > x, but {l} < {x}");
+    assert!(l > 0, "l should be greater than 0");
 
-    Ix(lvl1 - lvl0 - 1)
+    Ix(l - x - 1)
   }
 }
 

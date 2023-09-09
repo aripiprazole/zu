@@ -39,30 +39,22 @@ impl Elab {
         Term::Apply(apply) => {
           let callee = ctx.infer(&apply.callee);
 
-          return apply
-            .arguments
-            .iter()
-            .cloned()
-            // Creates a spine of applications to the callee
-            // and then applies the spine to the callee.
-            .fold(callee, |callee, argument| {
-              let (domain, codomain) = match callee.force() {
-                Type(_, Value::Pi(_, _, box tt, closure)) => (tt, closure),
-                value => {
-                  let tt = ctx.fresh_meta().eval(&ctx.env);
-                  let closure = Closure {
-                    env: ctx.env.clone(),
-                    term: ctx.create_new_value("x", tt.clone()).fresh_meta(),
-                  };
-
-                  ctx.unify(Type::pi("x", tt.clone(), closure.clone()), value);
-
-                  (tt, closure)
-                }
+          let (domain, codomain) = match callee.clone().force() {
+            Type(_, Value::Pi(_, _, box tt, closure)) => (tt, closure),
+            value => {
+              let tt = ctx.fresh_meta().eval(&ctx.env);
+              let closure = Closure {
+                env: ctx.env.clone(),
+                term: ctx.create_new_value("x", tt.clone()).fresh_meta(),
               };
 
-              codomain.apply(ctx.check(&argument, domain).eval(&ctx.env))
-            });
+              ctx.unify(Type::pi("x", tt.clone(), closure.clone()), value.clone());
+
+              (tt, closure)
+            }
+          };
+
+          return codomain.apply(ctx.check(&apply.arguments, domain).eval(&ctx.env));
         }
 
         // Resolves global references, and returns the type of the
@@ -78,14 +70,6 @@ impl Elab {
         // in the environment. It does uses debruijin, and `erase` function
         // works very well with it.
         Term::Reference(n) => {
-          let Term::Reference(Reference::Var(Ix(ix))) = term.clone().erase(ctx) else {
-            // We already check at the beginning of the function with the
-            // pattern matching that the term is a reference.
-            //
-            // So this is unreachable.
-            unreachable!("term is not a reference: {:?}", term)
-          };
-
           // Get the types from the context, and returns the first one.
           let mut types = ctx.types.clone();
           while let Some((c, t)) = types.pop_front() {
@@ -93,6 +77,14 @@ impl Elab {
               return t;
             }
           }
+
+          let Term::Reference(Reference::Var(Ix(ix))) = term.clone().erase(ctx) else {
+            // We already check at the beginning of the function with the
+            // pattern matching that the term is a reference.
+            //
+            // So this is unreachable.
+            unreachable!("term is not a reference: {:?}", term)
+          };
 
           // TODO: Report error
           // Gets the value from the environment and clones it to avoid
@@ -112,7 +104,16 @@ impl Elab {
 
         // Infers the type of a lambda, it does creates a new closure
         // and returns the type of the closure.
-        Term::Pi(_) => Value::Prim(PrimKind::Universe),
+        Term::Pi(pi) => {
+          // Checks that the type of the domain is a type
+          let domain = ctx.check(&pi.domain.type_repr, Type::universe()).eval(&ctx.env);
+
+          ctx
+            .create_new_value(&pi.domain.name.text, domain)
+            .check(&pi.codomain, Type::universe());
+
+          Value::Prim(PrimKind::Universe)
+        }
       })
     }
 

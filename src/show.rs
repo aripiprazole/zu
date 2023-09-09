@@ -4,6 +4,7 @@ use crate::ast::Term;
 use crate::nfe::Apply;
 use crate::nfe::Delim;
 use crate::nfe::Nfe;
+use crate::nfe::Prefix;
 use crate::nfe::Sep;
 use crate::passes::elab::quote::Quote;
 use crate::passes::elab::Elab;
@@ -61,6 +62,7 @@ impl Show {
           Nfe::S(fun.arguments.text.clone()),
           self.bind(&fun.arguments.text).show(*fun.value),
         ],
+        prefix: Prefix::Lambda,
         sep: Sep::ArrL,
         ..Default::default()
       }),
@@ -70,19 +72,25 @@ impl Show {
       Term::Reference(Reference::Global(m)) => Nfe::S(m.definition.text.clone()),
       Term::Reference(Reference::MetaVar(m)) => match m.get() {
         MetaHole::Defined(value) => self.show(value.quote(self.lvl)),
-        MetaHole::Nothing => Nfe::S("?".into()),
+        MetaHole::Nothing => Nfe::S("_".into()),
       },
       Term::Reference(Reference::Var(Ix(ix))) => match self.names.get(ix) {
-          Some(x) => Nfe::S(x.into()),
-          None => Nfe::S("*internal error*".into()),
+        Some(x) => Nfe::S(x.into()),
+        None => Nfe::S("*internal error*".into()),
       },
       Term::Pi(pi) => Nfe::Apply(Apply {
         values: vec![
           Nfe::Apply(Apply {
-            values: vec![Nfe::S(pi.domain.name.text.clone()), self.show(*pi.domain.type_repr)],
+            values: match pi.domain.name.text.as_ref() {
+              "_" => vec![self.show(*pi.domain.type_repr)],
+              _ => vec![Nfe::S(pi.domain.name.text.clone()), self.show(*pi.domain.type_repr)],
+            },
             sep: Sep::Colon,
             delim: match pi.domain.icit {
-              Icit::Expl => Delim::Paren,
+              Icit::Expl => match pi.domain.name.text.as_ref() {
+                "_" => Delim::None,
+                _ => Delim::Paren,
+              },
               Icit::Impl => Delim::Brace,
             },
             ..Default::default()

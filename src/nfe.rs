@@ -14,6 +14,18 @@ pub enum Sep {
   None,
 }
 
+/// The prefix of a term.
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Prefix {
+  #[default]
+  None,
+  Plus,     // +
+  Bang,     // !
+  Question, // ?
+  Tilde,    // ~
+  Lambda,   // \
+}
+
 /// The disposal, if the terms are disposed horizontally or vertically.
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Disposal {
@@ -46,6 +58,7 @@ pub struct Apply {
   pub values: Vec<Nfe>,
 
   // SECTION: Pretty printing
+  pub prefix: Prefix,
   pub sep: Sep,
   pub delim: Delim,
   pub disposal: Disposal,
@@ -73,7 +86,13 @@ impl Display for Nfe {
     match self {
       Nfe::S(v) => write!(f, "{v}"),
       Nfe::Nil => write!(f, "?"),
-      Nfe::Apply(Apply { values, sep, delim, .. }) => {
+      Nfe::Apply(Apply {
+        values,
+        sep,
+        delim,
+        prefix,
+        ..
+      }) => {
         let mut iter = values.iter();
         match delim {
           Delim::Paren => write!(f, "(")?,
@@ -81,6 +100,15 @@ impl Display for Nfe {
           Delim::Brace => write!(f, "{{")?,
           Delim::Angle => write!(f, "<")?,
           Delim::None => {}
+        }
+
+        match prefix {
+          Prefix::None => write!(f, "")?,
+          Prefix::Plus => write!(f, "+")?,
+          Prefix::Bang => write!(f, "!")?,
+          Prefix::Question => write!(f, "?")?,
+          Prefix::Tilde => write!(f, "~")?,
+          Prefix::Lambda => write!(f, "\\")?,
         }
 
         if let Some(first) = iter.next() {

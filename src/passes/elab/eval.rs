@@ -39,7 +39,7 @@ fn eval(expr: Expr, env: &Environment) -> Type {
         None => Type::flexible(meta),
       }
     }
-    Reference(Global(name)) => return env.globals.lookup(name.text()).value.clone(),
+    Reference(Global(name)) => return env.globals.lookup_value(name.text()),
     Pi(pi) => {
       let domain = pi.domain.type_repr.eval(env);
       let codomain = Closure {
